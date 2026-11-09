@@ -52,3 +52,6 @@ jobs:
             --only functions,firestore:rules \
             --project "$PROJECT_ID" \
             --non-interactive --force
+          # Auto-delete old function build images so they don't slowly add storage cost.
+          npx --yes firebase-tools@latest functions:artifacts:setpolicy \
+            --project "$PROJECT_ID" --location us-central1 --days 7 --force --non-interactive || true
