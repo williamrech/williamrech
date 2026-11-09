@@ -1,55 +1,108 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>The Button</title>
+  <title>Ela gosta de sorvete?</title>
   <meta name="theme-color" content="#14110f">
   <link rel="manifest" href="manifest.webmanifest">
   <!-- iPhone: needed so "Add to Home Screen" makes a real app (required for push on iOS) -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="The Button">
+  <meta name="apple-mobile-web-app-title" content="Sorvete?">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
   <script src="firebase-config.js"></script>
 </head>
 <body>
+  <header id="topbar" hidden>
+    <h1>Ela gosta de sorvete? <span aria-hidden="true">🍦</span></h1>
+    <button id="open-settings" class="icon" aria-label="Configurações">⚙️</button>
+  </header>
+
   <main>
-    <!-- Shown when Firebase isn't configured yet -->
     <section id="view-setup" class="card" hidden>
-      <h1>Almost there</h1>
-      <p>Firebase isn't configured yet. Fill in <code>web/firebase-config.js</code>.</p>
+      <h2>Quase lá</h2>
+      <p>O Firebase ainda não foi configurado.</p>
     </section>
 
     <!-- Login -->
     <section id="view-login" class="card" hidden>
-      <h1>The Button</h1>
-      <p class="muted">Family only. Ask the admin for an account.</p>
+      <h2>Ela gosta de sorvete? 🍦</h2>
+      <p class="muted">Só pra família. Pede uma conta pro admin.</p>
       <form id="login-form">
-        <input id="email" type="email" autocomplete="username" placeholder="Email" required>
-        <input id="password" type="password" autocomplete="current-password" placeholder="Password" required>
-        <button type="submit" class="primary">Log in</button>
+        <input id="email" type="email" autocomplete="username" placeholder="E-mail" required>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Senha" required>
+        <button type="submit" class="primary">Entrar</button>
       </form>
     </section>
 
-    <!-- The button -->
+    <!-- Main app -->
     <section id="view-app" hidden>
-      <button id="big-button" aria-label="Press the button">
-        <span>PRESS</span>
+      <div id="notif-banner" class="banner" hidden></div>
+
+      <button id="btn-market" class="feature">
+        <span class="emoji">🛒</span>
+        <span>Tô indo no mercado,<br><b>quem vai junto?</b></span>
       </button>
+
+      <h2 class="section-title">Quem vai no mercado</h2>
+      <ul id="trips" class="trips"></ul>
+      <p id="trips-empty" class="muted empty">Ninguém vai no mercado. A geladeira chora. 😢</p>
     </section>
   </main>
 
-  <footer id="footer" hidden>
-    <div id="notif-banner" class="banner" hidden></div>
-    <div class="row">
-      <span id="who" class="muted"></span>
-      <button id="logout" class="link">Log out</button>
+  <!-- Modal: pick a name -->
+  <dialog id="dlg-name">
+    <form method="dialog" id="name-form">
+      <h2>Quem é você nessa família?</h2>
+      <p class="muted">Escolhe um apelido. Ou inventa um pior.</p>
+      <div id="name-chips" class="chips"></div>
+      <input id="name-custom" maxlength="40" placeholder="Outro apelido…">
+      <button type="submit" class="primary">É isso</button>
+    </form>
+  </dialog>
+
+  <!-- Modal: daily question -->
+  <dialog id="dlg-daily">
+    <h2>Vai no mercado hoje? 🛒</h2>
+    <p class="muted" id="daily-hint"></p>
+    <div class="row-buttons">
+      <button id="daily-no" class="secondary">Não</button>
+      <button id="daily-yes" class="primary">Sim</button>
     </div>
-  </footer>
+  </dialog>
+
+  <!-- Modal: when -->
+  <dialog id="dlg-when">
+    <form method="dialog" id="when-form">
+      <h2>Vai quando?</h2>
+      <div class="chips" id="when-chips"></div>
+      <label class="muted small" for="when-input">Ou escolhe:</label>
+      <input id="when-input" type="datetime-local" required>
+      <div class="row-buttons">
+        <button type="button" id="when-cancel" class="secondary">Cancelar</button>
+        <button type="submit" class="primary">Avisar geral</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal: settings -->
+  <dialog id="dlg-settings">
+    <h2>Configurações</h2>
+    <h3>Me pergunta do mercado nesses dias:</h3>
+    <div id="days" class="days"></div>
+    <p class="muted small">Sexta é obrigatório. Não adianta reclamar.</p>
+    <h3>Apelido</h3>
+    <p><span id="settings-name"></span> · <button id="change-name" class="link">trocar</button></p>
+    <div class="row-buttons">
+      <button id="logout" class="secondary">Sair</button>
+      <button id="settings-close" class="primary">Fechar</button>
+    </div>
+    <p class="muted small" id="who"></p>
+  </dialog>
 
   <div id="toast" role="status" aria-live="polite"></div>
 

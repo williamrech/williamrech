@@ -1,14 +1,31 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each device saves its own push token. Nobody can read the list from the browser;
-    // only the Cloud Function (admin access) reads it to send notifications.
+    function signedIn() { return request.auth != null; }
+
+    // Each device saves its own push token. Only the Cloud Functions read the list.
     match /devices/{token} {
-      allow create, update: if request.auth != null
-        && request.resource.data.uid == request.auth.uid;
-      allow delete: if request.auth != null
-        && resource.data.uid == request.auth.uid;
+      allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
-    // Everything else (cooldowns, etc.) is server-only.
+
+    // Profiles: everyone in the family can see names; you can only edit your own
+    // name and skipped days. lastAnswered is written by the functions.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys()
+             .hasOnly(['name', 'skipDays', 'updatedAt'])
+        && (!('name' in request.resource.data) ||
+            (request.resource.data.name is string && request.resource.data.name.size() > 0
+             && request.resource.data.name.size() <= 40))
+        && (!('skipDays' in request.resource.data) || request.resource.data.skipDays is list);
+    }
+
+    // Market trips: readable by the family, written only through the functions
+    // (so every change sends a notification).
+    match /trips/{id} {
+      allow read: if signedIn();
+    }
   }
 }

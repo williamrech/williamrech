@@ -1,6 +1,6 @@
 {
-  "name": "The Button",
-  "short_name": "The Button",
+  "name": "Ela gosta de sorvete?",
+  "short_name": "Sorvete?",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
