@@ -2,12 +2,12 @@
 // Firebase Auth + Firestore rules, not from hiding them.
 // Find them in: Firebase console → Project settings → General → Your apps → Web app → Config.
 self.FIREBASE_CONFIG = {
-  apiKey: "REPLACE_ME",
+  apiKey: "AIzaSyBSlHUQU_mZuqh1azWMvBqcwA2LBpVG3FA",
   authDomain: "williamrech-firebase.firebaseapp.com",
   projectId: "williamrech-firebase",
   storageBucket: "williamrech-firebase.firebasestorage.app",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME",
+  messagingSenderId: "1046105438355",
+  appId: "1:1046105438355:web:3c4a25c5ce171e8eef3566",
 };
 
 // Public "Web Push certificate" key.
