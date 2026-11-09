@@ -3,9 +3,9 @@
 // Find them in: Firebase console → Project settings → General → Your apps → Web app → Config.
 self.FIREBASE_CONFIG = {
   apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME.firebaseapp.com",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME.firebasestorage.app",
+  authDomain: "williamrech-firebase.firebaseapp.com",
+  projectId: "williamrech-firebase",
+  storageBucket: "williamrech-firebase.firebasestorage.app",
   messagingSenderId: "REPLACE_ME",
   appId: "REPLACE_ME",
 };
