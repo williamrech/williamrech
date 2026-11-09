@@ -1,7 +1,6 @@
 # Deploys the Cloud Function and Firestore rules on every push that changes them.
-# Needs two things in the repo settings:
+# Needs one thing in the repo settings:
 #   Secret   FIREBASE_SERVICE_ACCOUNT  – the JSON key of the deploy service account
-#   Variable FIREBASE_PROJECT_ID       – e.g. family-button-1a2b3
 name: Deploy Firebase backend
 
 on:
@@ -19,13 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      PROJECT_ID: williamrech-firebase
     steps:
       - name: Check setup
         id: check
         run: |
-          if [ -z "$SA_KEY" ] || [ -z "$PROJECT_ID" ]; then
-            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret or FIREBASE_PROJECT_ID variable not set yet — skipping deploy."
+          if [ -z "$SA_KEY" ]; then
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret not set yet — skipping deploy."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"

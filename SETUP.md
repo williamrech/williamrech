@@ -22,7 +22,6 @@ One big red button. Press it and every logged-in family device gets a (sassy) no
    - Go to Google Cloud console → IAM & Admin → Service Accounts → Create, and name it `github-deployer`.
    - Give it these roles: **Editor**, **Cloud Functions Admin**, **Cloud Run Admin**, **Service Account User**.
    - Open the account → Keys → Add key → JSON. Paste the whole file into the GitHub repo under Settings → Secrets and variables → Actions → **Secret** `FIREBASE_SERVICE_ACCOUNT`, then delete the downloaded file.
-   - On the same page, add a **Variable** `FIREBASE_PROJECT_ID` = your project ID.
 7. **GitHub Pages.** In repo Settings → Pages → Source: **GitHub Actions**.
 
 ## Using it
