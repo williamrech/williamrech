@@ -1,0 +1,55 @@
+# Deploys the Cloud Function and Firestore rules on every push that changes them.
+# Needs two things in the repo settings:
+#   Secret   FIREBASE_SERVICE_ACCOUNT  – the JSON key of the deploy service account
+#   Variable FIREBASE_PROJECT_ID       – e.g. family-button-1a2b3
+name: Deploy Firebase backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["functions/**", "firestore.rules", "firebase.json", ".github/workflows/firebase.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: firebase
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+    steps:
+      - name: Check setup
+        id: check
+        run: |
+          if [ -z "$SA_KEY" ] || [ -z "$PROJECT_ID" ]; then
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret or FIREBASE_PROJECT_ID variable not set yet — skipping deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 22
+
+      - name: Install function dependencies
+        if: steps.check.outputs.ready == 'true'
+        run: npm install --omit=dev
+        working-directory: functions
+
+      - name: Deploy
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          echo "$SA_KEY" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools@latest deploy \
+            --only functions,firestore:rules \
+            --project "$PROJECT_ID" \
+            --non-interactive --force

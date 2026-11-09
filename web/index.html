@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>The Button</title>
+  <meta name="theme-color" content="#14110f">
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- iPhone: needed so "Add to Home Screen" makes a real app (required for push on iOS) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="The Button">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <main>
+    <!-- Shown when Firebase isn't configured yet -->
+    <section id="view-setup" class="card" hidden>
+      <h1>Almost there</h1>
+      <p>Firebase isn't configured yet. Fill in <code>web/firebase-config.js</code>.</p>
+    </section>
+
+    <!-- Login -->
+    <section id="view-login" class="card" hidden>
+      <h1>The Button</h1>
+      <p class="muted">Family only. Ask the admin for an account.</p>
+      <form id="login-form">
+        <input id="email" type="email" autocomplete="username" placeholder="Email" required>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Password" required>
+        <button type="submit" class="primary">Log in</button>
+      </form>
+    </section>
+
+    <!-- The button -->
+    <section id="view-app" hidden>
+      <button id="big-button" aria-label="Press the button">
+        <span>PRESS</span>
+      </button>
+    </section>
+  </main>
+
+  <footer id="footer" hidden>
+    <div id="notif-banner" class="banner" hidden></div>
+    <div class="row">
+      <span id="who" class="muted"></span>
+      <button id="logout" class="link">Log out</button>
+    </div>
+  </footer>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

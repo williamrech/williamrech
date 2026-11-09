@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Each device saves its own push token. Nobody can read the list from the browser;
+    // only the Cloud Function (admin access) reads it to send notifications.
+    match /devices/{token} {
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+    }
+    // Everything else (cooldowns, etc.) is server-only.
+  }
+}
