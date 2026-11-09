@@ -12,4 +12,4 @@ self.FIREBASE_CONFIG = {
 
 // Public "Web Push certificate" key.
 // Firebase console → Project settings → Cloud Messaging → Web configuration → Generate key pair.
-self.VAPID_KEY = "REPLACE_ME";
+self.VAPID_KEY = "BB9HwQH057DCQ6anKjXoGf3_5SBQXoZRKH8uq-IbzBImv_RQhUUoouZSCNOoYA-58_K0StyToxcymzrD8Yr-Rrs";
