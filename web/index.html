@@ -92,7 +92,7 @@
 
       <div class="tabs" role="tablist">
         <button class="tab selected" data-tab="feed" role="tab">Feed</button>
-        <button class="tab" data-tab="chamados" role="tab">Chamados</button>
+        <button class="tab" data-tab="chamados" role="tab">Recados</button>
         <button class="tab" data-tab="admin" role="tab" id="tab-btn-admin" hidden>Admin</button>
       </div>
 
@@ -116,7 +116,14 @@
 
         <details class="adm-sec">
           <summary>👥 Pessoas</summary>
-          <ul id="adm-people" class="plain-list"></ul>
+          <ul id="adm-people" class="people-list"></ul>
+          <p class="muted small" id="adm-people-msg"></p>
+          <form id="adm-add-form" class="add-person">
+            <p class="muted small pick-label">Adicionar pessoa</p>
+            <input id="adm-add-email" type="email" placeholder="e-mail" autocomplete="off" required>
+            <input id="adm-add-pass" placeholder="senha (vazio = gerar uma)" autocomplete="off" minlength="6">
+            <button type="submit" id="adm-add-btn" class="primary">Adicionar</button>
+          </form>
         </details>
 
         <details class="adm-sec">
@@ -156,7 +163,7 @@
 
       <div id="tab-chamados" role="tabpanel" hidden>
         <ul id="chamados-list" class="chamados"></ul>
-        <button id="chamados-new" class="btn-tile add wide-tile"><span class="tile-emoji">＋</span><span class="tile-title">Novo chamado</span></button>
+        <button id="chamados-new" class="btn-tile add wide-tile"><span class="tile-emoji">＋</span><span class="tile-title">Novo recado</span></button>
       </div>
     </section>
   </main>
@@ -187,7 +194,7 @@
   <!-- Modal: create / edit a chamado -->
   <dialog id="dlg-editor">
     <form id="editor-form">
-      <h2 id="editor-title">Novo chamado</h2>
+      <h2 id="editor-title">Novo recado</h2>
       <div id="starter-wrap">
         <p class="muted small pick-label">Começar de um modelo:</p>
         <div class="chips" id="starter-chips"></div>
@@ -341,6 +348,18 @@
     </form>
   </dialog>
 
+  <!-- Admin: credentials to share -->
+  <dialog id="dlg-cred">
+    <h2 id="cred-title">Acesso criado</h2>
+    <p class="muted small">Manda isso pra pessoa. A senha não aparece de novo depois que você fechar.</p>
+    <pre id="cred-text" class="cred-text"></pre>
+    <div class="row-buttons">
+      <button id="cred-copy" class="secondary">Copiar</button>
+      <a id="cred-wa" class="primary" target="_blank" rel="noopener">WhatsApp</a>
+    </div>
+    <button id="cred-close" class="link small close-link">fechar</button>
+  </dialog>
+
   <!-- Modal: generic confirm -->
   <dialog id="dlg-confirm">
     <h2 id="confirm-title"></h2>
@@ -381,7 +400,7 @@
     </div>
     <p class="muted small" id="quiet-hint" hidden>Perguntas que chegarem nesse horário te esperam acordar. Avisos de resposta são pulados.</p>
 
-    <h3>Chamados que você silenciou</h3>
+    <h3 id="muted-title">Recados que você silenciou</h3>
     <ul id="muted-list" class="plain-list"></ul>
     <div class="row-buttons">
       <button id="settings-close" class="primary">Fechar</button>

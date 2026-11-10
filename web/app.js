@@ -113,6 +113,7 @@ let todayOcc = null;
 // Chooses the look: an occasion forces its palette on everyone; otherwise the user's choice.
 function applyLook() {
   todayOcc = todaysOccasion();
+  applyTerms();
   let userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
   const chosen = getPalette(userPal);
   if (chosen && chosen.onlyOccasions) userPal = "espresso"; // occasion-only palettes can't be kept as a personal choice
@@ -155,6 +156,51 @@ function renderPreviewBar(on) {
     applyLook();
   };
   bar.appendChild(b);
+}
+
+// ---------- The day's name for "recados" ----------
+// Usually "recado"; on some days an easter egg (cutucada, berro…). Same for everyone, picked from the date.
+const DEFAULT_TERM = { id: "recado", one: "recado", many: "recados", g: "m", verb: "Mandar", ask: "Mandar pra {who}?", done: "Mandado pra {n} pessoa(s). 📣" };
+const PREVIEW_TERM = new URLSearchParams(location.search).get("termo");
+let TERM = DEFAULT_TERM;
+
+function pickTerm() {
+  const terms = (FUN.terms && typeof FUN.terms === "object") ? FUN.terms : {};
+  const valid = Object.entries(terms).filter(([, t]) => t && t.one && t.many && t.verb && (Number(t.weight) || 0) > 0)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  if (PREVIEW_TERM && terms[PREVIEW_TERM]) return { ...DEFAULT_TERM, ...terms[PREVIEW_TERM], id: PREVIEW_TERM };
+  if (!valid.length) return DEFAULT_TERM;
+  const key = spToday().key + "|term";
+  let h = 2166136261;
+  for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  const total = valid.reduce((n, [, t]) => n + Number(t.weight), 0);
+  let r = (h % 100000) / 100000 * total;
+  for (const [id, t] of valid) { r -= Number(t.weight); if (r < 0) return { ...DEFAULT_TERM, ...t, id }; }
+  return { ...DEFAULT_TERM, ...valid[0][1], id: valid[0][0] };
+}
+
+// Grammar helpers: T.one "recado", T.Many "Recados", T.novo "Novo"/"Nova", T.esse "esse"/"essa"…
+const cap = (x) => String(x).charAt(0).toUpperCase() + String(x).slice(1);
+const T = {
+  get one() { return TERM.one; }, get many() { return TERM.many; },
+  get One() { return cap(TERM.one); }, get Many() { return cap(TERM.many); },
+  get f() { return TERM.g === "f"; },
+  get novo() { return T.f ? "Nova" : "Novo"; }, get nenhum() { return T.f ? "Nenhuma" : "Nenhum"; },
+  get esse() { return T.f ? "essa" : "esse"; }, get seus() { return T.f ? "suas" : "seus"; },
+  get Seus() { return T.f ? "Suas" : "Seus"; }, get o() { return T.f ? "a" : "o"; },
+  get verb() { return TERM.verb; },
+  ask: (who) => String(TERM.ask || DEFAULT_TERM.ask).replace("{who}", who),
+  done: (n) => String(TERM.done || DEFAULT_TERM.done).replace("{n}", n),
+};
+
+// Static texts in the page that use the word.
+function applyTerms() {
+  TERM = pickTerm();
+  const set = (sel, text) => { const el = document.querySelector(sel); if (el) el.textContent = text; };
+  set('.tab[data-tab="chamados"]', T.Many);
+  set("#chamados-new .tile-title", `${T.novo} ${T.one}`);
+  set("#muted-title", `${T.Many} que você silenciou`);
+  if (typeof renderChamados === "function" && typeof auth !== "undefined" && auth.currentUser) renderChamados();
 }
 
 // Same "version" for the whole family on a given day. Purely decorative.
@@ -323,6 +369,10 @@ const api = {
   adminHealth: call("adminHealth"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
+  adminListUsers: call("adminListUsers"),
+  adminCreateUser: call("adminCreateUser"),
+  adminSetPassword: call("adminSetPassword"),
+  adminDeleteUser: call("adminDeleteUser"),
   setAdmin: call("setAdmin"),
   claimAdmin: call("claimAdmin"),
 };
@@ -987,7 +1037,7 @@ function renderChamados() {
   const list = $("chamados-list");
   if (!list) return;
   if (list.querySelector(".busy")) return;
-  list.innerHTML = templates.length ? "" : `<li class="muted empty">Nenhum chamado ainda. Cria um! ✨</li>`;
+  list.innerHTML = templates.length ? "" : `<li class="muted empty">${T.nenhum} ${T.one} ainda. Cria um${T.f ? "a" : ""}! ✨</li>`;
   const sorted = [...templates].sort((a, b) =>
     (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) ||
     (a.schedule && a.schedule.on ? 1 : 0) - (b.schedule && b.schedule.on ? 1 : 0) ||
@@ -1024,7 +1074,7 @@ function renderChamados() {
     }
     const send = document.createElement("button");
     send.className = "secondary small-btn";
-    send.textContent = scheduled ? "Mandar agora" : "Mandar";
+    send.textContent = scheduled ? `${T.verb} agora` : T.verb;
     send.onclick = () => fire(t, send);
     actions.appendChild(send);
     list.appendChild(li);
@@ -1049,19 +1099,19 @@ function setTab(name) {
   show("tab-feed", name === "feed");
   show("tab-chamados", name === "chamados");
   show("tab-admin", name === "admin");
-  if (name === "admin") renderAdmin();
+  if (name === "admin") { renderAdmin(); if (authUsers === null) loadAuthUsers(); }
   try { localStorage.setItem("tab", name); } catch {}
 }
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 setTab((() => { try { const t = localStorage.getItem("tab") || "feed"; return t === "admin" ? "feed" : t; } catch { return "feed"; } })());
 
 async function fire(t, btn) {
-  const who = recipientsText(t.recipients);
-  if (!(await confirmBox(`${t.emoji || "🔔"} ${t.title}`, `Mandar pra: ${who}?`))) return;
-  const res = await withBusy(btn, () => api.fireTemplate({ templateId: t.id }), "Mandando…");
+  const who = t.recipients === "all" ? "todo mundo" : recipientsText(t.recipients);
+  if (!(await confirmBox(`${t.emoji || "🔔"} ${t.title}`, T.ask(who), T.verb))) return;
+  const res = await withBusy(btn, () => api.fireTemplate({ templateId: t.id }));
   if (!res) return;
   const d = res.data;
-  toast(d.delayed ? `Mandado! ${d.delayed} pessoa(s) em modo silêncio recebem depois. 🌙` : `Mandado pra ${d.recipients} pessoa(s). 📣`);
+  toast(d.delayed ? `${T.done(d.recipients)} ${d.delayed} em modo silêncio recebe(m) depois. 🌙` : T.done(d.recipients), 4000);
 }
 
 // Home: live feed of rounds
@@ -1151,7 +1201,7 @@ function renderRounds() {
     if (isRecipient && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
       const b = document.createElement("button");
       b.className = "link small";
-      b.textContent = "silenciar esse chamado";
+      b.textContent = `silenciar ${T.esse} ${T.one}`;
       b.onclick = async () => {
         if (!(await confirmBox("Silenciar?", `Você para de receber “${r.title}”. ${r.ownerName} vai ficar sabendo. 😬`, "Silenciar"))) return;
         const res = await withBusy(b, () => api.muteTemplate({ roundId: r.id, mute: true }), "…");
@@ -1290,7 +1340,7 @@ function loadEditor(t) {
 
 function openEditor(t) {
   edId = t ? t.id : null;
-  $("editor-title").textContent = t ? "Editar chamado" : "Novo chamado";
+  $("editor-title").textContent = t ? `Editar ${T.one}` : `${T.novo} ${T.one}`;
   show("ed-delete", !!t);
   show("starter-wrap", !t);
   const chips = $("starter-chips");
@@ -1313,7 +1363,7 @@ function openEditor(t) {
 
 $("ed-cancel").addEventListener("click", () => $("dlg-editor").close());
 $("ed-delete").addEventListener("click", async () => {
-  if (!edId || !(await confirmBox("Apagar chamado?", "Some pra sempre. As rodadas antigas continuam no histórico.", "Apagar"))) return;
+  if (!edId || !(await confirmBox(`Apagar ${T.esse} ${T.one}?`, "Some pra sempre. As rodadas antigas continuam no histórico.", "Apagar"))) return;
   const ok = await withBusy($("ed-delete"), async () => { await deleteDoc(doc(db, "templates", edId)); return true; }, "…");
   if (ok) { $("dlg-editor").close(); toast("Apagado. 🗑️"); }
 });
@@ -1349,7 +1399,7 @@ $("editor-form").addEventListener("submit", async (e) => {
   }, "Salvando…");
   if (!ok) return;
   $("dlg-editor").close();
-  toast(scheduleOn ? `Agendado: ${scheduleText(data.schedule)}. ⏰` : "Salvo! Tá lá nos seus chamados. ✨");
+  toast(scheduleOn ? `Agendado: ${scheduleText(data.schedule)}. ⏰` : `Salv${T.o}! Tá lá nos ${T.seus} ${T.many}. ✨`);
 });
 
 // =====================================================================
@@ -1393,29 +1443,104 @@ function renderAdmin() {
   renderAdminTexts();
 }
 
-// ---------- People ----------
+// ---------- People (logins from Firebase Auth + profiles) ----------
+let authUsers = null; // null = not loaded yet
+let authUsersError = "";
+async function loadAuthUsers() {
+  try {
+    const { data } = await api.adminListUsers();
+    authUsers = data.users || [];
+    authUsersError = "";
+  } catch (err) {
+    authUsersError = friendlyError(err);
+  }
+  renderAdminPeople();
+}
+
+function showCredentials(title, email, password) {
+  const link = location.origin + location.pathname;
+  const text = `Oi! Seu acesso ao “Ela gosta de sorvete?” 🍦\n\n${link}\nE-mail: ${email}\nSenha: ${password}\n\nNo iPhone: abre no Safari → Compartilhar → Adicionar à Tela de Início, e entra por lá.`;
+  $("cred-title").textContent = title;
+  $("cred-text").textContent = text;
+  $("cred-wa").href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  $("cred-copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(text); toast("Copiado. 📋"); } catch { toast("Não deu pra copiar. Seleciona o texto."); }
+  };
+  $("dlg-cred").showModal();
+}
+$("cred-close").addEventListener("click", () => $("dlg-cred").close());
+
 function renderAdminPeople() {
   const list = $("adm-people");
   const uid = auth.currentUser && auth.currentUser.uid;
-  const admins = Object.entries(family).filter(([, p]) => p.admin === true).length;
+  const admins = Object.values(family).filter((p) => p.admin === true).length;
+  $("adm-people-msg").textContent = authUsersError || (authUsers === null ? "Carregando contas…" : "");
+  // Everyone with a login, plus any profile without one (shouldn't happen, but show it).
+  const rows = new Map();
+  for (const u of authUsers || []) rows.set(u.uid, { uid: u.uid, email: u.email, lastSignIn: u.lastSignIn });
+  for (const u of Object.keys(family)) if (!rows.has(u)) rows.set(u, { uid: u, email: "" });
   list.innerHTML = "";
-  Object.entries(family).sort((a, b) => String(a[1].name || "").localeCompare(String(b[1].name || ""))).forEach(([u, p]) => {
-    const li = document.createElement("li");
-    li.innerHTML = `<span>${nameHtml(u, "(sem apelido)")}${p.admin ? ` <span class="badge">admin</span>` : ""}${u === uid ? ` <span class="muted small">· você</span>` : ""}</span>`;
-    const b = document.createElement("button");
-    b.className = "link small";
-    const lastAdmin = p.admin && admins <= 1;
-    b.textContent = p.admin ? (lastAdmin ? "único admin" : "remover admin") : "tornar admin";
-    b.disabled = lastAdmin;
-    b.onclick = async () => {
-      if (!(await confirmBox(p.admin ? "Remover admin?" : "Tornar admin?", `${p.name || "Essa pessoa"} ${p.admin ? "perde" : "ganha"} acesso à aba Admin.`, "Confirmar"))) return;
-      const res = await withBusy(b, () => api.setAdmin({ uid: u, admin: !p.admin }), "…");
-      if (res) toast(p.admin ? "Admin removido." : "Novo admin. 👑");
-    };
-    li.appendChild(b);
-    list.appendChild(li);
-  });
+  [...rows.values()]
+    .sort((a, b) => String((family[a.uid] || {}).name || a.email).localeCompare(String((family[b.uid] || {}).name || b.email)))
+    .forEach((r) => {
+      const p = family[r.uid] || {};
+      const li = document.createElement("li");
+      li.className = "person";
+      const name = p.name ? nameHtml(r.uid, p.name) : `<span class="muted">(ainda não entrou)</span>`;
+      li.innerHTML = `
+        <div class="person-main">
+          <div>${name}${p.admin ? ` <span class="badge">admin</span>` : ""}${r.uid === uid ? ` <span class="muted small">· você</span>` : ""}</div>
+          <div class="muted small">${esc(r.email || "sem login")}</div>
+        </div>
+        <div class="person-actions"></div>`;
+      const actions = li.querySelector(".person-actions");
+      const link = (text, fn, disabled = false) => {
+        const b = document.createElement("button");
+        b.className = "link small";
+        b.textContent = text;
+        b.disabled = disabled;
+        b.onclick = () => fn(b);
+        actions.appendChild(b);
+      };
+      if (p.name) {
+        const lastAdmin = p.admin && admins <= 1;
+        link(p.admin ? (lastAdmin ? "único admin" : "tirar admin") : "tornar admin", async (b) => {
+          if (!(await confirmBox(p.admin ? "Tirar admin?" : "Tornar admin?", `${p.name} ${p.admin ? "perde" : "ganha"} acesso à aba Admin.`, "Confirmar"))) return;
+          const res = await withBusy(b, () => api.setAdmin({ uid: r.uid, admin: !p.admin }), "…");
+          if (res) toast(p.admin ? "Admin removido." : "Novo admin. 👑");
+        }, lastAdmin);
+      }
+      if (r.email) {
+        link("nova senha", async (b) => {
+          if (!(await confirmBox("Gerar nova senha?", `A senha atual de ${r.email} para de funcionar.`, "Gerar"))) return;
+          const res = await withBusy(b, () => api.adminSetPassword({ uid: r.uid }), "…");
+          if (res) showCredentials("Nova senha", res.data.email || r.email, res.data.password);
+        });
+      }
+      if (r.uid !== uid && !p.admin) {
+        link("remover", async (b) => {
+          const who = p.name || r.email || "essa pessoa";
+          if (!(await confirmBox(`Remover ${who}?`, "Apaga o login, o apelido, os aparelhos e os recados dessa pessoa. Não tem volta.", "Remover"))) return;
+          const res = await withBusy(b, () => api.adminDeleteUser({ uid: r.uid }), "…");
+          if (res) { toast(`${who} removid${p.gender === "f" ? "a" : "o"}.`); loadAuthUsers(); }
+        });
+      }
+      list.appendChild(li);
+    });
 }
+
+$("adm-add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = $("adm-add-email").value.trim();
+  const password = $("adm-add-pass").value.trim();
+  if (password && password.length < 6) return toast("Senha: pelo menos 6 caracteres (ou deixa vazio).");
+  const res = await withBusy($("adm-add-btn"), () => api.adminCreateUser({ email, password }), "Criando…");
+  if (!res) return;
+  $("adm-add-email").value = "";
+  $("adm-add-pass").value = "";
+  showCredentials("Acesso criado", res.data.email, res.data.password);
+  loadAuthUsers();
+});
 
 // ---------- Palettes ----------
 function paletteDots(p) {
@@ -1902,7 +2027,7 @@ const linesOf = (id) => $(id).value.split("\n").map((x) => x.trim()).filter(Bool
 let textsDirty = false;
 ["adm-odds", "adm-words", "adm-names", "adm-busy"].forEach((id) => $(id).addEventListener("input", () => { textsDirty = true; }));
 function renderAdminTexts() {
-  $("adm-version-today").textContent = `Versão de hoje: ${$("version").textContent}`;
+  $("adm-version-today").textContent = `Versão de hoje: ${$("version").textContent} · Nome do dia: “${T.one}”${PREVIEW_TERM ? " (prévia)" : ""}`;
   if (textsDirty) return; // don't overwrite what's being typed
   $("adm-odds").value = Number(FUN.versionOdds) || 0;
   $("adm-words").value = funList("versionWords", []).join("\n");

@@ -758,3 +758,15 @@ input[readonly] { opacity: 0.6; }
 .rule-label { font-size: 0.8rem; color: var(--muted); flex: none; min-width: 26px; }
 .rule-desc { font-size: 0.8rem; color: var(--crema); font-style: italic; }
 #occ-rule-add { margin-top: 4px; }
+
+/* ---------- Admin: people ---------- */
+.people-list { list-style: none; padding: 0; margin: 0; }
+.person { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.person:last-child { border-bottom: 0; }
+.person-main { min-width: 0; }
+.person-main .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
+.person-actions .link:disabled { opacity: 0.45; text-decoration: none; }
+.add-person { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.cred-text { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 10px; padding: 10px; color: var(--fg); margin: 8px 0 0; }
+#cred-wa { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }

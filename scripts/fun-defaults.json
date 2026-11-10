@@ -1,5 +1,5 @@
 {
-  "_como_usar": "Edite à vontade no console do Firebase. versionOdds: 1 em N dias tem piada (0 = nunca). versionWords: palavras no 2º ou 3º número da versão. palettes: temas de cor (6 cores hex cada: bg, surface, text, muted, accent, highlight + name; opcional: decor; onlyOccasions: true esconde das configurações e só aparece em ocasiões). occasions: datas especiais. Cada uma tem 'when' e pode ter version, palette, decor (emojis e/ou desenhos .svg da pasta web/decor, separados por espaço, ex: 'pumpkin.svg 🦇 👻'), banner, effect (confetti ou snow), priority (maior vence), enabled (false desliga). Formatos de 'when': 12-25 (todo ano) | 2026-11-10 (um dia) | fri-13 (sexta 13) | 2sun-05 (2º domingo de maio) | lastfri-11 (última sexta de novembro) | easter-47 (relativo à Páscoa) | 12-20..12-31 (período). Vários separados por vírgula. Para testar sem esperar a data: abra o app com ?ocasiao=ID no fim do endereço.",
+  "_como_usar": "Edite à vontade no console do Firebase. versionOdds: 1 em N dias tem piada (0 = nunca). versionWords: palavras no 2º ou 3º número da versão. palettes: temas de cor (6 cores hex cada: bg, surface, text, muted, accent, highlight + name; opcional: decor; onlyOccasions: true esconde das configurações e só aparece em ocasiões). occasions: datas especiais. Cada uma tem 'when' e pode ter version, palette, decor (emojis e/ou desenhos .svg da pasta web/decor, separados por espaço, ex: 'pumpkin.svg 🦇 👻'), banner, effect (confetti ou snow), priority (maior vence), enabled (false desliga). Formatos de 'when': 12-25 (todo ano) | 2026-11-10 (um dia) | fri-13 (sexta 13) | 2sun-05 (2º domingo de maio) | lastfri-11 (última sexta de novembro) | easter-47 (relativo à Páscoa) | 12-20..12-31 (período). Vários separados por vírgula. Para testar sem esperar a data: abra o app com ?ocasiao=ID no fim do endereço. terms: o nome do dia pros 'recados' (sorteado por dia, mesmo pra todos). weight = chance relativa; one/many = singular/plural; g = m ou f; verb = botão; ask = pergunta de confirmação ({who}); done = aviso depois de mandar ({n}). Pra testar: ?termo=ID no endereço.",
   "versionOdds": 5,
   "versionWords": [
     "666",
@@ -238,5 +238,70 @@
     }
   },
   "decorVersion": 2,
-  "configVersion": 3
+  "configVersion": 4,
+  "terms": {
+    "recado": {
+      "weight": 70,
+      "one": "recado",
+      "many": "recados",
+      "g": "m",
+      "verb": "Mandar",
+      "ask": "Mandar pra {who}?",
+      "done": "Mandado pra {n} pessoa(s). 📣"
+    },
+    "chamado": {
+      "weight": 5,
+      "one": "chamado",
+      "many": "chamados",
+      "g": "m",
+      "verb": "Chamar",
+      "ask": "Chamar {who}?",
+      "done": "Chamou {n} pessoa(s). 📣"
+    },
+    "cutucada": {
+      "weight": 5,
+      "one": "cutucada",
+      "many": "cutucadas",
+      "g": "f",
+      "verb": "Cutucar",
+      "ask": "Cutucar {who}?",
+      "done": "Cutucou {n} pessoa(s). 👉"
+    },
+    "berro": {
+      "weight": 5,
+      "one": "berro",
+      "many": "berros",
+      "g": "m",
+      "verb": "Berrar",
+      "ask": "Berrar pra {who}?",
+      "done": "Berrou pra {n} pessoa(s). 📢"
+    },
+    "toque": {
+      "weight": 5,
+      "one": "toque",
+      "many": "toques",
+      "g": "m",
+      "verb": "Tocar",
+      "ask": "Dar um toque em {who}?",
+      "done": "Deu um toque em {n} pessoa(s). 👋"
+    },
+    "buzinada": {
+      "weight": 5,
+      "one": "buzinada",
+      "many": "buzinadas",
+      "g": "f",
+      "verb": "Buzinar",
+      "ask": "Buzinar pra {who}?",
+      "done": "Buzinou pra {n} pessoa(s). 📯"
+    },
+    "enchecao": {
+      "weight": 5,
+      "one": "encheção",
+      "many": "encheções",
+      "g": "f",
+      "verb": "Encher",
+      "ask": "Encher o saco de {who}?",
+      "done": "Encheu o saco de {n} pessoa(s). 😈"
+    }
+  }
 }

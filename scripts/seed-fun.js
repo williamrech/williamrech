@@ -50,6 +50,11 @@ const ref = getFirestore().doc("config/fun");
     }
     update.configVersion = 3;
   }
+  // configVersion 4: the daily rotating name for "recados" (only added if missing).
+  if ((Number(cur.configVersion) || 0) < 4) {
+    if (!cur.terms) update.terms = defaults.terms;
+    update.configVersion = 4;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

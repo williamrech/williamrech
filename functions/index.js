@@ -3,6 +3,8 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getAuth } = require("firebase-admin/auth");
+const { randomInt } = require("crypto");
 
 initializeApp();
 const db = getFirestore();
@@ -216,7 +218,7 @@ handlers.fireTemplate = async (req) => {
   const id = req.data && String(req.data.templateId || "");
   const ref = db.doc(`templates/${id}`);
   const snap = await ref.get();
-  if (!snap.exists || snap.get("ownerUid") !== auth.uid) throw new HttpsError("not-found", "Chamado não encontrado.");
+  if (!snap.exists || snap.get("ownerUid") !== auth.uid) throw new HttpsError("not-found", "Não encontrei esse aqui.");
   const last = snap.get("lastManualAt");
   if (last && Date.now() - last.toMillis() < 15000) throw new HttpsError("resource-exhausted", "Calma. Espera uns segundinhos.");
   await ref.update({ lastManualAt: FieldValue.serverTimestamp() });
@@ -282,7 +284,7 @@ handlers.muteTemplate = async (req) => {
   }
   const tRef = db.doc(`templates/${String(templateId || "")}`);
   const tSnap = await tRef.get();
-  if (!tSnap.exists) throw new HttpsError("not-found", "Esse chamado não existe mais.");
+  if (!tSnap.exists) throw new HttpsError("not-found", "Isso não existe mais.");
   const tpl = tSnap.data();
   if (mute && tpl.allowMute === false) throw new HttpsError("permission-denied", "Esse aqui não dá pra silenciar.");
   const me = await profile(auth);
@@ -450,6 +452,84 @@ handlers.setAdmin = async (req) => {
   }
   await ref.update({ admin: make ? true : FieldValue.delete() });
   return { ok: true, admin: make };
+};
+
+// ---------------------------------------------------------------------------
+// User management (Admin → Pessoas). Uses the Admin SDK, so it works with public
+// sign-up turned off. The functions' runtime service account needs the
+// "Firebase Authentication Admin" role; if it's missing we say so clearly.
+// ---------------------------------------------------------------------------
+const PW_WORDS = ["cafe", "sorvete", "mercado", "pudim", "pastel", "biscoito", "panela", "carrinho", "sacola", "brigadeiro", "goiaba", "pipoca"];
+const newPassword = () => `${PW_WORDS[randomInt(PW_WORDS.length)]}-${PW_WORDS[randomInt(PW_WORDS.length)]}-${randomInt(1000, 10000)}`;
+
+async function authCall(fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    const code = String((e && (e.code || e.errorInfo && e.errorInfo.code)) || "");
+    const msg = String((e && e.message) || "");
+    if (code === "auth/email-already-exists") throw new HttpsError("already-exists", "Esse e-mail já tem conta.");
+    if (code === "auth/invalid-email") throw new HttpsError("invalid-argument", "E-mail inválido.");
+    if (code === "auth/invalid-password") throw new HttpsError("invalid-argument", "Senha fraca: pelo menos 6 caracteres.");
+    if (code === "auth/user-not-found") throw new HttpsError("not-found", "Essa conta não existe mais.");
+    if (code === "auth/insufficient-permission" || /permission|PERMISSION_DENIED|403/i.test(msg)) {
+      throw new HttpsError("failed-precondition",
+        "Sem permissão pra mexer em contas. No Google Cloud → IAM, dê o papel “Administrador do Firebase Authentication” " +
+        "para a conta “…-compute@developer.gserviceaccount.com” (a que roda as functions).");
+    }
+    console.error("auth admin error", code, msg);
+    throw new HttpsError("internal", "Deu ruim mexendo na conta. Tenta de novo.");
+  }
+}
+
+handlers.adminListUsers = async (req) => {
+  await requireAdmin(req);
+  const res = await authCall(() => getAuth().listUsers(1000));
+  return {
+    users: res.users.map((u) => ({
+      uid: u.uid, email: u.email || "", disabled: !!u.disabled,
+      created: u.metadata.creationTime || "", lastSignIn: u.metadata.lastSignInTime || "",
+    })),
+  };
+};
+
+handlers.adminCreateUser = async (req) => {
+  await requireAdmin(req);
+  const email = String((req.data && req.data.email) || "").trim().toLowerCase();
+  const password = String((req.data && req.data.password) || "").trim() || newPassword();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError("invalid-argument", "E-mail inválido.");
+  if (password.length < 6) throw new HttpsError("invalid-argument", "Senha fraca: pelo menos 6 caracteres.");
+  const user = await authCall(() => getAuth().createUser({ email, password }));
+  return { uid: user.uid, email, password };
+};
+
+handlers.adminSetPassword = async (req) => {
+  await requireAdmin(req);
+  const uid = String((req.data && req.data.uid) || "");
+  const password = String((req.data && req.data.password) || "").trim() || newPassword();
+  if (password.length < 6) throw new HttpsError("invalid-argument", "Senha fraca: pelo menos 6 caracteres.");
+  const user = await authCall(() => getAuth().updateUser(uid, { password }));
+  return { uid, email: user.email || "", password };
+};
+
+// Removes the login, profile, devices and everything they created.
+handlers.adminDeleteUser = async (req) => {
+  const auth = await requireAdmin(req);
+  const uid = String((req.data && req.data.uid) || "");
+  if (!uid) throw new HttpsError("invalid-argument", "Quem?");
+  if (uid === auth.uid) throw new HttpsError("failed-precondition", "Você não pode se remover. Peça pra outro admin.");
+  const profileSnap = await db.doc(`users/${uid}`).get();
+  if (profileSnap.exists && profileSnap.get("admin") === true) {
+    throw new HttpsError("failed-precondition", "Tira o admin dessa pessoa antes de remover.");
+  }
+  await authCall(() => getAuth().deleteUser(uid).catch((e) => { if (e && e.code === "auth/user-not-found") return; throw e; }));
+  const [devices, templates, rounds] = await Promise.all([
+    db.collection("devices").where("uid", "==", uid).get(),
+    db.collection("templates").where("ownerUid", "==", uid).get(),
+    db.collection("rounds").where("ownerUid", "==", uid).get(),
+  ]);
+  await Promise.all([...devices.docs, ...templates.docs, ...rounds.docs].map((d) => d.ref.delete()).concat([db.doc(`users/${uid}`).delete()]));
+  return { ok: true };
 };
 
 handlers.claimAdmin = async (req) => {
