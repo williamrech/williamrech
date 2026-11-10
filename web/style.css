@@ -493,3 +493,110 @@ header .icon { padding: 4px; }
 .uname-wrap { white-space: nowrap; display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; }
 .uname-wrap .uname { overflow: visible; }
 .ubadge { margin-left: 0; flex: none; }
+
+/* =====================================================================
+   Lean pass: smaller type, tighter spacing, and long-text safety.
+   (Overrides the earlier rules above.)
+   ===================================================================== */
+html { font-size: 15px; }
+body { line-height: 1.4; }
+main { padding: 10px 16px 20px; }
+header { padding: 10px 16px 0; gap: 4px; }
+header h1 { font-size: 0.82rem; }
+.me-chip { font-size: 0.98rem; padding: 6px 14px; }
+
+h2 { font-size: 1.15rem; margin-bottom: 6px; }
+h3 { font-size: 0.72rem; margin: 16px 0 8px; }
+.muted { font-size: 0.86rem; }
+.small { font-size: 0.78rem; }
+p { margin: 8px 0; }
+
+.card { padding: 22px 18px; border-radius: 16px; }
+input, select { font-size: 16px; padding: 10px 12px; border-radius: 10px; min-height: 42px; }
+select { padding-right: 34px; background-position: right 12px center, 0 0; }
+.primary, .secondary, .danger { padding: 10px 14px; border-radius: 10px; font-size: 0.92rem; }
+form { gap: 10px; }
+
+dialog { padding: 20px 16px; border-radius: 18px; overflow-x: hidden; }
+dialog h2 { margin-bottom: 4px; }
+.row-buttons { gap: 8px; margin-top: 16px; }
+.pick-label, #editor-form .pick-label { margin: 10px 0 2px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.chips { gap: 6px; margin-top: 6px; }
+.chip { padding: 6px 11px; font-size: 0.84rem; }
+.chip.swatch { width: 28px; height: 28px; }
+#style-badges .chip { padding: 5px 9px; font-size: 1rem; min-width: 38px; }
+
+.tabs { margin: 2px 0 14px; padding: 3px; border-radius: 12px; }
+.tab { padding: 7px; font-size: 0.9rem; }
+
+.pins { gap: 8px; padding-bottom: 10px; }
+.pin { padding: 9px 12px; border-radius: 14px; max-width: 200px; }
+.pin .tile-emoji, .chamado .tile-emoji { font-size: 1.25rem; width: 26px; }
+.tile-title { font-size: 0.86rem; }
+.pin .tile-title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+}
+
+.rounds { gap: 10px; }
+.round { padding: 12px 14px; border-radius: 14px; }
+.round-head { gap: 10px; align-items: flex-start; }
+.round-head > div { min-width: 0; }
+.round-emoji { font-size: 1.3rem; line-height: 1.2; }
+.round-title { font-size: 1rem; overflow-wrap: anywhere; }
+.round-body { font-size: 0.88rem; overflow-wrap: anywhere; }
+.answers { font-size: 0.86rem; gap: 3px; }
+.answers li { overflow-wrap: anywhere; }
+.summary { font-size: 0.8rem; margin-top: 8px; }
+.round .actions { margin-top: 10px; gap: 6px; }
+.round .actions button { padding: 8px 10px; font-size: 0.86rem; }
+
+.chamados { gap: 8px; }
+.chamado { border-radius: 14px; padding: 4px 8px 4px 4px; }
+.chamado-main { padding: 6px; gap: 8px; }
+.manage-text { min-width: 0; }
+.chamado-main .manage-text b { font-size: 0.92rem; white-space: nowrap; }
+.manage-text .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.small-btn { padding: 7px 10px; font-size: 0.8rem; }
+.star { font-size: 1.2rem; }
+.btn-tile { padding: 10px 12px; min-height: 50px; border-radius: 14px; }
+
+.title-row { grid-template-columns: 54px 1fr; gap: 8px; }
+#ed-emoji { font-size: 1.2rem; padding: 6px; }
+.days { gap: 4px; }
+.days label { padding: 6px 0; font-size: 0.72rem; border-radius: 10px; }
+.days input { width: 18px; height: 18px; }
+.toggle { font-size: 0.88rem; }
+.toggle input { width: 20px; height: 20px; }
+
+.empty { font-size: 0.95rem; margin-top: 14px; }
+#toast { font-size: 0.88rem; padding: 9px 14px; }
+#version { font-size: 0.68rem; }
+
+/* ---------- Long names: never overflow, never clip the glow ---------- */
+.uname-wrap { max-width: 100%; min-width: 0; vertical-align: bottom; }
+.uname-wrap .uname {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  padding: 4px 6px; margin: -4px -6px; /* room for glow/shadow inside the clip */
+}
+.me-chip { display: inline-flex; max-width: calc(100% - 24px); overflow: hidden; }
+.me-chip .uname-wrap { overflow: hidden; }
+
+/* Style preview: shrink and wrap instead of pushing the popup sideways */
+.style-preview {
+  font-size: clamp(1.1rem, 5.5vw, 1.5rem); padding: 14px 10px; margin: 6px 0 2px;
+  display: flex; justify-content: center; overflow: hidden;
+}
+.style-preview .uname-wrap { white-space: normal; flex-wrap: wrap; justify-content: center; text-align: center; }
+.style-preview .uname { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+
+/* Sombra: a clean drop shadow instead of a blurry double */
+.x-shadow { text-shadow: 0 2px 0 rgba(0, 0, 0, 0.85), 0 3px 6px rgba(0, 0, 0, 0.45); }
+
+/* Feature/legacy leftovers stay compact too */
+.feature { padding: 16px; font-size: 1rem; }
+.style-preview { display: block; text-align: center; }
+.style-preview .uname-wrap { display: inline; white-space: normal; }
+.style-preview .ubadge { margin-right: 6px; }
+.round .actions button { flex: 1 1 auto; min-width: 64px; line-height: 1.25; }
+#style-badges .chip:first-child { font-size: 0.84rem; }

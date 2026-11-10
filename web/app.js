@@ -560,6 +560,13 @@ $("logout").addEventListener("click", async () => {
   $("dlg-settings").close();
 });
 
+// First visible character (keeps multi-part emoji like 👨‍👩‍👧 whole).
+function firstGrapheme(str) {
+  if (!str) return "";
+  try { return new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(str)[Symbol.iterator]().next().value.segment; }
+  catch { return [...str][0]; }
+}
+
 // ---------- Styled names (color, font, effect, badge) — everyone sees them ----------
 const NAME_COLORS = ["#e2c39b", "#c98b4f", "#f0a594", "#ff8fb1", "#b9a4ff", "#7fc8f8", "#8fd694", "#f5d76e", "#ffffff"];
 const NAME_FONTS = { classic: "Clássica", bold: "Negrito", round: "Fofa", script: "Cursiva", mono: "Máquina" };
@@ -1044,7 +1051,7 @@ $("editor-form").addEventListener("submit", async (e) => {
   const scheduleOn = segValue("ed-when") === "schedule";
   const options = $("ed-options").value.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 6);
   const data = {
-    emoji: $("ed-emoji").value.trim().slice(0, 4) || "🔔",
+    emoji: firstGrapheme($("ed-emoji").value.trim()) || "🔔",
     title: $("ed-title").value.trim(),
     body: $("ed-body").value.trim(),
     answerType: type,
