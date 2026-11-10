@@ -651,3 +651,13 @@ dialog h2 { margin-bottom: 4px; }
 .palette.selected { border-color: var(--crema); box-shadow: 0 0 0 1px var(--crema) inset; }
 .palette .dots { display: inline-flex; flex: none; }
 .palette .dots i { width: 12px; height: 12px; border-radius: 50%; margin-right: -3px; border: 1px solid rgba(0, 0, 0, 0.4); }
+
+/* ---------- Decor drawings follow the palette ---------- */
+#decor {
+  --d-dark: color-mix(in srgb, var(--caramel) 45%, black);
+  --d-mid: var(--caramel);
+  --d-light: var(--crema);
+  --d-pale: color-mix(in srgb, var(--fg) 85%, var(--surface));
+}
+.decor-item { position: absolute; user-select: none; -webkit-user-select: none; line-height: 1; }
+.decor-item svg { width: 100%; height: auto; display: block; }

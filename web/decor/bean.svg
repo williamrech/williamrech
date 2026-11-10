@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 80"><ellipse cx="30" cy="40" rx="24" ry="34" fill="#7a4a2b"/><ellipse cx="24" cy="30" rx="8" ry="14" fill="#9a6440" opacity=".55"/><path d="M30 8 C 18 26, 42 48, 30 72" fill="none" stroke="#3a2214" stroke-width="5" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 80"><!-- colors follow the palette when inlined; fallbacks are used elsewhere -->
+  <ellipse cx="30" cy="40" rx="24" ry="34" fill="var(--d-mid, #7a4a2b)"/>
+  <ellipse cx="24" cy="30" rx="8" ry="14" fill="var(--d-light, #9a6440)" opacity=".35"/>
+  <path d="M30 8 C 18 26, 42 48, 30 72" fill="none" stroke="var(--d-dark, #3a2214)" stroke-width="5" stroke-linecap="round"/>
+</svg>

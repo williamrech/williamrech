@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 110"><!-- example with FIXED colors: stays orange on any palette -->
+  <path d="M60 22 c 2 -10 8 -16 16 -18" fill="none" stroke="#4d6b2f" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="38" cy="66" rx="28" ry="38" fill="#e0701c"/>
+  <ellipse cx="82" cy="66" rx="28" ry="38" fill="#e0701c"/>
+  <ellipse cx="60" cy="66" rx="26" ry="40" fill="#f08a2c"/>
+  <path d="M44 56 l 8 -10 l 8 10 z M64 56 l 8 -10 l 8 10 z" fill="#3a1d08"/>
+  <path d="M40 78 q 20 16 40 0 l -6 6 l -6 -5 l -8 6 l -8 -6 l -6 5 z" fill="#3a1d08"/>
+</svg>

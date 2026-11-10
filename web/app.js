@@ -109,7 +109,7 @@ function applyLook() {
   applyPalette(pal);
   renderVersion();
   renderBanner();
-  placeDecor(todayOcc && todayOcc.decor);
+  placeDecor((todayOcc && todayOcc.decor) || pal.decor);
   runEffect(todayOcc && todayOcc.effect);
   if (typeof renderSettings === "function" && typeof auth !== "undefined" && auth.currentUser) renderSettings();
 }
@@ -141,42 +141,57 @@ function renderBanner() {
   el.hidden = !text;
 }
 
-// Background decor: coffee SVGs normally; an occasion can swap in emoji (e.g. "🎃🦇👻").
+// Background decor. A "decor" spec is a space-separated mix of drawings from web/decor
+// ("latte.svg") and emoji ("🎃🦇"). Occasion decor beats palette decor beats the coffee default.
+const DEFAULT_DECOR = "latte.svg mug.svg bean.svg bean.svg bean.svg";
+const svgCache = {};
+async function loadSvg(name) {
+  if (!(name in svgCache)) {
+    svgCache[name] = fetch(`decor/${name}`).then((r) => (r.ok ? r.text() : ""))
+      .then((t) => (/^\s*<svg[\s>]/i.test(t) && !/<script|on\w+=|href=/i.test(t) ? t : "")) // only plain, safe SVGs
+      .catch(() => "");
+  }
+  return svgCache[name];
+}
+
+function parseDecor(spec) {
+  const out = [];
+  for (const token of String(spec || "").trim().split(/\s+/).filter(Boolean)) {
+    if (/^[\w-]+\.svg$/i.test(token)) out.push({ svg: token });
+    else for (const g of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(token)) {
+      if (g.segment.trim()) out.push({ emoji: g.segment });
+    }
+  }
+  return out;
+}
+
 let decorKey = null;
-function placeDecor(emojiString) {
+function placeDecor(spec) {
+  spec = String(spec || "").trim() || DEFAULT_DECOR;
+  if (spec === decorKey) return; // don't reshuffle on every config update
+  decorKey = spec;
   const box = document.getElementById("decor");
-  const emojis = emojiString ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(String(emojiString))]
-    .map((s) => s.segment).filter((s) => s.trim()) : [];
-  const key = emojis.join("") || "coffee";
-  if (key === decorKey) return; // don't reshuffle on every config update
-  decorKey = key;
   box.innerHTML = "";
+  const items = parseDecor(spec);
+  if (!items.length) return;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const edgeX = () => (Math.random() < 0.5 ? rnd(-8, 18) : rnd(78, 102));
-  if (emojis.length) {
-    const n = Math.max(6, Math.min(10, emojis.length * 2));
-    for (let i = 0; i < n; i++) {
-      const s = document.createElement("span");
-      s.className = "decor-emoji";
-      s.textContent = emojis[i % emojis.length];
-      s.style.cssText = `font-size:${rnd(26, i < 2 ? 90 : 52)}px;left:${i < 3 ? edgeX() : rnd(0, 96)}vw;top:${rnd(2, 95)}vh;opacity:${rnd(0.12, 0.22)};transform:translate(-50%,-50%) rotate(${rnd(-35, 35)}deg)`;
-      box.appendChild(s);
-    }
-    return;
-  }
-  const items = [
-    { src: "decor/latte.svg", size: rnd(150, 210), x: edgeX(), y: rnd(-5, 90), op: rnd(0.10, 0.15) },
-    { src: "decor/mug.svg", size: rnd(80, 120), x: edgeX(), y: rnd(0, 92), op: rnd(0.12, 0.18) },
-  ];
-  const beans = 2 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < beans; i++) items.push({ src: "decor/bean.svg", size: rnd(22, 40), x: rnd(0, 95), y: rnd(0, 95), op: rnd(0.16, 0.26) });
-  for (const it of items) {
-    const img = document.createElement("img");
-    img.src = it.src;
-    img.alt = "";
-    img.style.cssText = `width:${it.size}px;left:${it.x}vw;top:${it.y}vh;opacity:${it.op};transform:translate(-50%,-50%) rotate(${rnd(0, 360)}deg)`;
-    box.appendChild(img);
-  }
+  // A short spec (e.g. 3 emoji) gets repeated a bit so the background isn't empty.
+  const list = items.length >= 5 ? items : Array.from({ length: Math.min(8, items.length * 2) }, (_, i) => items[i % items.length]);
+
+  list.forEach((it, i) => {
+    const big = i < 2; // the first two are the big ones, kept near the sides
+    const el = document.createElement("span");
+    el.className = "decor-item";
+    const size = it.svg ? (big ? rnd(130, 200) : rnd(26, 44)) : (big ? rnd(60, 90) : rnd(26, 46));
+    el.style.cssText = `left:${big ? edgeX() : rnd(0, 96)}vw;top:${rnd(2, 95)}vh;` +
+      `opacity:${it.svg ? (big ? rnd(0.10, 0.15) : rnd(0.16, 0.26)) : rnd(0.12, 0.22)};` +
+      `transform:translate(-50%,-50%) rotate(${rnd(it.svg ? 0 : -35, it.svg ? 360 : 35)}deg);` +
+      (it.svg ? `width:${size}px` : `font-size:${size}px`);
+    if (it.emoji) el.textContent = it.emoji;
+    else loadSvg(it.svg).then((svg) => { el.innerHTML = svg; });
+    box.appendChild(el);
+  });
 }
 
 // Effects: "confetti" (a burst on open) or "snow" (gentle, continuous).
