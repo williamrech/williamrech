@@ -235,3 +235,96 @@ exports.noonNag = onSchedule({ schedule: "0 12 * * *", timeZone: TZ, region: REG
     await send(tokens, msg, "?pergunta=mercado");
   }
 });
+
+// ---------------------------------------------------------------------------
+// Admin tools. To make someone admin: Firestore console → users/{uid} → add
+// field `admin` (boolean) = true. Clients can't set it themselves (see rules).
+// ---------------------------------------------------------------------------
+async function requireAdmin(req) {
+  const auth = requireAuth(req);
+  const snap = await db.doc(`users/${auth.uid}`).get();
+  if (!snap.exists || snap.get("admin") !== true) throw new HttpsError("permission-denied", "Só admin. Belo tento.");
+  return auth;
+}
+
+// Health check: counts, orphans, and validates every push token (dry run, nothing is shown).
+exports.adminHealth = onCall(opts, async (req) => {
+  const auth = await requireAdmin(req);
+  const myToken = req.data && String(req.data.token || "");
+  const [users, devices, trips] = await Promise.all([
+    db.collection("users").get(), db.collection("devices").get(), db.collection("trips").get(),
+  ]);
+  const userIds = new Set(users.docs.map((d) => d.id));
+  const deviceUids = new Set(devices.docs.map((d) => d.get("uid")));
+  const now = Date.now();
+
+  // Dry-run every token to find dead ones, and clean them up.
+  const tokens = devices.docs.map((d) => d.id);
+  const dead = [];
+  for (let i = 0; i < tokens.length; i += 500) {
+    const batch = tokens.slice(i, i + 500);
+    const res = await getMessaging().sendEach(
+      batch.map((token) => ({ token, notification: { title: "health", body: "check" } })), true);
+    res.responses.forEach((r, j) => { if (!r.success) dead.push(batch[j]); });
+  }
+  await Promise.all(dead.map((t) => db.collection("devices").doc(t).delete()));
+
+  const today = spParts();
+  return {
+    serverTime: `${today.key} ${today.hour}:${today.minute} (${DAY_NAMES[today.weekday]}, Brasília)`,
+    users: users.size,
+    names: users.docs.map((d) => d.get("name") || "(sem apelido)"),
+    usersWithoutDevices: users.docs.filter((d) => !deviceUids.has(d.id)).map((d) => d.get("name") || d.id),
+    devices: devices.size,
+    devicesWithoutProfile: devices.docs.filter((d) => !userIds.has(d.get("uid"))).length,
+    deadTokensRemoved: dead.length,
+    myDeviceRegistered: !!myToken && devices.docs.some((d) => d.id === myToken && d.get("uid") === auth.uid),
+    myDevices: devices.docs.filter((d) => d.get("uid") === auth.uid).length,
+    tripsUpcoming: trips.docs.filter((d) => d.get("when").toMillis() >= now).length,
+    tripsPast: trips.docs.filter((d) => d.get("when").toMillis() < now).length,
+  };
+});
+
+// Sends a test notification to the admin's own devices only.
+exports.adminTest = onCall(opts, async (req) => {
+  const auth = await requireAdmin(req);
+  return send(await tokensFor({ onlyUid: auth.uid }),
+    { title: "Teste ☕", body: "Se você tá lendo isso, as notificações funcionam." });
+});
+
+// scope "me": wipe my profile, devices, trips and rides. scope "all": wipe everything.
+// Admin flags survive so you can log back in as admin.
+exports.adminReset = onCall({ ...opts, timeoutSeconds: 120 }, async (req) => {
+  const auth = await requireAdmin(req);
+  const scope = req.data && req.data.scope;
+
+  if (scope === "all") {
+    await Promise.all([
+      db.recursiveDelete(db.collection("devices")),
+      db.recursiveDelete(db.collection("trips")),
+      db.recursiveDelete(db.collection("cooldowns")),
+    ]);
+    const users = await db.collection("users").get();
+    await Promise.all(users.docs.map((d) =>
+      d.get("admin") === true ? d.ref.set({ admin: true }) : d.ref.delete()));
+    return { ok: true, scope };
+  }
+
+  if (scope === "me") {
+    const [devices, trips] = await Promise.all([
+      db.collection("devices").where("uid", "==", auth.uid).get(),
+      db.collection("trips").get(),
+    ]);
+    const writes = devices.docs.map((d) => d.ref.delete());
+    for (const t of trips.docs) {
+      if (t.get("uid") === auth.uid) writes.push(t.ref.delete());
+      else if (t.get(`riders.${auth.uid}`)) writes.push(t.ref.update({ [`riders.${auth.uid}`]: FieldValue.delete() }));
+    }
+    writes.push(db.doc(`cooldowns/${auth.uid}`).delete());
+    writes.push(db.doc(`users/${auth.uid}`).set({ admin: true }));
+    await Promise.all(writes);
+    return { ok: true, scope };
+  }
+
+  throw new HttpsError("invalid-argument", "scope deve ser 'me' ou 'all'.");
+});

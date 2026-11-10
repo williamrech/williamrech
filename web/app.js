@@ -63,6 +63,9 @@ const api = {
   toggleRide: call("toggleRide"),
   cancelTrip: call("cancelTrip"),
   answerNo: call("answerNo"),
+  adminHealth: call("adminHealth"),
+  adminTest: call("adminTest"),
+  adminReset: call("adminReset"),
 };
 
 // ---------- Constants ----------
@@ -84,6 +87,31 @@ function toast(msg, ms = 3200) {
   t.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+// Loading state for any button: a little steaming cup + a coffee-flavoured excuse.
+const BUSY_LINES = ["Passando o café…", "Moendo os grãos…", "Esquentando a água…", "Coando…", "Fofocando com o servidor…"];
+function busy(btn, on, label) {
+  if (!btn) return;
+  if (on) {
+    if (btn.classList.contains("busy")) return;
+    btn.dataset.html = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add("busy");
+    btn.innerHTML = `<span class="cup" aria-hidden="true"></span><span>${esc(label || BUSY_LINES[Math.floor(Math.random() * BUSY_LINES.length)])}</span>`;
+  } else {
+    if (btn.dataset.html != null) btn.innerHTML = btn.dataset.html;
+    delete btn.dataset.html;
+    btn.disabled = false;
+    btn.classList.remove("busy");
+  }
+}
+// Runs fn with btn showing the loading state. Returns fn's result, or undefined on error (after a toast).
+async function withBusy(btn, fn, label) {
+  busy(btn, true, label);
+  try { return await fn(); }
+  catch (err) { console.error(err); toast(friendlyError(err)); }
+  finally { if (btn.isConnected) busy(btn, false); }
 }
 
 function spParts(date = new Date()) {
@@ -233,9 +261,14 @@ async function checkGate() {
     btn.textContent = copy.button;
     btn.onclick = async () => {
       // Must come straight from a tap — iOS requires it.
+      busy(btn, true, "Esperando você deixar…");
       const perm = await Notification.requestPermission();
-      if (perm === "granted") toast("Pronto. Agora você é nosso. 🔔");
-      checkGate();
+      if (perm === "granted") {
+        busy(btn, true, "Registrando o aparelho…");
+        toast("Pronto. Agora você é nosso. 🔔");
+      }
+      await checkGate();
+      busy(btn, false);
     };
   }
   if (!dlg.open) dlg.showModal();
@@ -254,6 +287,7 @@ let me = null;          // users/{uid} data
 let meLoaded = false;
 let askedDaily = false;
 let trips = [];
+let tripsLoaded = false;
 let unsubs = [];
 
 // ---------- Auth flow ----------
@@ -266,6 +300,8 @@ onAuthStateChanged(auth, async (user) => {
   meLoaded = false;
   askedDaily = false;
   gatePassed = false;
+  tripsLoaded = false;
+  trips = [];
 
   if (!user) {
     show("view-app", false);
@@ -277,12 +313,14 @@ onAuthStateChanged(auth, async (user) => {
   show("view-app");
   show("topbar");
   $("who").textContent = user.email;
+  renderTrips(); // shows the loading state until data arrives
 
   // My profile
   unsubs.push(onSnapshot(doc(db, "users", user.uid), (snap) => {
     me = snap.exists() ? snap.data() : {};
     meLoaded = true;
     $("settings-name").textContent = me.name || "(sem apelido)";
+    show("admin", me.admin === true);
     renderDays();
     proceed();
   }));
@@ -292,6 +330,7 @@ onAuthStateChanged(auth, async (user) => {
   const q = query(collection(db, "trips"), where("when", ">=", since), orderBy("when"));
   unsubs.push(onSnapshot(q, (snap) => {
     trips = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    tripsLoaded = true;
     renderTrips();
   }, (err) => console.error("trips", err)));
 
@@ -301,13 +340,13 @@ onAuthStateChanged(auth, async (user) => {
 $("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = e.submitter;
-  btn.disabled = true;
+  busy(btn, true, "Conferindo…");
   try {
     await signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value);
   } catch {
     toast("Errou o e-mail ou a senha. Concentra.");
   } finally {
-    btn.disabled = false;
+    busy(btn, false);
   }
 });
 
@@ -342,12 +381,14 @@ $("name-custom").addEventListener("input", () => {
 });
 $("dlg-name").addEventListener("cancel", (e) => { if (!me || !me.name) e.preventDefault(); });
 $("name-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
   const name = ($("name-custom").value.trim() || chosenName).slice(0, 40);
-  if (!name) { e.preventDefault(); toast("Escolhe um, vai."); return; }
-  try {
+  if (!name) { toast("Escolhe um, vai."); return; }
+  const ok = await withBusy(e.submitter, async () => {
     await setDoc(doc(db, "users", auth.currentUser.uid), { name, updatedAt: serverTimestamp() }, { merge: true });
-    toast(`Prazer, ${name}. 🍦`);
-  } catch (err) { toast(friendlyError(err)); }
+    return true;
+  }, "Batizando…");
+  if (ok) { $("dlg-name").close(); toast(`Prazer, ${name}. ☕`); }
 });
 
 // ---------- Daily question ----------
@@ -377,19 +418,14 @@ $("daily-yes").addEventListener("click", () => {
 });
 
 $("daily-no").addEventListener("click", async () => {
-  const btn = $("daily-no");
-  btn.disabled = true;
-  try {
-    const { data } = await api.answerNo();
-    $("dlg-daily").close();
-    toast(data.skipped
-      ? `Beleza. Nunca mais te pergunto na ${data.skipped}.`
-      : "Anotado. Mas sexta que vem eu pergunto de novo. 😌", 4500);
-  } catch (err) {
-    toast(friendlyError(err));
-  } finally {
-    btn.disabled = false;
-  }
+  $("daily-yes").disabled = true;
+  const res = await withBusy($("daily-no"), () => api.answerNo(), "Anotando…");
+  $("daily-yes").disabled = false;
+  if (!res) return;
+  $("dlg-daily").close();
+  toast(res.data.skipped
+    ? `Beleza. Nunca mais te pergunto na ${res.data.skipped}.`
+    : "Anotado. Mas sexta que vem eu pergunto de novo. 😌", 4500);
 });
 
 // ---------- When picker / create trip ----------
@@ -407,9 +443,8 @@ function openWhenPicker() {
     ["Agora", new Date(now.getTime() + 5 * 60000)],
     ["Daqui 1h", new Date(now.getTime() + 60 * 60000)],
   ];
-  if (now.getHours() < 18) options.push(["Hoje 18h", at(18)]);
+  if (now.getHours() < 18) options.push(["Às 18h", at(18)]);
   options.push(["Amanhã cedo", at(9, 0, 1)]);
-  options.push(["Amanhã 18h", at(18, 0, 1)]);
 
   for (const [label, date] of options) {
     const b = document.createElement("button");
@@ -419,34 +454,35 @@ function openWhenPicker() {
     b.onclick = () => {
       $("when-input").value = toLocalInput(date);
       chips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c === b));
+      updateWhenSubmit();
     };
     chips.appendChild(b);
   }
-  $("when-input").value = toLocalInput(new Date(now.getTime() + 60 * 60000));
+  $("when-input").value = "";
+  updateWhenSubmit();
   $("dlg-when").showModal();
 }
 
 $("btn-market").addEventListener("click", openWhenPicker);
 $("when-cancel").addEventListener("click", () => $("dlg-when").close());
+function updateWhenSubmit() {
+  $("when-submit").disabled = !$("when-input").value;
+}
 $("when-input").addEventListener("input", () => {
   $("when-chips").querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+  updateWhenSubmit();
 });
 
 $("when-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const btn = e.submitter;
   const when = new Date($("when-input").value);
   if (isNaN(when)) return toast("Escolhe um horário.");
-  btn.disabled = true;
-  try {
-    const { data } = await api.createTrip({ when: when.toISOString() });
-    $("dlg-when").close();
-    toast(data.sent ? `Avisei ${data.sent} aparelho(s). Agora aguenta. 📣` : "Criado. Mas ninguém tem notificação ativada. 🦗");
-  } catch (err) {
-    toast(friendlyError(err));
-  } finally {
-    btn.disabled = false;
-  }
+  $("when-cancel").disabled = true;
+  const res = await withBusy($("when-submit"), () => api.createTrip({ when: when.toISOString() }), "Avisando geral…");
+  $("when-cancel").disabled = false;
+  if (!res) return updateWhenSubmit();
+  $("dlg-when").close();
+  toast(res.data.sent ? `Avisei ${res.data.sent} aparelho(s). Agora aguenta. 📣` : "Criado. Mas ninguém mais tem notificação ativada. 🦗");
 });
 
 // ---------- Trips list ----------
@@ -456,8 +492,11 @@ function renderTrips() {
   const cutoff = Date.now() - 60 * 60000; // keep showing for 1h after it starts
   const visible = trips.filter((t) => t.when && t.when.toMillis() >= cutoff);
 
+  // Don't redraw while a trip button is mid-action (keeps its loading state).
+  if (list.querySelector(".busy")) return;
   list.innerHTML = "";
-  show("trips-empty", visible.length === 0);
+  show("trips-loading", !tripsLoaded);
+  show("trips-empty", tripsLoaded && visible.length === 0);
 
   for (const t of visible) {
     const li = document.createElement("li");
@@ -494,8 +533,9 @@ function renderTrips() {
 setInterval(renderTrips, 60000);
 
 async function act(btn, fn, okMsg) {
-  btn.disabled = true;
-  try { await fn(); toast(okMsg); } catch (err) { toast(friendlyError(err)); btn.disabled = false; }
+  const res = await withBusy(btn, fn);
+  if (res) toast(okMsg);
+  renderTrips(); // pick up any update that arrived while busy
 }
 
 // ---------- Settings ----------
@@ -512,10 +552,15 @@ function renderDays() {
     cb.onchange = async () => {
       const current = new Set((me && me.skipDays) || []);
       cb.checked ? current.delete(i) : current.add(i);
+      wrap.classList.add("saving");
+      wrap.querySelectorAll("input").forEach((x) => (x.disabled = true));
       try {
         await setDoc(doc(db, "users", auth.currentUser.uid),
           { skipDays: [...current].sort(), updatedAt: serverTimestamp() }, { merge: true });
-      } catch (err) { toast(friendlyError(err)); }
+        toast(cb.checked ? `Ok, volto a perguntar na ${DAY_NAMES[i]}. 😈` : `Ok, ${DAY_NAMES[i]} tá liberada.`);
+      } catch (err) { toast(friendlyError(err)); cb.checked = !cb.checked; }
+      wrap.classList.remove("saving");
+      renderDays();
     };
     l.append(label, cb);
     wrap.appendChild(l);
@@ -527,6 +572,7 @@ $("settings-close").addEventListener("click", () => $("dlg-settings").close());
 $("change-name").addEventListener("click", () => { $("dlg-settings").close(); openNamePicker(); });
 
 $("logout").addEventListener("click", async () => {
+  busy($("logout"), true, "Saindo…");
   try {
     if (currentToken) {
       await deleteDoc(doc(db, "devices", currentToken));
@@ -534,9 +580,76 @@ $("logout").addEventListener("click", async () => {
       currentToken = null;
     }
   } catch (err) { console.error(err); }
-  $("dlg-settings").close();
   await signOut(auth);
+  busy($("logout"), false);
+  $("dlg-settings").close();
 });
+
+// ---------- Admin ----------
+function adminOut(lines) {
+  $("adm-out").innerHTML = lines.map(([ok, text]) =>
+    `<div class="${ok ? "ok" : "warn"}">${ok ? "✓" : "⚠"} ${esc(text)}</div>`).join("");
+}
+
+$("adm-health").addEventListener("click", async () => {
+  const lines = [];
+  const supported = await messagingReady;
+  lines.push([true, `Config Firebase: ${config.projectId}`]);
+  lines.push([supported, `Navegador suporta push: ${supported ? "sim" : "não"}`]);
+  lines.push([Notification.permission === "granted", `Permissão de notificação: ${Notification.permission}`]);
+  const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : null;
+  lines.push([!!(reg && reg.active), `Service worker: ${reg && reg.active ? "ativo" : "não encontrado"}`]);
+  lines.push([!isIOS || isStandalone, `Modo app (Tela de Início): ${isStandalone ? "sim" : "não"}`]);
+  lines.push([!!currentToken, `Token deste aparelho: ${currentToken ? "ok" : "nenhum"}`]);
+  adminOut(lines);
+
+  const res = await withBusy($("adm-health"), () => api.adminHealth({ token: currentToken }), "Examinando…");
+  if (!res) return;
+  const h = res.data;
+  lines.push([true, `Servidor: ${h.serverTime}`]);
+  lines.push([h.myDeviceRegistered, `Este aparelho no servidor: ${h.myDeviceRegistered ? "sim" : "não"} (você tem ${h.myDevices})`]);
+  lines.push([true, `Pessoas: ${h.users} — ${h.names.join(", ") || "ninguém"}`]);
+  lines.push([h.usersWithoutDevices.length === 0, `Sem aparelho: ${h.usersWithoutDevices.join(", ") || "ninguém"}`]);
+  lines.push([true, `Aparelhos: ${h.devices}`]);
+  lines.push([h.devicesWithoutProfile === 0, `Aparelhos sem perfil: ${h.devicesWithoutProfile}`]);
+  lines.push([h.deadTokensRemoved === 0, `Tokens mortos removidos: ${h.deadTokensRemoved}`]);
+  lines.push([true, `Mercados: ${h.tripsUpcoming} futuros, ${h.tripsPast} passados`]);
+  adminOut(lines);
+});
+
+$("adm-test").addEventListener("click", async () => {
+  const res = await withBusy($("adm-test"), () => api.adminTest(), "Mandando…");
+  if (res) toast(res.data.sent ? `Enviado pra ${res.data.sent} aparelho(s) seu(s).` : "Você não tem aparelho registrado. 🤔");
+});
+
+// Clears this device (push token + service worker), then logs out and reloads.
+// Note: browsers don't let a site revoke its own notification permission —
+// to see the permission prompt again, remove it in the phone/browser settings
+// (on iPhone: delete the app from the Home Screen and add it again).
+async function wipeThisDevice() {
+  try { if (messaging) await deleteToken(messaging); } catch (e) { console.error(e); }
+  try {
+    const regs = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistrations() : [];
+    await Promise.all(regs.map((r) => r.unregister()));
+  } catch (e) { console.error(e); }
+  try { localStorage.clear(); sessionStorage.clear(); } catch {}
+  await signOut(auth);
+  location.reload();
+}
+
+async function adminReset(btn, scope, question) {
+  if (!confirm(question)) return;
+  if (scope === "all" && !confirm("Certeza MESMO? Apaga mercados, apelidos e aparelhos de TODO MUNDO.")) return;
+  const res = await withBusy(btn, () => api.adminReset({ scope }), "Apagando…");
+  if (!res) return;
+  busy(btn, true, "Limpando este aparelho…");
+  await wipeThisDevice();
+}
+
+$("adm-reset-me").addEventListener("click", () => adminReset($("adm-reset-me"), "me",
+  "Apagar seu apelido, seus mercados e seus aparelhos? Você vai ver tudo de novo como novato."));
+$("adm-nuke").addEventListener("click", () => adminReset($("adm-nuke"), "all",
+  "Apagar TUDO de todo mundo? (Só o seu status de admin fica.)"));
 
 // Coming back to the app (e.g. from a notification) — re-check the daily question.
 document.addEventListener("visibilitychange", () => {

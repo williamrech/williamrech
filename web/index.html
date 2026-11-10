@@ -50,6 +50,7 @@
 
       <h2 class="section-title">Quem vai no mercado</h2>
       <ul id="trips" class="trips"></ul>
+      <p id="trips-loading" class="muted empty loading" hidden><span class="cup" aria-hidden="true"></span> Passando o café…</p>
       <p id="trips-empty" class="muted empty">Ninguém vai no mercado. A geladeira chora. 😢</p>
     </section>
   </main>
@@ -88,10 +89,10 @@
       <h2>Vai quando?</h2>
       <div class="chips" id="when-chips"></div>
       <label class="muted small" for="when-input">Ou escolhe:</label>
-      <input id="when-input" type="datetime-local" required>
+      <input id="when-input" type="datetime-local">
       <div class="row-buttons">
         <button type="button" id="when-cancel" class="secondary">Cancelar</button>
-        <button type="submit" class="primary">Avisar geral</button>
+        <button type="submit" id="when-submit" class="primary" disabled>Avisar geral</button>
       </div>
     </form>
   </dialog>
@@ -104,6 +105,16 @@
     <p class="muted small">Sexta é obrigatório. Não adianta reclamar.</p>
     <h3>Apelido</h3>
     <p><span id="settings-name"></span> · <button id="change-name" class="link">trocar</button></p>
+    <div id="admin" hidden>
+      <h3>Admin</h3>
+      <div class="admin-grid">
+        <button id="adm-health" class="secondary">Checar saúde</button>
+        <button id="adm-test" class="secondary">Notificação teste</button>
+        <button id="adm-reset-me" class="secondary">Resetar só eu</button>
+        <button id="adm-nuke" class="danger">Apagar TUDO</button>
+      </div>
+      <div id="adm-out" class="adm-out"></div>
+    </div>
     <div class="row-buttons">
       <button id="logout" class="secondary">Sair</button>
       <button id="settings-close" class="primary">Fechar</button>
