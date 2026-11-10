@@ -15,6 +15,37 @@ const $ = (id) => document.getElementById(id);
 const show = (id, on = true) => { $(id).hidden = !on; };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+// ---------- Version number (purely decorative, not the real app version) ----------
+// Same "version" for the whole family on a given day: chosen from the date, in Brasília time.
+(function renderVersion() {
+  const key = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()); // YYYY-MM-DD
+  const md = key.slice(5);
+  const weekday = new Date(key + "T12:00:00").getDay();
+  const SPECIAL = {
+    "12-27": "feliz.aniversario",
+    "12-25": "feliz.aniversario",
+    "12-26": "feliz.aniversario",
+    "01-01": "2.0.0-ano.novo",
+    "04-01": "0.0.1-mentira",
+    "10-31": "1.666.0",
+    "12-25": "1.0.0-natal",
+  };
+  const WEIRD = [
+    "1.666.0", "1.eita.0", "1.bah.0", "1.tchê.0", "1.oxe.0", "1.uai.0",
+    "1.0.0-beta-da-tia", "0.0.1", "1.0.sorvete", "3.14.159", "1.0.0-socorro",
+    "9.9.9", "1.0.cafezinho", "1.0.0.0.0.0", "1.2.3.4.5", "1.0.-1", "NaN.0.0",
+    "1.0.0-sem-açúcar", "1.mercado.0", "1.42.0", "1.0.0-ela-gosta", "1.0.0 (confia)",
+  ];
+  // Tiny deterministic hash of the date.
+  let h = 2166136261;
+  for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+
+  let v = SPECIAL[md];
+  if (!v && md.endsWith("-13") && weekday === 5) v = "1.13.sexta";
+  if (!v && h % 5 === 0) v = WEIRD[(h >>> 3) % WEIRD.length]; // roughly 1 day in 5
+  document.getElementById("version").textContent = v || "1.0.0";
+})();
+
 // ---------- Setup check ----------
 const config = self.FIREBASE_CONFIG;
 if (!config || String(config.apiKey).startsWith("REPLACE")) {
@@ -139,36 +170,83 @@ async function registerDevice() {
   }
 }
 
-function renderNotifBanner(supported) {
-  const banner = $("notif-banner");
-  banner.innerHTML = "";
-  if (isIOS && !isStandalone) {
-    banner.innerHTML = `<b>iPhone:</b> pra receber notificações, toca em Compartilhar
-      → <b>Adicionar à Tela de Início</b>, abre o app por lá e entra de novo.`;
-    return show("notif-banner");
+// ---------- Mandatory notification gate ----------
+// No notifications, no app. This is a nag app after all.
+let gatePassed = false;
+
+function notifState(supported) {
+  if (isIOS && !isStandalone) return "ios-install";
+  if (!supported) return "unsupported";
+  return Notification.permission; // "default" | "denied" | "granted"
+}
+
+const GATE_COPY = {
+  "ios-install": {
+    title: "Primeiro, instala o app 📲",
+    body: `No iPhone só funciona pela Tela de Início:<br><br>
+      1. Toca em <b>Compartilhar</b> (o quadradinho com a seta)<br>
+      2. <b>Adicionar à Tela de Início</b><br>
+      3. Abre o app por lá e entra de novo.<br><br>
+      <span class="muted">Sem isso, nada feito. Regras são regras.</span>`,
+  },
+  unsupported: {
+    title: "Esse navegador não serve 🙅",
+    body: "Ele não recebe notificações, e sem notificação não tem app. Tenta no Chrome ou, no iPhone, pelo Safari.",
+  },
+  denied: {
+    title: "Você bloqueou a gente 😤",
+    body: `As notificações estão bloqueadas. Libera nas configurações do celular
+      (Ajustes → Notificações) ou do navegador, e volta aqui.<br><br>
+      <span class="muted">A gente espera. A gente sempre espera.</span>`,
+  },
+  default: {
+    title: "Uma coisinha antes ☕",
+    body: `Esse app vive de te encher o saco. Sem notificação, sem acesso.<br><br>
+      <span class="muted">Não é negociável.</span>`,
+    button: "Ativar notificações",
+  },
+};
+
+async function checkGate() {
+  if (!auth.currentUser) return;
+  const supported = await messagingReady;
+  const state = notifState(supported);
+  const dlg = $("dlg-gate");
+
+  if (state === "granted") {
+    if (dlg.open) dlg.close();
+    if (!gatePassed) {
+      gatePassed = true;
+      await registerDevice();
+      proceed();
+    }
+    return;
   }
-  if (!supported) {
-    banner.textContent = "Este navegador não recebe notificações. O resto funciona.";
-    return show("notif-banner");
-  }
-  if (Notification.permission === "denied") {
-    banner.textContent = "As notificações estão bloqueadas. Libera nas configurações do celular/navegador.";
-    return show("notif-banner");
-  }
-  if (Notification.permission === "default") {
-    banner.textContent = "Ativa as notificações, senão como a gente vai te encher o saco?";
-    const btn = document.createElement("button");
-    btn.className = "primary";
-    btn.textContent = "Ativar notificações";
+
+  gatePassed = false;
+  const copy = GATE_COPY[state];
+  $("gate-title").textContent = copy.title;
+  $("gate-body").innerHTML = copy.body;
+  const btn = $("gate-button");
+  btn.hidden = !copy.button;
+  if (copy.button) {
+    btn.textContent = copy.button;
     btn.onclick = async () => {
+      // Must come straight from a tap — iOS requires it.
       const perm = await Notification.requestPermission();
-      if (perm === "granted") { await registerDevice(); toast("Pronto. Agora você é nosso. 🔔"); }
-      renderNotifBanner(supported);
+      if (perm === "granted") toast("Pronto. Agora você é nosso. 🔔");
+      checkGate();
     };
-    banner.appendChild(btn);
-    return show("notif-banner");
   }
-  show("notif-banner", false);
+  if (!dlg.open) dlg.showModal();
+}
+$("dlg-gate").addEventListener("cancel", (e) => e.preventDefault()); // no escaping
+
+// Runs the next popup in line once the gate is passed: name first, then the daily question.
+function proceed() {
+  if (!gatePassed || !meLoaded) return;
+  if (!me.name) openNamePicker();
+  else if (!askedDaily) { askedDaily = true; maybeAskDaily(); }
 }
 
 // ---------- State ----------
@@ -187,6 +265,7 @@ onAuthStateChanged(auth, async (user) => {
   me = null;
   meLoaded = false;
   askedDaily = false;
+  gatePassed = false;
 
   if (!user) {
     show("view-app", false);
@@ -205,8 +284,7 @@ onAuthStateChanged(auth, async (user) => {
     meLoaded = true;
     $("settings-name").textContent = me.name || "(sem apelido)";
     renderDays();
-    if (!me.name) openNamePicker();
-    else if (!askedDaily) { askedDaily = true; maybeAskDaily(); }
+    proceed();
   }));
 
   // Upcoming trips
@@ -217,9 +295,7 @@ onAuthStateChanged(auth, async (user) => {
     renderTrips();
   }, (err) => console.error("trips", err)));
 
-  const supported = await messagingReady;
-  if (supported && Notification.permission === "granted") await registerDevice();
-  renderNotifBanner(supported);
+  checkGate();
 });
 
 $("login-form").addEventListener("submit", async (e) => {
@@ -281,7 +357,8 @@ function isNagDayForMe(weekday) {
 }
 
 function maybeAskDaily() {
-  if ($("dlg-daily").open || $("dlg-when").open || $("dlg-name").open) return;
+  if (!gatePassed) return;
+  if ($("dlg-daily").open || $("dlg-when").open || $("dlg-name").open || $("dlg-gate").open) return;
   const today = spParts();
   if (me && me.lastAnswered === today.key) { wantDailyQuestion = false; return; }
   const due = today.hour >= 12 && isNagDayForMe(today.weekday);
@@ -289,7 +366,7 @@ function maybeAskDaily() {
     wantDailyQuestion = false;
     $("daily-hint").textContent = today.weekday === FRIDAY
       ? "É sexta. Sexta é obrigatório. 💅"
-      : `Se disser não, nunca mais te pergunto na ${DAY_NAMES[today.weekday]}. (Dá pra mudar nas ⚙️)`;
+      : `Se disser não, nunca mais te pergunto na ${DAY_NAMES[today.weekday]}. (Dá pra mudar nas configurações)`;
     $("dlg-daily").showModal();
   }
 }
@@ -330,9 +407,9 @@ function openWhenPicker() {
     ["Agora", new Date(now.getTime() + 5 * 60000)],
     ["Daqui 1h", new Date(now.getTime() + 60 * 60000)],
   ];
-  if (now.getHours() < 17) options.push(["Fim da tarde", at(18)]);
-  if (now.getHours() < 20) options.push(["De noite", at(20)]);
+  if (now.getHours() < 18) options.push(["Hoje 18h", at(18)]);
   options.push(["Amanhã cedo", at(9, 0, 1)]);
+  options.push(["Amanhã 18h", at(18, 0, 1)]);
 
   for (const [label, date] of options) {
     const b = document.createElement("button");
@@ -463,5 +540,7 @@ $("logout").addEventListener("click", async () => {
 
 // Coming back to the app (e.g. from a notification) — re-check the daily question.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && meLoaded && me && me.name) maybeAskDaily();
+  if (document.visibilityState !== "visible" || !auth.currentUser) return;
+  checkGate();
+  if (gatePassed && meLoaded && me && me.name) maybeAskDaily();
 });

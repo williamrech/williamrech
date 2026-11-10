@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Ela gosta de sorvete?</title>
-  <meta name="theme-color" content="#14110f">
+  <meta name="theme-color" content="#1a1210">
   <link rel="manifest" href="manifest.webmanifest">
   <!-- iPhone: needed so "Add to Home Screen" makes a real app (required for push on iOS) -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,8 +18,10 @@
 </head>
 <body>
   <header id="topbar" hidden>
-    <h1>Ela gosta de sorvete? <span aria-hidden="true">🍦</span></h1>
-    <button id="open-settings" class="icon" aria-label="Configurações">⚙️</button>
+    <h1>Ela gosta de sorvete?</h1>
+    <button id="open-settings" class="icon" aria-label="Configurações">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
   </header>
 
   <main>
@@ -30,7 +32,7 @@
 
     <!-- Login -->
     <section id="view-login" class="card" hidden>
-      <h2>Ela gosta de sorvete? 🍦</h2>
+      <h2>Ela gosta de sorvete?</h2>
       <p class="muted">Só pra família. Pede uma conta pro admin.</p>
       <form id="login-form">
         <input id="email" type="email" autocomplete="username" placeholder="E-mail" required>
@@ -41,8 +43,6 @@
 
     <!-- Main app -->
     <section id="view-app" hidden>
-      <div id="notif-banner" class="banner" hidden></div>
-
       <button id="btn-market" class="feature">
         <span class="emoji">🛒</span>
         <span>Tô indo no mercado,<br><b>quem vai junto?</b></span>
@@ -53,6 +53,13 @@
       <p id="trips-empty" class="muted empty">Ninguém vai no mercado. A geladeira chora. 😢</p>
     </section>
   </main>
+
+  <!-- Modal: mandatory notifications (can't be closed) -->
+  <dialog id="dlg-gate">
+    <h2 id="gate-title"></h2>
+    <p id="gate-body"></p>
+    <button id="gate-button" class="primary wide" hidden></button>
+  </dialog>
 
   <!-- Modal: pick a name -->
   <dialog id="dlg-name">
@@ -103,6 +110,8 @@
     </div>
     <p class="muted small" id="who"></p>
   </dialog>
+
+  <footer><span id="version">1.0.0</span></footer>
 
   <div id="toast" role="status" aria-live="polite"></div>
 
