@@ -1,12 +1,14 @@
 # Ela gosta de sorvete? 🍦
 
 Family nag app (pt-BR UI). Features:
-- **Noon nag:** every day at 12:00 (Brasília) each user is asked "Vai no mercado hoje?". Answering "Não" skips that weekday forever (except Friday, which is mandatory). Users can re-enable days in ⚙️.
-- **"Tô indo no mercado, quem vai junto?":** announce a trip with a time; everyone is notified.
-- **Ride-along:** "Vou junto" / "Desisti" on any trip; everyone is notified of every action.
+- **Chamados:** personal saved notifications. Each has a look (emoji/title/text), answer type (none, Sim/Não, options, free text), recipients, who sees answers, nagging (every X min for Y hours), mute permission, and a trigger (button or weekly schedule).
+- **Rounds:** each firing creates a round; answers are live, changes are announced ("mudou de ideia, 2ª vez"), creators see who muted their chamados.
+- **Quiet hours:** per person, off by default. Questions wait; answer broadcasts are skipped.
+- **Market trips:** "Tô indo no mercado, quem vai junto?" with ride-along.
+- **Gendered copy:** each user picks menino/menina at onboarding.
 
-Data: `users/{uid}` (name, skipDays, lastAnswered), `trips/{id}` (uid, name, when, riders), `devices/{token}`.
-Functions: `createTrip`, `toggleRide`, `cancelTrip`, `answerNo` (callables) and `noonNag` (scheduled).
+Data: `users/{uid}` (name, gender, quiet, mutes, admin), `templates/{id}`, `rounds/{id}`, `trips/{id}`, `devices/{token}`.
+Functions: `fireTemplate`, `answerRound`, `closeRound`, `muteTemplate`, `createTrip`, `toggleRide`, `cancelTrip`, admin tools, and `tick` (every 5 min: scheduled chamados, delayed deliveries, nagging, closing).
 
 ## How it fits together
 
