@@ -271,6 +271,20 @@ handlers.closeRound = async (req) => {
   return { ok: true };
 };
 
+// Delete a round for everyone (its creator, or an admin).
+handlers.deleteRound = async (req) => {
+  const auth = requireAuth(req);
+  const ref = db.doc(`rounds/${String((req.data && req.data.roundId) || "")}`);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: true };
+  if (snap.get("ownerUid") !== auth.uid) {
+    const me = await db.doc(`users/${auth.uid}`).get();
+    if (!me.exists || me.get("admin") !== true) throw new HttpsError("permission-denied", "Só quem criou pode apagar.");
+  }
+  await ref.delete();
+  return { ok: true };
+};
+
 // Mute / unmute a template (from a round card, or by templateId from settings).
 handlers.muteTemplate = async (req) => {
   const auth = requireAuth(req);

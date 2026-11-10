@@ -365,6 +365,7 @@ const api = {
   fireTemplate: call("fireTemplate"),
   answerRound: call("answerRound"),
   closeRound: call("closeRound"),
+  deleteRound: call("deleteRound"),
   muteTemplate: call("muteTemplate"),
   adminHealth: call("adminHealth"),
   adminTest: call("adminTest"),
@@ -675,6 +676,7 @@ onAuthStateChanged(auth, async (user) => {
     meLoaded = true;
     $("settings-name").textContent = me.name || "(sem apelido)";
     setAdminVisible(me.admin === true);
+    renderRounds(); // hidden rounds may have changed
     applyLook();
     renderSettings();
     renderMeChip();
@@ -1121,7 +1123,8 @@ function renderRounds() {
   if (list.querySelector(".busy")) return;
   const uid = auth.currentUser.uid;
   const dayAgo = Date.now() - 24 * 3600000;
-  const visible = rounds.filter((r) => r.open || (r.createdAt && r.createdAt.toMillis() > dayAgo));
+  const hidden = (me && me.hidden) || {};
+  const visible = rounds.filter((r) => !hidden[r.id] && (r.open || (r.createdAt && r.createdAt.toMillis() > dayAgo)));
   list.innerHTML = "";
   show("rounds-empty", roundsLoaded && visible.length === 0);
 
@@ -1196,6 +1199,28 @@ function renderRounds() {
         const res = await withBusy(b, () => api.closeRound({ roundId: r.id }), "…");
         if (res) toast("Encerrado. 🔒");
       };
+      li.querySelector(".round-corner").appendChild(b);
+    }
+    // Closed rounds: the creator deletes it for everyone; anyone else hides it from their own feed.
+    if (!r.open || r.answerType === "none") {
+      const b = document.createElement("button");
+      b.className = "link small";
+      if (mine) {
+        b.textContent = "apagar";
+        b.onclick = async () => {
+          if (!(await confirmBox("Apagar?", "Some do feed de todo mundo.", "Apagar"))) return;
+          const res = await withBusy(b, () => api.deleteRound({ roundId: r.id }), "…");
+          if (res) toast("Apagado. 🧹");
+        };
+      } else {
+        b.textContent = "ocultar";
+        b.onclick = async () => {
+          try {
+            await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [r.id]: true }, updatedAt: serverTimestamp() }, { merge: true });
+            toast("Ocultado do seu feed. 🙈");
+          } catch (err) { toast(friendlyError(err)); }
+        };
+      }
       li.querySelector(".round-corner").appendChild(b);
     }
     if (isRecipient && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
