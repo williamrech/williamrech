@@ -6,6 +6,7 @@ Family nag app (pt-BR UI). Features:
 - **Quiet hours:** per person, off by default. Questions wait; answer broadcasts are skipped.
 - **Home:** pinned favorite chamados on top, then Feed / Chamados tabs. Schedules use 15-minute steps (the server checks every 15 min).
 - **Occasions & palettes (config/fun):** date rules (12-25, fri-13, 2sun-05, lastfri-11, easter-47, 12-20..12-31, comma = OR) that force a palette, emoji decor, banner, confetti/snow and the footer version for everyone. Preview any with `?ocasiao=<id>`. Users pick a palette in Configurações.
+- **Admin tab** (admins only): tools, people (make/remove admins), palettes and occasions editors with preview, drawings gallery + SVG upload (stored in Firestore `decor/{name}`), version & texts.
 - **Styled names:** each user picks color, font, effect and badge; everyone sees it.
 - **Gendered copy:** each user picks menino/menina at onboarding.
 

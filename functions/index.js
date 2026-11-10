@@ -436,6 +436,22 @@ handlers.adminReset = async (req) => {
   throw new HttpsError("invalid-argument", "scope deve ser 'me' ou 'all'.");
 };
 
+// Promote / demote another person (can't remove the last admin).
+handlers.setAdmin = async (req) => {
+  await requireAdmin(req);
+  const uid = String((req.data && req.data.uid) || "");
+  const make = !!(req.data && req.data.admin);
+  const ref = db.doc(`users/${uid}`);
+  const snap = await ref.get();
+  if (!uid || !snap.exists) throw new HttpsError("not-found", "Pessoa não encontrada.");
+  if (!make) {
+    const admins = await db.collection("users").where("admin", "==", true).get();
+    if (admins.size <= 1 && admins.docs[0].id === uid) throw new HttpsError("failed-precondition", "Precisa ter pelo menos um admin.");
+  }
+  await ref.update({ admin: make ? true : FieldValue.delete() });
+  return { ok: true, admin: make };
+};
+
 handlers.claimAdmin = async (req) => {
   const auth = requireAuth(req);
   return db.runTransaction(async (t) => {

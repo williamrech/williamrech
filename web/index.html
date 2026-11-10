@@ -93,11 +93,65 @@
       <div class="tabs" role="tablist">
         <button class="tab selected" data-tab="feed" role="tab">Feed</button>
         <button class="tab" data-tab="chamados" role="tab">Chamados</button>
+        <button class="tab" data-tab="admin" role="tab" id="tab-btn-admin" hidden>Admin</button>
       </div>
 
       <div id="tab-feed" role="tabpanel">
         <ul id="rounds" class="rounds"></ul>
         <p id="rounds-empty" class="muted empty" hidden>Nada rolando. Silêncio suspeito. 🤨</p>
+      </div>
+
+      <!-- Admin tab (only for admins) -->
+      <div id="tab-admin" role="tabpanel" hidden>
+        <details class="adm-sec" open>
+          <summary>🛠️ Ferramentas</summary>
+          <div class="admin-grid">
+            <button id="adm-health" class="secondary">Checar saúde</button>
+            <button id="adm-test" class="secondary">Notificação teste</button>
+            <button id="adm-reset-me" class="secondary">Resetar só eu</button>
+            <button id="adm-nuke" class="danger">Apagar TUDO</button>
+          </div>
+          <div id="adm-out" class="adm-out"></div>
+        </details>
+
+        <details class="adm-sec">
+          <summary>👥 Pessoas</summary>
+          <ul id="adm-people" class="plain-list"></ul>
+        </details>
+
+        <details class="adm-sec">
+          <summary>🎨 Paletas</summary>
+          <ul id="adm-palettes" class="adm-list"></ul>
+          <button id="adm-pal-new" class="secondary wide">＋ Nova paleta</button>
+        </details>
+
+        <details class="adm-sec">
+          <summary>📅 Ocasiões</summary>
+          <p class="muted small" id="adm-today"></p>
+          <ul id="adm-occasions" class="adm-list"></ul>
+          <button id="adm-occ-new" class="secondary wide">＋ Nova ocasião</button>
+        </details>
+
+        <details class="adm-sec">
+          <summary>🖼️ Desenhos</summary>
+          <p class="muted small">Toque num desenho pra ver o nome. Os enviados por aqui ficam no banco e podem ser apagados.</p>
+          <div id="adm-drawings" class="drawings"></div>
+          <div class="row-buttons">
+            <label class="secondary file-btn">Enviar .svg<input type="file" id="adm-svg-file" accept=".svg,image/svg+xml" hidden></label>
+            <button id="adm-svg-paste" class="secondary">Colar código</button>
+          </div>
+        </details>
+
+        <details class="adm-sec">
+          <summary>🔤 Versão &amp; textos</summary>
+          <p class="muted small" id="adm-version-today"></p>
+          <label class="field">1 em quantos dias tem piada na versão? (0 = nunca)
+            <input id="adm-odds" type="number" min="0" max="365" inputmode="numeric"></label>
+          <label class="field">Palavras da versão (uma por linha)<textarea id="adm-words" rows="5"></textarea></label>
+          <label class="field">Sugestões de apelido (uma por linha)<textarea id="adm-names" rows="5"></textarea></label>
+          <label class="field">Frases de carregamento (uma por linha)<textarea id="adm-busy" rows="4"></textarea></label>
+          <button id="adm-texts-save" class="primary wide">Salvar textos</button>
+        </details>
       </div>
 
       <div id="tab-chamados" role="tabpanel" hidden>
@@ -222,6 +276,79 @@
     </div>
   </dialog>
 
+  <!-- Admin: palette editor -->
+  <dialog id="dlg-pal">
+    <form id="pal-form">
+      <h2 id="pal-title">Paleta</h2>
+      <label class="field">ID (sem espaços)<input id="pal-id" maxlength="30" pattern="[a-z0-9-]{2,30}" required></label>
+      <label class="field">Nome<input id="pal-name" maxlength="30" required></label>
+      <div id="pal-colors" class="pal-colors"></div>
+      <label class="field">Desenhos (decor)<input id="pal-decor" maxlength="300" placeholder="latte.svg mug.svg bean.svg"></label>
+      <div class="chips mini-picker" id="pal-decor-picker"></div>
+      <label class="toggle"><input type="checkbox" id="pal-only"> <span>Só em ocasiões (esconde das configurações)</span></label>
+      <p class="muted small pick-label">Prévia</p>
+      <div id="pal-preview" class="theme-scope pal-preview"></div>
+      <div class="row-buttons">
+        <button type="button" id="pal-delete" class="danger" hidden>Apagar</button>
+        <button type="button" id="pal-try" class="secondary">Testar</button>
+        <button type="submit" id="pal-save" class="primary">Salvar</button>
+      </div>
+      <button type="button" id="pal-cancel" class="link small close-link">fechar sem salvar</button>
+    </form>
+  </dialog>
+
+  <!-- Admin: occasion editor -->
+  <dialog id="dlg-occ">
+    <form id="occ-form">
+      <h2 id="occ-title">Ocasião</h2>
+      <label class="field">ID (sem espaços)<input id="occ-id" maxlength="40" pattern="[a-z0-9-]{2,40}" required></label>
+      <label class="field">Quando<input id="occ-when" maxlength="200" placeholder="12-25 · fri-13 · 2sun-05 · easter-47 · 12-20..12-31" required></label>
+      <p class="muted small" id="occ-when-info"></p>
+      <details class="hint"><summary class="small">formatos de data</summary>
+        <ul class="small muted">
+          <li><code>12-25</code> todo ano nesse dia</li>
+          <li><code>2026-11-10</code> só nesse dia</li>
+          <li><code>fri-13</code> dia da semana + dia do mês (<code>sex-13</code> também)</li>
+          <li><code>2sun-05</code> 2º domingo de maio · <code>lastfri-11</code> última sexta de novembro</li>
+          <li><code>easter-47</code> dias antes/depois da Páscoa</li>
+          <li><code>12-20..12-31</code> período (pode virar o ano)</li>
+          <li>vários separados por vírgula</li>
+        </ul>
+      </details>
+      <label class="field">Banner (frase no topo)<input id="occ-banner" maxlength="120"></label>
+      <label class="field">Versão (rodapé)<input id="occ-version" maxlength="40" placeholder="ex: 1.13.sexta"></label>
+      <div class="pick-row">
+        <label class="field">Paleta<select id="occ-palette"></select></label>
+        <label class="field">Efeito<select id="occ-effect"><option value="">Nenhum</option><option value="confetti">Confete</option><option value="snow">Neve</option></select></label>
+      </div>
+      <label class="field">Desenhos (decor)<input id="occ-decor" maxlength="300" placeholder="pumpkin.svg ghost.svg 🦇"></label>
+      <div class="chips mini-picker" id="occ-decor-picker"></div>
+      <div class="pick-row">
+        <label class="field">Prioridade<input id="occ-priority" type="number" min="0" max="999" inputmode="numeric"></label>
+        <label class="toggle occ-enabled"><input type="checkbox" id="occ-enabled"> <span>Ativa</span></label>
+      </div>
+      <div class="row-buttons">
+        <button type="button" id="occ-delete" class="danger" hidden>Apagar</button>
+        <button type="button" id="occ-try" class="secondary">Prévia</button>
+        <button type="submit" id="occ-save" class="primary">Salvar</button>
+      </div>
+      <button type="button" id="occ-cancel" class="link small close-link">fechar sem salvar</button>
+    </form>
+  </dialog>
+
+  <!-- Admin: paste SVG code -->
+  <dialog id="dlg-svg">
+    <form id="svg-form">
+      <h2>Colar desenho</h2>
+      <label class="field">Nome do arquivo<input id="svg-name" maxlength="40" placeholder="cookie.svg" required></label>
+      <label class="field">Código SVG<textarea id="svg-code" rows="8" placeholder="<svg ...>...</svg>" required></textarea></label>
+      <div class="row-buttons">
+        <button type="button" id="svg-cancel" class="secondary">Cancelar</button>
+        <button type="submit" id="svg-save" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Modal: generic confirm -->
   <dialog id="dlg-confirm">
     <h2 id="confirm-title"></h2>
@@ -264,16 +391,6 @@
 
     <h3>Chamados que você silenciou</h3>
     <ul id="muted-list" class="plain-list"></ul>
-    <div id="admin" hidden>
-      <h3>Admin</h3>
-      <div class="admin-grid">
-        <button id="adm-health" class="secondary">Checar saúde</button>
-        <button id="adm-test" class="secondary">Notificação teste</button>
-        <button id="adm-reset-me" class="secondary">Resetar só eu</button>
-        <button id="adm-nuke" class="danger">Apagar TUDO</button>
-      </div>
-      <div id="adm-out" class="adm-out"></div>
-    </div>
     <div class="row-buttons">
       <button id="settings-close" class="primary">Fechar</button>
     </div>

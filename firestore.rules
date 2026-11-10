@@ -2,6 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('admin', false) == true;
+    }
     function changed() {
       return request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys();
     }
@@ -41,9 +45,20 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 80;
     }
 
-    // Fun content (version jokes, nickname ideas, loading phrases): public, edited by hand in the console.
+    // Fun content, palettes, occasions: public; edited by admins (Admin tab) or in the console.
     match /config/{id} {
       allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Drawings uploaded from the Admin tab (SVG text). Public, admins write.
+    match /decor/{name} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.svg is string
+        && request.resource.data.svg.size() < 60000
+        && name.matches('^[a-z0-9-]+[.]svg$');
+      allow delete: if isAdmin();
     }
 
     // Rounds: visible to the people involved; written only through the functions.

@@ -3,7 +3,7 @@ import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, deleteField, FieldPath, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
   orderBy, limit, serverTimestamp, Timestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-functions.js";
@@ -24,6 +24,9 @@ const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 // Preview any occasion without changing data: add ?ocasiao=<id> to the address.
 const PREVIEW_OCCASION = new URLSearchParams(location.search).get("ocasiao");
+// Admin previews (local only, never saved): an occasion object or a palette object.
+let previewOcc = null;
+let previewPal = null;
 
 const DEFAULT_PALETTE = { name: "Espresso", bg: "#1a1210", surface: "#30221b", text: "#f2e6d6", muted: "#b39d87", accent: "#c98b4f", highlight: "#e2c39b" };
 
@@ -78,7 +81,8 @@ function todaysOccasion() {
   const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
   const t = spToday();
   let list = Object.entries(all).filter(([, o]) => o && typeof o === "object" && o.enabled !== false && occasionMatches(o, t));
-  if (PREVIEW_OCCASION && all[PREVIEW_OCCASION]) list = [[PREVIEW_OCCASION, all[PREVIEW_OCCASION]]];
+  if (previewOcc) list = [[previewOcc.id, previewOcc]];
+  else if (PREVIEW_OCCASION && all[PREVIEW_OCCASION]) list = [[PREVIEW_OCCASION, all[PREVIEW_OCCASION]]];
   list.sort((a, b) => (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
   const merged = {};
   for (const [id, o] of list) { Object.assign(merged, o); merged.id = id; }
@@ -107,11 +111,13 @@ function applyLook() {
   let userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
   const chosen = getPalette(userPal);
   if (chosen && chosen.onlyOccasions) userPal = "espresso"; // occasion-only palettes can't be kept as a personal choice
-  const pal = (todayOcc && getPalette(todayOcc.palette)) || getPalette(userPal) || getPalette("espresso") || DEFAULT_PALETTE;
+  const pal = (previewPal && { ...DEFAULT_PALETTE, ...previewPal }) ||
+    (todayOcc && getPalette(todayOcc.palette)) || getPalette(userPal) || getPalette("espresso") || DEFAULT_PALETTE;
   applyPalette(pal);
   const decorSpec = (todayOcc && todayOcc.decor) || pal.decor || "";
   // Remember the look so the next launch paints it immediately (see the inline script in index.html).
-  try {
+  const previewing = !!(previewOcc || previewPal || PREVIEW_OCCASION);
+  if (!previewing) try {
     localStorage.setItem("look", JSON.stringify({
       bg: pal.bg, surface: pal.surface, text: pal.text, muted: pal.muted, accent: pal.accent, highlight: pal.highlight, decor: decorSpec,
     }));
@@ -119,8 +125,31 @@ function applyLook() {
   renderVersion();
   renderBanner();
   placeDecor(decorSpec);
+  renderPreviewBar(previewing);
   runEffect(todayOcc && todayOcc.effect);
   if (typeof renderSettings === "function" && typeof auth !== "undefined" && auth.currentUser) renderSettings();
+  if (typeof renderAdmin === "function" && typeof auth !== "undefined" && auth.currentUser) renderAdmin();
+}
+
+// Little floating bar while an admin preview is active.
+function renderPreviewBar(on) {
+  let bar = document.getElementById("preview-bar");
+  if (!on) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "preview-bar";
+    document.body.appendChild(bar);
+  }
+  const label = previewPal ? `paleta “${previewPal.name || previewPal.id}”` : `ocasião “${(previewOcc && previewOcc.id) || PREVIEW_OCCASION}”`;
+  bar.innerHTML = `<span>Prévia: ${esc(label)}</span>`;
+  const b = document.createElement("button");
+  b.textContent = "sair";
+  b.onclick = () => {
+    previewOcc = null; previewPal = null;
+    if (PREVIEW_OCCASION) { location.href = location.pathname; return; }
+    applyLook();
+  };
+  bar.appendChild(b);
 }
 
 // Same "version" for the whole family on a given day. Purely decorative.
@@ -146,7 +175,7 @@ function renderBanner() {
   if (!el) return;
   const text = todayOcc && typeof todayOcc.banner === "string" ? todayOcc.banner : "";
   el.textContent = text;
-  if (text && PREVIEW_OCCASION) el.insertAdjacentHTML("beforeend", ` <span class="preview-tag">prévia</span>`);
+  if (text && (PREVIEW_OCCASION || previewOcc)) el.insertAdjacentHTML("beforeend", ` <span class="preview-tag">prévia</span>`);
   el.hidden = !text;
 }
 
@@ -154,11 +183,21 @@ function renderBanner() {
 // ("latte.svg") and emoji ("🎃🦇"). Occasion decor beats palette decor beats the coffee default.
 const DEFAULT_DECOR = "latte.svg mug.svg bean.svg bean.svg bean.svg";
 const svgCache = {};
+let uploadedSvgs = {}; // drawings uploaded by admins (Firestore decor/{name}); they win over repo files
+
+// Only plain, safe SVGs: no scripts, event handlers, external links or embedded documents.
+function cleanSvg(text) {
+  let t = String(text || "").trim()
+    .replace(/^<\?xml[^>]*>/i, "").replace(/<!DOCTYPE[^>]*>/i, "").replace(/<!--[\s\S]*?-->/g, "").trim();
+  if (t.length > 60000 || !/^<svg[\s>]/i.test(t) || !/<\/svg>\s*$/i.test(t)) return "";
+  if (/<script|<foreignObject|<iframe|<image|<use[^>]+href\s*=\s*["'](?!#)|\son\w+\s*=|javascript:|href\s*=\s*["'](?!#)/i.test(t)) return "";
+  return t;
+}
+
 async function loadSvg(name) {
+  if (uploadedSvgs[name]) return cleanSvg(uploadedSvgs[name]);
   if (!(name in svgCache)) {
-    svgCache[name] = fetch(`decor/${name}`).then((r) => (r.ok ? r.text() : ""))
-      .then((t) => (/^\s*<svg[\s>]/i.test(t) && !/<script|on\w+=|href=/i.test(t) ? t : "")) // only plain, safe SVGs
-      .catch(() => "");
+    svgCache[name] = fetch(`decor/${name}`).then((r) => (r.ok ? r.text() : "")).then(cleanSvg).catch(() => "");
   }
   return svgCache[name];
 }
@@ -175,9 +214,11 @@ function parseDecor(spec) {
 }
 
 let decorKey = null;
-function placeDecor(spec) {
+let lastDecorSpec = "";
+function placeDecor(spec, force = false) {
   spec = String(spec || "").trim() || DEFAULT_DECOR;
-  if (spec === decorKey) return; // don't reshuffle on every config update
+  lastDecorSpec = spec;
+  if (spec === decorKey && !force) return; // don't reshuffle on every config update
   decorKey = spec;
   const box = document.getElementById("decor");
   box.innerHTML = "";
@@ -259,6 +300,13 @@ onSnapshot(doc(db, "config", "fun"), (snap) => {
   applyLook();
 }, (err) => { console.warn("config/fun", err); applyLook(); });
 placeDecor(window.__lookDecor || null); // last known decor right away; config may swap it once loaded
+
+// Uploaded drawings: when they change, redraw the decor (and the admin gallery).
+onSnapshot(collection(db, "decor"), (snap) => {
+  uploadedSvgs = Object.fromEntries(snap.docs.map((d) => [d.id, d.get("svg")]));
+  if (parseDecor(lastDecorSpec).some((it) => it.svg && uploadedSvgs[it.svg])) placeDecor(lastDecorSpec, true);
+  if (typeof renderAdmin === "function") renderAdmin();
+}, (err) => console.warn("decor", err));
 const functions = getFunctions(app, "us-central1");
 const apiFn = httpsCallable(functions, "api");
 const call = (action) => (data = {}) => apiFn({ ...data, action });
@@ -270,6 +318,7 @@ const api = {
   adminHealth: call("adminHealth"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
+  setAdmin: call("setAdmin"),
   claimAdmin: call("claimAdmin"),
 };
 
@@ -570,7 +619,7 @@ onAuthStateChanged(auth, async (user) => {
     me = snap.exists() ? snap.data() : {};
     meLoaded = true;
     $("settings-name").textContent = me.name || "(sem apelido)";
-    show("admin", me.admin === true);
+    setAdminVisible(me.admin === true);
     applyLook();
     renderSettings();
     renderMeChip();
@@ -582,6 +631,7 @@ onAuthStateChanged(auth, async (user) => {
     family = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
     renderMeChip();
     renderRounds(); // names/styles may have changed
+    renderAdmin();
   }, (err) => console.error("users", err)));
 
   // My chamados
@@ -978,6 +1028,13 @@ function renderChamados() {
 $("chamados-new").addEventListener("click", () => openEditor(null));
 
 // Tabs (remembered per browser, just a convenience)
+function setAdminVisible(on) {
+  show("tab-btn-admin", on);
+  document.querySelector(".tabs").classList.toggle("three", on);
+  if (!on && document.querySelector('.tab[data-tab="admin"].selected')) setTab("feed");
+  if (on) renderAdmin();
+}
+
 function setTab(name) {
   document.querySelectorAll(".tab").forEach((b) => {
     const on = b.dataset.tab === name;
@@ -986,10 +1043,12 @@ function setTab(name) {
   });
   show("tab-feed", name === "feed");
   show("tab-chamados", name === "chamados");
+  show("tab-admin", name === "admin");
+  if (name === "admin") renderAdmin();
   try { localStorage.setItem("tab", name); } catch {}
 }
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
-setTab((() => { try { return localStorage.getItem("tab") || "feed"; } catch { return "feed"; } })());
+setTab((() => { try { const t = localStorage.getItem("tab") || "feed"; return t === "admin" ? "feed" : t; } catch { return "feed"; } })());
 
 async function fire(t, btn) {
   const who = recipientsText(t.recipients);
@@ -1286,6 +1345,364 @@ $("editor-form").addEventListener("submit", async (e) => {
   if (!ok) return;
   $("dlg-editor").close();
   toast(scheduleOn ? `Agendado: ${scheduleText(data.schedule)}. ⏰` : "Salvo! Tá lá nos seus chamados. ✨");
+});
+
+// =====================================================================
+// Admin tab: people, palettes, occasions, drawings, texts.
+// Everything edits Firestore config/fun (and decor/{name}); rules allow admins only.
+// =====================================================================
+const funRef = () => doc(db, "config", "fun");
+const isAdminNow = () => !!(me && me.admin === true);
+const SLUG = /^[a-z0-9-]{2,40}$/;
+const PAL_FIELDS = [
+  ["bg", "Fundo"], ["surface", "Cartões"], ["text", "Texto"],
+  ["muted", "Texto fraco"], ["accent", "Botões"], ["highlight", "Realces"],
+];
+let builtinDrawings = [];
+fetch("decor/index.json").then((r) => r.json()).then((list) => { builtinDrawings = Array.isArray(list) ? list : []; renderAdmin(); }).catch(() => {});
+
+const allPalettes = () => ((FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : {});
+const allOccasions = () => ((FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {});
+const allDrawingNames = () => [...new Set([...builtinDrawings, ...Object.keys(uploadedSvgs)])].sort();
+
+// Next dates an occasion hits (up to n, within ~2 years).
+function nextDates(when, n = 3) {
+  const out = [];
+  const t0 = spToday();
+  for (let i = 0; i < 800 && out.length < n; i++) {
+    const d = new Date(Date.UTC(t0.y, t0.m - 1, t0.d + i));
+    const key = `${d.getUTCFullYear()}-${pad2s(d.getUTCMonth() + 1)}-${pad2s(d.getUTCDate())}`;
+    const t = { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), key, md: key.slice(5), weekday: d.getUTCDay() };
+    if (String(when || "").split(",").some((p) => matchesPattern(p, t))) out.push({ i, t });
+  }
+  return out;
+}
+const fmtDate = ({ i, t }) => (i === 0 ? "hoje" : i === 1 ? "amanhã" : `${DAY_SHORT[t.weekday].toLowerCase()} ${pad2s(t.d)}/${pad2s(t.m)}${t.y !== spToday().y ? "/" + String(t.y).slice(2) : ""}`);
+
+function renderAdmin() {
+  if (!isAdminNow() || !$("tab-admin") || $("tab-admin").hidden) return;
+  renderAdminPeople();
+  renderAdminPalettes();
+  renderAdminOccasions();
+  renderAdminDrawings();
+  renderAdminTexts();
+}
+
+// ---------- People ----------
+function renderAdminPeople() {
+  const list = $("adm-people");
+  const uid = auth.currentUser && auth.currentUser.uid;
+  const admins = Object.entries(family).filter(([, p]) => p.admin === true).length;
+  list.innerHTML = "";
+  Object.entries(family).sort((a, b) => String(a[1].name || "").localeCompare(String(b[1].name || ""))).forEach(([u, p]) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${nameHtml(u, "(sem apelido)")}${p.admin ? ` <span class="badge">admin</span>` : ""}${u === uid ? ` <span class="muted small">· você</span>` : ""}</span>`;
+    const b = document.createElement("button");
+    b.className = "link small";
+    const lastAdmin = p.admin && admins <= 1;
+    b.textContent = p.admin ? (lastAdmin ? "único admin" : "remover admin") : "tornar admin";
+    b.disabled = lastAdmin;
+    b.onclick = async () => {
+      if (!(await confirmBox(p.admin ? "Remover admin?" : "Tornar admin?", `${p.name || "Essa pessoa"} ${p.admin ? "perde" : "ganha"} acesso à aba Admin.`, "Confirmar"))) return;
+      const res = await withBusy(b, () => api.setAdmin({ uid: u, admin: !p.admin }), "…");
+      if (res) toast(p.admin ? "Admin removido." : "Novo admin. 👑");
+    };
+    li.appendChild(b);
+    list.appendChild(li);
+  });
+}
+
+// ---------- Palettes ----------
+function paletteDots(p) {
+  return [p.bg, p.surface, p.accent, p.highlight].filter((c) => HEX.test(String(c))).map((c) => `<i style="background:${c}"></i>`).join("");
+}
+function usedByOccasions(palId) {
+  return Object.entries(allOccasions()).filter(([, o]) => o && o.palette === palId).map(([id]) => id);
+}
+function renderAdminPalettes() {
+  const list = $("adm-palettes");
+  list.innerHTML = "";
+  Object.entries(allPalettes()).sort((a, b) => String(a[1].name || a[0]).localeCompare(String(b[1].name || b[0]))).forEach(([id, raw]) => {
+    const p = { ...DEFAULT_PALETTE, ...raw };
+    const used = usedByOccasions(id);
+    const li = document.createElement("li");
+    li.innerHTML = `<button class="adm-row"><span class="dots">${paletteDots(p)}</span>
+      <span class="adm-row-text"><b>${esc(p.name || id)}</b><span class="muted small">${esc(id)}${raw.onlyOccasions ? " · só ocasiões" : ""}${used.length ? " · usada em " + esc(used.join(", ")) : ""}</span></span></button>`;
+    li.querySelector("button").onclick = () => openPaletteEditor(id);
+    list.appendChild(li);
+  });
+}
+
+let palEditing = null; // id when editing
+function readPalForm() {
+  const obj = { name: $("pal-name").value.trim() };
+  for (const [k] of PAL_FIELDS) obj[k] = $(`pal-${k}-hex`).value.trim();
+  const decor = $("pal-decor").value.trim();
+  if (decor) obj.decor = decor;
+  if ($("pal-only").checked) obj.onlyOccasions = true;
+  return obj;
+}
+
+function renderPalPreview() {
+  const p = readPalForm();
+  const box = $("pal-preview");
+  const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
+  for (const [k, v] of Object.entries(vars)) { if (HEX.test(v)) box.style.setProperty(k, v); }
+  const svgs = parseDecor(p.decor || DEFAULT_DECOR).filter((i) => i.svg).slice(0, 3);
+  box.innerHTML = `
+    <div class="pv-decor">${svgs.map(() => `<span class="pv-svg"></span>`).join("")}</div>
+    <div class="pv-card">
+      <div class="round-title">Vai ter almoço hoje?</div>
+      <div class="muted small">Você · agora</div>
+      <div class="chips"><span class="chip selected">Selecionado</span><span class="chip">Normal</span></div>
+      <div class="row-buttons"><span class="primary pv-btn">Sim</span><span class="secondary pv-btn">Não</span></div>
+    </div>`;
+  box.querySelectorAll(".pv-svg").forEach((el, i) => loadSvg(svgs[i].svg).then((t) => { el.innerHTML = t; }));
+}
+
+function renderDecorPicker(pickerId, inputId) {
+  const wrap = $(pickerId);
+  wrap.innerHTML = "";
+  for (const name of allDrawingNames()) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = name.replace(/\.svg$/, "");
+    b.title = "Adicionar";
+    b.onclick = () => {
+      const inp = $(inputId);
+      inp.value = (inp.value.trim() + " " + name).trim();
+      inp.dispatchEvent(new Event("input"));
+    };
+    wrap.appendChild(b);
+  }
+}
+
+function openPaletteEditor(id) {
+  palEditing = id;
+  const raw = id ? allPalettes()[id] || {} : {};
+  const p = { ...DEFAULT_PALETTE, ...raw };
+  $("pal-title").textContent = id ? `Paleta: ${p.name || id}` : "Nova paleta";
+  $("pal-id").value = id || "";
+  $("pal-id").readOnly = !!id;
+  $("pal-name").value = id ? (p.name || "") : "";
+  $("pal-decor").value = raw.decor || "";
+  $("pal-only").checked = !!raw.onlyOccasions;
+  const colors = $("pal-colors");
+  colors.innerHTML = "";
+  for (const [k, label] of PAL_FIELDS) {
+    const row = document.createElement("label");
+    row.className = "pal-color";
+    row.innerHTML = `<span>${label}</span><input type="color" id="pal-${k}" value="${HEX.test(p[k]) && p[k].length === 7 ? p[k] : "#000000"}"><input id="pal-${k}-hex" maxlength="7" value="${esc(p[k] || "")}">`;
+    colors.appendChild(row);
+    const picker = row.querySelector(`#pal-${k}`), hex = row.querySelector(`#pal-${k}-hex`);
+    picker.oninput = () => { hex.value = picker.value; renderPalPreview(); };
+    hex.oninput = () => { if (/^#[0-9a-f]{6}$/i.test(hex.value)) picker.value = hex.value; renderPalPreview(); };
+  }
+  show("pal-delete", !!id && id !== "espresso");
+  renderDecorPicker("pal-decor-picker", "pal-decor");
+  renderPalPreview();
+  $("dlg-pal").showModal();
+}
+$("pal-decor").addEventListener("input", renderPalPreview);
+$("adm-pal-new").addEventListener("click", () => openPaletteEditor(null));
+$("pal-cancel").addEventListener("click", () => $("dlg-pal").close());
+$("pal-try").addEventListener("click", () => {
+  const p = readPalForm();
+  if (PAL_FIELDS.some(([k]) => !HEX.test(p[k]))) return toast("Tem cor inválida. Use #rrggbb.");
+  previewOcc = null;
+  previewPal = { ...p, id: palEditing || $("pal-id").value.trim() };
+  $("dlg-pal").close();
+  applyLook();
+  toast("Prévia só no seu aparelho. Toque em “sair” pra voltar.", 4000);
+});
+$("pal-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = palEditing || $("pal-id").value.trim().toLowerCase();
+  const p = readPalForm();
+  if (!SLUG.test(id)) return toast("ID: só letras minúsculas, números e hífen.");
+  if (!palEditing && allPalettes()[id]) return toast("Já existe uma paleta com esse ID.");
+  if (!p.name) return toast("Dá um nome pra paleta.");
+  const bad = PAL_FIELDS.find(([k]) => !HEX.test(p[k]));
+  if (bad) return toast(`Cor inválida em “${bad[1]}”. Use #rrggbb.`);
+  const ok = await withBusy($("pal-save"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), p); return true; }, "Salvando…");
+  if (ok) { $("dlg-pal").close(); toast("Paleta salva. 🎨"); }
+});
+$("pal-delete").addEventListener("click", async () => {
+  const id = palEditing;
+  const used = usedByOccasions(id);
+  const msg = used.length ? `Ela é usada em: ${used.join(", ")}. Essas ocasiões vão ficar sem paleta.` : "Quem tinha escolhido ela volta pro Espresso.";
+  if (!(await confirmBox("Apagar paleta?", msg, "Apagar"))) return;
+  const ok = await withBusy($("pal-delete"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), deleteField()); return true; }, "…");
+  if (ok) { $("dlg-pal").close(); toast("Paleta apagada."); }
+});
+
+// ---------- Occasions ----------
+function renderAdminOccasions() {
+  const today = todaysOccasion();
+  const t = spToday();
+  $("adm-today").textContent = `Hoje (${DAY_SHORT[t.weekday].toLowerCase()}, ${pad2s(t.d)}/${pad2s(t.m)}): ${today ? "“" + today.id + "”" : "nenhuma ocasião"}${previewOcc || previewPal ? " (prévia ativa)" : ""}`;
+  const list = $("adm-occasions");
+  list.innerHTML = "";
+  Object.entries(allOccasions())
+    .map(([id, o]) => ({ id, o: o || {}, next: nextDates((o || {}).when, 1)[0] }))
+    .sort((a, b) => (a.next ? a.next.i : 9999) - (b.next ? b.next.i : 9999) || a.id.localeCompare(b.id))
+    .forEach(({ id, o, next }) => {
+      const pal = getPalette(o.palette);
+      const li = document.createElement("li");
+      li.innerHTML = `<button class="adm-row"><span class="dots">${pal ? paletteDots(pal) : ""}</span>
+        <span class="adm-row-text"><b>${esc(id)}${o.enabled === false ? ` <span class="badge off">desativada</span>` : ""}${next && next.i === 0 ? ` <span class="badge">hoje</span>` : ""}</b>
+        <span class="muted small">${esc(o.when || "(sem data)")} · ${next ? "próxima: " + fmtDate(next) : "nunca"}</span></span></button>`;
+      li.querySelector("button").onclick = () => openOccasionEditor(id);
+      list.appendChild(li);
+    });
+}
+
+let occEditing = null;
+function readOccForm() {
+  const o = { when: $("occ-when").value.trim() };
+  const put = (k, v) => { if (v !== "" && v !== null && v !== undefined) o[k] = v; };
+  put("banner", $("occ-banner").value.trim());
+  put("version", $("occ-version").value.trim());
+  put("palette", $("occ-palette").value);
+  put("decor", $("occ-decor").value.trim());
+  put("effect", $("occ-effect").value);
+  const pr = $("occ-priority").value.trim();
+  if (pr !== "") o.priority = Number(pr) || 0;
+  if (!$("occ-enabled").checked) o.enabled = false;
+  return o;
+}
+function renderWhenInfo() {
+  const when = $("occ-when").value.trim();
+  if (!when) { $("occ-when-info").textContent = "Sem data: só aparece na prévia."; return; }
+  const next = nextDates(when, 3);
+  $("occ-when-info").textContent = next.length ? `${next[0].i === 0 ? "✓ Bate hoje · " : ""}Próximas: ${next.map(fmtDate).join(", ")}` : "⚠ Não bate em nenhum dia dos próximos 2 anos. Confere o formato.";
+}
+function openOccasionEditor(id) {
+  occEditing = id;
+  const o = id ? allOccasions()[id] || {} : { priority: 5 };
+  $("occ-title").textContent = id ? `Ocasião: ${id}` : "Nova ocasião";
+  $("occ-id").value = id || "";
+  $("occ-id").readOnly = !!id;
+  $("occ-when").value = o.when || "";
+  $("occ-banner").value = o.banner || "";
+  $("occ-version").value = o.version || "";
+  $("occ-decor").value = o.decor || "";
+  $("occ-effect").value = o.effect || "";
+  $("occ-priority").value = o.priority ?? "";
+  $("occ-enabled").checked = o.enabled !== false;
+  const sel = $("occ-palette");
+  sel.innerHTML = `<option value="">(a de cada um)</option>`;
+  Object.entries(allPalettes()).forEach(([pid, p]) => sel.add(new Option((p && p.name) || pid, pid)));
+  sel.value = o.palette || "";
+  show("occ-delete", !!id);
+  renderDecorPicker("occ-decor-picker", "occ-decor");
+  renderWhenInfo();
+  $("dlg-occ").showModal();
+}
+$("occ-when").addEventListener("input", renderWhenInfo);
+$("adm-occ-new").addEventListener("click", () => openOccasionEditor(null));
+$("occ-cancel").addEventListener("click", () => $("dlg-occ").close());
+$("occ-try").addEventListener("click", () => {
+  previewPal = null;
+  previewOcc = { ...readOccForm(), id: occEditing || $("occ-id").value.trim() || "nova", enabled: true };
+  effectKey = null; // replay the effect
+  $("dlg-occ").close();
+  applyLook();
+  toast("Prévia só no seu aparelho. Toque em “sair” pra voltar.", 4000);
+});
+$("occ-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = occEditing || $("occ-id").value.trim().toLowerCase();
+  const o = readOccForm();
+  if (!SLUG.test(id)) return toast("ID: só letras minúsculas, números e hífen.");
+  if (!occEditing && allOccasions()[id]) return toast("Já existe uma ocasião com esse ID.");
+  const ok = await withBusy($("occ-save"), async () => { await updateDoc(funRef(), new FieldPath("occasions", id), o); return true; }, "Salvando…");
+  if (ok) { $("dlg-occ").close(); toast("Ocasião salva. 📅"); }
+});
+$("occ-delete").addEventListener("click", async () => {
+  if (!(await confirmBox("Apagar ocasião?", `“${occEditing}” some pra sempre.`, "Apagar"))) return;
+  const ok = await withBusy($("occ-delete"), async () => { await updateDoc(funRef(), new FieldPath("occasions", occEditing), deleteField()); return true; }, "…");
+  if (ok) { $("dlg-occ").close(); toast("Ocasião apagada."); }
+});
+
+// ---------- Drawings ----------
+function renderAdminDrawings() {
+  const grid = $("adm-drawings");
+  grid.innerHTML = "";
+  for (const name of allDrawingNames()) {
+    const uploaded = !!uploadedSvgs[name];
+    const tile = document.createElement("div");
+    tile.className = "drawing";
+    tile.innerHTML = `<div class="drawing-img"></div><span class="small">${esc(name.replace(/\.svg$/, ""))}</span>${uploaded ? `<button class="drawing-del" aria-label="Apagar">×</button>` : ""}`;
+    loadSvg(name).then((t) => { tile.querySelector(".drawing-img").innerHTML = t || "⚠"; });
+    tile.querySelector(".drawing-img").onclick = async () => {
+      try { await navigator.clipboard.writeText(name); toast(`“${name}” copiado.`); } catch { toast(name); }
+    };
+    if (uploaded) {
+      tile.querySelector(".drawing-del").onclick = async () => {
+        const users = [
+          ...Object.entries(allPalettes()).filter(([, p]) => String((p || {}).decor || "").includes(name)).map(([id]) => "paleta " + id),
+          ...Object.entries(allOccasions()).filter(([, o]) => String((o || {}).decor || "").includes(name)).map(([id]) => "ocasião " + id),
+        ];
+        if (!(await confirmBox(`Apagar ${name}?`, users.length ? `Usado em: ${users.join(", ")}. Lá ele simplesmente some.` : "Não é usado em lugar nenhum.", "Apagar"))) return;
+        try { await deleteDoc(doc(db, "decor", name)); toast("Desenho apagado."); } catch (err) { toast(friendlyError(err)); }
+      };
+    }
+    grid.appendChild(tile);
+  }
+}
+
+async function saveDrawing(rawName, text, btn) {
+  let name = String(rawName || "").trim().toLowerCase().replace(/\.svg$/, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!name) return toast("Dá um nome pro desenho.");
+  name += ".svg";
+  const svg = cleanSvg(text);
+  if (!svg) return toast("Esse SVG não serve: precisa ser um <svg> simples, sem scripts, links ou imagens, até 60 KB.", 5000);
+  if (builtinDrawings.includes(name)) return toast("Já existe um desenho embutido com esse nome. Escolhe outro.");
+  if (uploadedSvgs[name] && !(await confirmBox("Substituir?", `Já existe “${name}”. Trocar pelo novo?`, "Substituir"))) return;
+  return withBusy(btn, async () => {
+    await setDoc(doc(db, "decor", name), { svg, updatedAt: serverTimestamp(), by: auth.currentUser.uid });
+    toast(`Desenho “${name}” salvo. Use no campo decor. 🖼️`, 4000);
+    return true;
+  }, "Enviando…");
+}
+$("adm-svg-file").addEventListener("change", async (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  if (f.size > 60000) return toast("Arquivo grande demais (máx. 60 KB).");
+  await saveDrawing(f.name, await f.text(), $("adm-svg-paste"));
+});
+$("adm-svg-paste").addEventListener("click", () => { $("svg-name").value = ""; $("svg-code").value = ""; $("dlg-svg").showModal(); });
+$("svg-cancel").addEventListener("click", () => $("dlg-svg").close());
+$("svg-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ok = await saveDrawing($("svg-name").value, $("svg-code").value, $("svg-save"));
+  if (ok) $("dlg-svg").close();
+});
+
+// ---------- Texts ----------
+const linesOf = (id) => $(id).value.split("\n").map((x) => x.trim()).filter(Boolean);
+let textsDirty = false;
+["adm-odds", "adm-words", "adm-names", "adm-busy"].forEach((id) => $(id).addEventListener("input", () => { textsDirty = true; }));
+function renderAdminTexts() {
+  $("adm-version-today").textContent = `Versão de hoje: ${$("version").textContent}`;
+  if (textsDirty) return; // don't overwrite what's being typed
+  $("adm-odds").value = Number(FUN.versionOdds) || 0;
+  $("adm-words").value = funList("versionWords", []).join("\n");
+  $("adm-names").value = funList("nameSuggestions", DEFAULT_NAMES).join("\n");
+  $("adm-busy").value = funList("busyLines", DEFAULT_BUSY).join("\n");
+}
+$("adm-texts-save").addEventListener("click", async () => {
+  const data = {
+    versionOdds: Math.max(0, Math.min(365, Number($("adm-odds").value) || 0)),
+    versionWords: linesOf("adm-words").slice(0, 200),
+    nameSuggestions: linesOf("adm-names").slice(0, 100).map((x) => x.slice(0, 40)),
+    busyLines: linesOf("adm-busy").slice(0, 50).map((x) => x.slice(0, 40)),
+  };
+  const ok = await withBusy($("adm-texts-save"), async () => { await updateDoc(funRef(), data); return true; }, "Salvando…");
+  if (ok) { textsDirty = false; toast("Textos salvos. ✍️"); }
 });
 
 // ---------- Admin ----------
