@@ -30,11 +30,11 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
     "10-31": "1.666.0",
     "12-25": "1.0.0-natal",
   };
-  const WEIRD = [
-    "1.666.0", "1.eita.0", "1.bah.0", "1.tchê.0", "1.oxe.0", "1.uai.0",
-    "1.0.0-beta-da-tia", "0.0.1", "1.0.sorvete", "3.14.159", "1.0.0-socorro",
-    "9.9.9", "1.0.cafezinho", "1.0.0.0.0.0", "1.2.3.4.5", "1.0.-1", "NaN.0.0",
-    "1.0.0-sem-açúcar", "1.mercado.0", "1.42.0", "1.0.0-ela-gosta", "1.0.0 (confia)",
+  // Joke words go in the 2nd or 3rd slot (1.oxe.0 or 1.0.oxe), never the 1st.
+  const WORDS = [
+    "666", "eita", "bah", "tchê", "oxe", "uai", "vish", "capaz", "amém", "42",
+    "sorvete", "cafezinho", "socorro", "mercado", "confia", "deu-ruim", "partiu",
+    "sem-açúcar", "beta-da-tia", "ela-gosta",
   ];
   // Tiny deterministic hash of the date.
   let h = 2166136261;
@@ -42,7 +42,10 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
   let v = SPECIAL[md];
   if (!v && md.endsWith("-13") && weekday === 5) v = "1.13.sexta";
-  if (!v && h % 5 === 0) v = WEIRD[(h >>> 3) % WEIRD.length]; // roughly 1 day in 5
+  if (!v && h % 5 === 0) { // roughly 1 day in 5
+    const w = WORDS[(h >>> 3) % WORDS.length];
+    v = (h >>> 11) % 2 ? `1.${w}.0` : `1.0.${w}`;
+  }
   document.getElementById("version").textContent = v || "1.0.0";
 })();
 
@@ -838,7 +841,8 @@ function renderRounds() {
     li.innerHTML = `
       <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
         <div><div class="round-title">${esc(r.title)}</div>
-        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)}${r.open ? "" : " · encerrado"}</div></div></div>
+        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)}${r.open ? "" : " · encerrado"}</div></div>
+        <div class="round-corner"></div></div>
       ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
       ${answersHtml}
       <div class="actions"></div>
@@ -864,6 +868,7 @@ function renderRounds() {
         }
       }
     }
+    // Only the creator can close a round (the server enforces it too).
     if (mine && r.open && r.answerType !== "none") {
       const b = document.createElement("button");
       b.className = "link small";
@@ -873,7 +878,7 @@ function renderRounds() {
         const res = await withBusy(b, () => api.closeRound({ roundId: r.id }), "…");
         if (res) toast("Encerrado. 🔒");
       };
-      foot.appendChild(b);
+      li.querySelector(".round-corner").appendChild(b);
     }
     if (isRecipient && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
       const b = document.createElement("button");

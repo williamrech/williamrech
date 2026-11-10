@@ -600,3 +600,11 @@ dialog h2 { margin-bottom: 4px; }
 .style-preview .ubadge { margin-right: 6px; }
 .round .actions button { flex: 1 1 auto; min-width: 64px; line-height: 1.25; }
 #style-badges .chip:first-child { font-size: 0.84rem; }
+.round-head > div:not(.round-corner) { flex: 1; }
+.round-corner { flex: none; margin-left: auto; align-self: flex-start; }
+.round-corner:empty { display: none; }
+.round-corner .link { padding: 0 2px; }
+/* Glow: tighter blur + more room inside the clip, so no box shows behind the name */
+.x-glow { text-shadow: 0 0 3px var(--uc), 0 0 7px color-mix(in srgb, var(--uc) 70%, transparent); }
+.uname-wrap .uname { padding: 8px 10px; margin: -8px -10px; }
+.me-chip { padding: 7px 16px; }
