@@ -770,3 +770,23 @@ input[readonly] { opacity: 0.6; }
 .add-person { display: grid; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .cred-text { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 10px; padding: 10px; color: var(--fg); margin: 8px 0 0; }
 #cred-wa { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+/* ---------- Compatibility: browsers without color-mix() (older Samsung Internet / Chrome < 111) ----------
+   Fixed espresso-like values so cards, lines and buttons keep their backgrounds. */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  :root {
+    --bg-2: #1e1512;
+    --card: rgba(48, 34, 27, 0.72);
+    --line: rgba(226, 195, 155, 0.16);
+    --caramel-2: #a86a33;
+    --pin-1: #6b4126;
+    --pin-2: #3d2416;
+    --dlg-1: #2c201a;
+    --dlg-2: #211814;
+  }
+  .theme-scope { --card: rgba(48, 34, 27, 0.72); --line: rgba(226, 195, 155, 0.16); }
+  #decor, .theme-scope, .drawing-img { --d-dark: #3a2214; --d-mid: var(--caramel); --d-light: var(--crema); --d-pale: #efe5d8; }
+  dialog::backdrop { background: rgba(14, 9, 7, 0.8); }
+  .banner-occ { background: rgba(201, 139, 79, 0.18); }
+}
+.desktop-url { font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; color: var(--crema); word-break: break-all; padding: 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }

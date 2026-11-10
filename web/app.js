@@ -253,12 +253,19 @@ async function loadSvg(name) {
   return svgCache[name];
 }
 
+// Splits text into visible characters (emoji-safe). Older browsers without Intl.Segmenter
+// fall back to a regex that keeps most emoji (incl. ZWJ sequences) together.
+function graphemes(str) {
+  try { return [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(str)].map((x) => x.segment); }
+  catch { return String(str).match(/(?:\p{Extended_Pictographic}(?:\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F)?)*|.)/gsu) || []; }
+}
+
 function parseDecor(spec) {
   const out = [];
   for (const token of String(spec || "").trim().split(/\s+/).filter(Boolean)) {
     if (/^[\w-]+\.svg$/i.test(token)) out.push({ svg: token });
-    else for (const g of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(token)) {
-      if (g.segment.trim()) out.push({ emoji: g.segment });
+    else for (const g of graphemes(token)) {
+      if (g.trim()) out.push({ emoji: g });
     }
   }
   return out;
@@ -323,6 +330,18 @@ function runEffect(kind) {
       layer.appendChild(s);
     }
   }
+}
+
+// ---------- Phone only ----------
+// Generous on purpose (real family phones must never be blocked): any Android/iPhone/iPod,
+// anything that says "Mobile", and iPads (which pretend to be Macs but have a touch screen).
+const IS_PHONE = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Opera Mini|IEMobile/i.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ||
+  (navigator.userAgentData && navigator.userAgentData.mobile === true);
+if (!IS_PHONE) {
+  $("desktop-url").textContent = location.origin + location.pathname;
+  show("view-desktop");
+  throw new Error("Phone only");
 }
 
 // ---------- Setup check ----------
@@ -877,8 +896,7 @@ $("logout").addEventListener("click", async () => {
 // First visible character (keeps multi-part emoji like 👨‍👩‍👧 whole).
 function firstGrapheme(str) {
   if (!str) return "";
-  try { return new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(str)[Symbol.iterator]().next().value.segment; }
-  catch { return [...str][0]; }
+  return graphemes(str)[0] || "";
 }
 
 // ---------- Styled names (color, font, effect, badge) — everyone sees them ----------
@@ -980,6 +998,19 @@ const BLANK = { emoji: "🔔", title: "", body: "", answerType: "yesno", options
 
 const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
 const nameOf = (uid) => (family[uid] && family[uid].name) || "?";
+
+// "fecha às 21:30" / "fecha amanhã às 09:00" / "fecha sex 14/11 às 09:00"
+function closesText(ts) {
+  if (!ts || !ts.toMillis) return "aberto";
+  const d = new Date(ts.toMillis());
+  const hm = `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
+  const today = new Date(); const tomorrow = new Date(Date.now() + 86400000);
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (d.getTime() <= Date.now()) return "fechando…";
+  if (same(d, today)) return `fecha às ${hm}`;
+  if (same(d, tomorrow)) return `fecha amanhã às ${hm}`;
+  return `fecha ${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} às ${hm}`;
+}
 
 function relTime(ts) {
   if (!ts || !ts.toMillis) return "agora";
@@ -1109,7 +1140,9 @@ setTab((() => { try { const t = localStorage.getItem("tab") || "feed"; return t 
 
 async function fire(t, btn) {
   const who = t.recipients === "all" ? "todo mundo" : recipientsText(t.recipients);
-  if (!(await confirmBox(`${t.emoji || "🔔"} ${t.title}`, T.ask(who), T.verb))) return;
+  const hrs = Number(t.durationHours) || 12;
+  const dur = hrs % 24 === 0 ? `${hrs / 24} dia${hrs > 24 ? "s" : ""}` : `${hrs} hora${hrs > 1 ? "s" : ""}`;
+  if (!(await confirmBox(`${t.emoji || "🔔"} ${t.title}`, `${T.ask(who)} Fica aberto por ${dur}.`, T.verb))) return;
   const res = await withBusy(btn, () => api.fireTemplate({ templateId: t.id }));
   if (!res) return;
   const d = res.data;
@@ -1162,7 +1195,7 @@ function renderRounds() {
     li.innerHTML = `
       <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
         <div><div class="round-title">${esc(r.title)}</div>
-        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)}${r.open ? "" : " · encerrado"}</div></div>
+        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)} · ${r.open ? closesText(r.closesAt) : "encerrado"}</div></div>
         <div class="round-corner"></div></div>
       ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
       ${answersHtml}

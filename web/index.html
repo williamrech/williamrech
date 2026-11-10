@@ -56,6 +56,14 @@
   </header>
 
   <main>
+    <!-- Shown on computers: the app is phone-only -->
+    <section id="view-desktop" class="card" hidden>
+      <h2>Só no celular 📱</h2>
+      <p>Esse app foi feito pra encher o saco no seu bolso, não no computador.</p>
+      <p class="muted">Abre esse endereço no navegador do celular:</p>
+      <p class="desktop-url" id="desktop-url"></p>
+    </section>
+
     <section id="view-setup" class="card" hidden>
       <h2>Quase lá</h2>
       <p>O Firebase ainda não foi configurado.</p>
@@ -224,25 +232,28 @@
           <button type="button" class="chip" data-v="all">Todo mundo</button>
           <button type="button" class="chip" data-v="owner">Só eu</button>
         </div>
-        <p class="muted small pick-label">Insistir até responder</p>
-        <div class="pick-row">
-          <select id="ed-nag" aria-label="Insistir">
-            <option value="0">Não insistir</option>
-            <option value="15">A cada 15 min</option>
-            <option value="30">A cada 30 min</option>
-            <option value="60">A cada 1 h</option>
-            <option value="120">A cada 2 h</option>
-          </select>
-          <select id="ed-duration" aria-label="Por quanto tempo">
-            <option value="1">Por 1 h</option>
-            <option value="2">Por 2 h</option>
-            <option value="4">Por 4 h</option>
-            <option value="8">Por 8 h</option>
-            <option value="12">Por 12 h</option>
-            <option value="24">Por 1 dia</option>
-          </select>
-        </div>
+        <p class="muted small pick-label">Insistir com quem não respondeu</p>
+        <select id="ed-nag" aria-label="Insistir">
+          <option value="0">Não insistir</option>
+          <option value="15">A cada 15 min</option>
+          <option value="30">A cada 30 min</option>
+          <option value="60">A cada 1 h</option>
+          <option value="120">A cada 2 h</option>
+        </select>
       </div>
+
+      <p class="muted small pick-label">Fica aberto por</p>
+      <select id="ed-duration" aria-label="Fica aberto por">
+        <option value="1">1 hora</option>
+        <option value="2">2 horas</option>
+        <option value="4">4 horas</option>
+        <option value="8">8 horas</option>
+        <option value="12">12 horas</option>
+        <option value="24">1 dia</option>
+        <option value="48">2 dias</option>
+        <option value="72">3 dias</option>
+      </select>
+      <p class="muted small">Depois disso fecha sozinho (ninguém mais responde e para de insistir). Dá pra encerrar antes.</p>
 
       <p class="muted small pick-label">Quando</p>
       <div class="chips seg" id="ed-when">
