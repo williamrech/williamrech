@@ -15,27 +15,114 @@ const $ = (id) => document.getElementById(id);
 const show = (id, on = true) => { $(id).hidden = !on; };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// ---------- Fun content (Firestore config/fun, edited by hand in the console) ----------
+// ---------- Fun content, palettes & occasions (Firestore config/fun, edited by hand) ----------
 // Defaults are used until the doc loads (or if it doesn't exist).
 let FUN = {};
 const funList = (key, fallback) => (Array.isArray(FUN[key]) && FUN[key].length ? FUN[key] : fallback);
+const TZ_SP = "America/Sao_Paulo";
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-// Same "version" for the whole family on a given day: chosen from the date, in Brasília time.
-// Purely decorative — not the real app version.
+// Preview any occasion without changing data: add ?ocasiao=<id> to the address.
+const PREVIEW_OCCASION = new URLSearchParams(location.search).get("ocasiao");
+
+const DEFAULT_PALETTE = { name: "Espresso", bg: "#1a1210", surface: "#30221b", text: "#f2e6d6", muted: "#b39d87", accent: "#c98b4f", highlight: "#e2c39b" };
+
+// Today in Brasília time: { y, m, d, weekday, key "YYYY-MM-DD", md "MM-DD" }
+function spToday(date = new Date()) {
+  const key = new Intl.DateTimeFormat("en-CA", { timeZone: TZ_SP }).format(date);
+  const [y, m, d] = key.split("-").map(Number);
+  return { y, m, d, key, md: key.slice(5), weekday: new Date(Date.UTC(y, m - 1, d)).getUTCDay() };
+}
+
+// Easter Sunday (Gregorian), as UTC date.
+function easter(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return Date.UTC(y, month - 1, day);
+}
+
+const WD = { sun: 0, dom: 0, mon: 1, seg: 1, tue: 2, ter: 2, wed: 3, qua: 3, thu: 4, qui: 4, fri: 5, sex: 5, sat: 6, sab: 6 };
+const pad2s = (n) => String(n).padStart(2, "0");
+
+// Does one date pattern match today? Patterns:
+//   12-25 | 2026-11-10 | fri-13 | 2sun-05 | lastfri-11 | easter-47 | 12-20..01-06
+function matchesPattern(pat, t) {
+  pat = String(pat).trim().toLowerCase();
+  if (!pat) return false;
+  let m;
+  if ((m = pat.match(/^(\d\d-\d\d)\.\.(\d\d-\d\d)$/))) {
+    const [a, b] = [m[1], m[2]];
+    return a <= b ? t.md >= a && t.md <= b : t.md >= a || t.md <= b; // ranges may wrap the new year
+  }
+  if (/^\d{4}-\d\d-\d\d$/.test(pat)) return pat === t.key;
+  if (/^\d\d-\d\d$/.test(pat)) return pat === t.md;
+  if ((m = pat.match(/^([a-z]{3})-(\d\d?)$/)) && m[1] in WD) return t.weekday === WD[m[1]] && t.d === Number(m[2]);
+  if ((m = pat.match(/^(\d|last)([a-z]{3})-(\d\d)$/)) && m[2] in WD) {
+    if (t.m !== Number(m[3]) || t.weekday !== WD[m[2]]) return false;
+    if (m[1] === "last") return t.d + 7 > new Date(Date.UTC(t.y, t.m, 0)).getUTCDate();
+    return Math.ceil(t.d / 7) === Number(m[1]);
+  }
+  if ((m = pat.match(/^easter([+-]\d+)?$/))) {
+    const target = new Date(easter(t.y) + Number(m[1] || 0) * 86400000);
+    return `${target.getUTCFullYear()}-${pad2s(target.getUTCMonth() + 1)}-${pad2s(target.getUTCDate())}` === t.key;
+  }
+  return false;
+}
+// "when" can hold several patterns separated by commas (any one matches).
+const occasionMatches = (occ, t) => String(occ.when || "").split(",").some((p) => matchesPattern(p, t));
+
+// All of today's occasions, merged: higher priority wins field by field.
+function todaysOccasion() {
+  const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
+  const t = spToday();
+  let list = Object.entries(all).filter(([, o]) => o && typeof o === "object" && o.enabled !== false && occasionMatches(o, t));
+  if (PREVIEW_OCCASION && all[PREVIEW_OCCASION]) list = [[PREVIEW_OCCASION, all[PREVIEW_OCCASION]]];
+  list.sort((a, b) => (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
+  const merged = {};
+  for (const [id, o] of list) { Object.assign(merged, o); merged.id = id; }
+  return list.length ? merged : null;
+}
+
+function getPalette(id) {
+  const pals = (FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : {};
+  const p = pals[id];
+  return p && typeof p === "object" ? { ...DEFAULT_PALETTE, ...p } : null;
+}
+
+function applyPalette(p) {
+  const root = document.documentElement.style;
+  const set = (v, val) => { if (HEX.test(String(val || ""))) root.setProperty(v, val); else root.removeProperty(v); };
+  set("--bg", p.bg); set("--surface", p.surface); set("--fg", p.text);
+  set("--muted", p.muted); set("--caramel", p.accent); set("--crema", p.highlight);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta && HEX.test(p.bg)) meta.content = p.bg;
+}
+
+let todayOcc = null;
+// Chooses the look: an occasion forces its palette on everyone; otherwise the user's choice.
+function applyLook() {
+  todayOcc = todaysOccasion();
+  const userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
+  const pal = (todayOcc && getPalette(todayOcc.palette)) || getPalette(userPal) || getPalette("espresso") || DEFAULT_PALETTE;
+  applyPalette(pal);
+  renderVersion();
+  renderBanner();
+  placeDecor(todayOcc && todayOcc.decor);
+  runEffect(todayOcc && todayOcc.effect);
+  if (typeof renderSettings === "function" && typeof auth !== "undefined" && auth.currentUser) renderSettings();
+}
+
+// Same "version" for the whole family on a given day. Purely decorative.
 function renderVersion() {
-  const key = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()); // YYYY-MM-DD
-  const md = key.slice(5);
-  const weekday = new Date(key + "T12:00:00").getDay();
-  const specials = (FUN.versionSpecials && typeof FUN.versionSpecials === "object") ? FUN.versionSpecials : {};
+  const t = spToday();
   const words = funList("versionWords", []);
   const odds = Number(FUN.versionOdds) || 0;
+  let h = 2166136261; // tiny deterministic hash of the date
+  for (const c of t.key) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
 
-  // Tiny deterministic hash of the date.
-  let h = 2166136261;
-  for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
-
-  let v = typeof specials[md] === "string" ? specials[md] : "";
-  if (!v && md.endsWith("-13") && weekday === 5 && FUN.friday13) v = String(FUN.friday13);
+  let v = todayOcc && typeof todayOcc.version === "string" ? todayOcc.version : "";
   if (!v && odds > 0 && words.length && h % odds === 0) {
     // Joke words go in the 2nd or 3rd slot (1.oxe.0 or 1.0.oxe), never the 1st.
     const w = String(words[(h >>> 3) % words.length]);
@@ -45,11 +132,38 @@ function renderVersion() {
   show("footer-version", true);
 }
 
-// ---------- Coffee decorations: random spot & angle on every load (not saved) ----------
-(function placeDecor() {
+function renderBanner() {
+  const el = document.getElementById("banner");
+  if (!el) return;
+  const text = todayOcc && typeof todayOcc.banner === "string" ? todayOcc.banner : "";
+  el.textContent = text;
+  if (text && PREVIEW_OCCASION) el.insertAdjacentHTML("beforeend", ` <span class="preview-tag">prévia</span>`);
+  el.hidden = !text;
+}
+
+// Background decor: coffee SVGs normally; an occasion can swap in emoji (e.g. "🎃🦇👻").
+let decorKey = null;
+function placeDecor(emojiString) {
   const box = document.getElementById("decor");
+  const emojis = emojiString ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(String(emojiString))]
+    .map((s) => s.segment).filter((s) => s.trim()) : [];
+  const key = emojis.join("") || "coffee";
+  if (key === decorKey) return; // don't reshuffle on every config update
+  decorKey = key;
+  box.innerHTML = "";
   const rnd = (a, b) => a + Math.random() * (b - a);
-  const edgeX = () => (Math.random() < 0.5 ? rnd(-12, 18) : rnd(72, 98)); // keep big ones near the sides
+  const edgeX = () => (Math.random() < 0.5 ? rnd(-8, 18) : rnd(78, 102));
+  if (emojis.length) {
+    const n = Math.max(6, Math.min(10, emojis.length * 2));
+    for (let i = 0; i < n; i++) {
+      const s = document.createElement("span");
+      s.className = "decor-emoji";
+      s.textContent = emojis[i % emojis.length];
+      s.style.cssText = `font-size:${rnd(26, i < 2 ? 90 : 52)}px;left:${i < 3 ? edgeX() : rnd(0, 96)}vw;top:${rnd(2, 95)}vh;opacity:${rnd(0.12, 0.22)};transform:translate(-50%,-50%) rotate(${rnd(-35, 35)}deg)`;
+      box.appendChild(s);
+    }
+    return;
+  }
   const items = [
     { src: "decor/latte.svg", size: rnd(150, 210), x: edgeX(), y: rnd(-5, 90), op: rnd(0.10, 0.15) },
     { src: "decor/mug.svg", size: rnd(80, 120), x: edgeX(), y: rnd(0, 92), op: rnd(0.12, 0.18) },
@@ -63,7 +177,37 @@ function renderVersion() {
     img.style.cssText = `width:${it.size}px;left:${it.x}vw;top:${it.y}vh;opacity:${it.op};transform:translate(-50%,-50%) rotate(${rnd(0, 360)}deg)`;
     box.appendChild(img);
   }
-})();
+}
+
+// Effects: "confetti" (a burst on open) or "snow" (gentle, continuous).
+let effectKey = null;
+function runEffect(kind) {
+  if (kind === effectKey) return;
+  effectKey = kind;
+  const layer = document.getElementById("fx");
+  layer.innerHTML = "";
+  if (!kind || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const css = getComputedStyle(document.documentElement);
+  const colors = ["--caramel", "--crema", "--fg", "--muted"].map((v) => css.getPropertyValue(v).trim()).concat(["#ff8fb1", "#7fc8f8", "#f5d76e"]);
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  if (kind === "confetti") {
+    for (let i = 0; i < 70; i++) {
+      const s = document.createElement("i");
+      s.className = "confetti";
+      s.style.cssText = `left:${rnd(0, 100)}vw;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8)}s;animation-duration:${rnd(2.4, 4.2)}s;--drift:${rnd(-60, 60)}px;--spin:${rnd(-720, 720)}deg;width:${rnd(6, 10)}px;height:${rnd(8, 14)}px`;
+      layer.appendChild(s);
+    }
+    setTimeout(() => { if (effectKey === "confetti") layer.innerHTML = ""; }, 6000);
+  } else if (kind === "snow") {
+    for (let i = 0; i < 26; i++) {
+      const s = document.createElement("i");
+      s.className = "snow";
+      s.textContent = "❄";
+      s.style.cssText = `left:${rnd(0, 100)}vw;font-size:${rnd(8, 18)}px;opacity:${rnd(0.25, 0.6)};animation-delay:${rnd(-12, 0)}s;animation-duration:${rnd(8, 16)}s;--drift:${rnd(-40, 40)}px`;
+      layer.appendChild(s);
+    }
+  }
+}
 
 // ---------- Setup check ----------
 const config = self.FIREBASE_CONFIG;
@@ -88,8 +232,9 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // Fun content: live, so console edits show up without a reload.
 onSnapshot(doc(db, "config", "fun"), (snap) => {
   FUN = snap.exists() ? snap.data() : {};
-  renderVersion();
-}, (err) => { console.warn("config/fun", err); renderVersion(); });
+  applyLook();
+}, (err) => { console.warn("config/fun", err); applyLook(); });
+placeDecor(null); // coffee decor right away; occasions may swap it once config loads
 const functions = getFunctions(app, "us-central1");
 const apiFn = httpsCallable(functions, "api");
 const call = (action) => (data = {}) => apiFn({ ...data, action });
@@ -402,6 +547,7 @@ onAuthStateChanged(auth, async (user) => {
     meLoaded = true;
     $("settings-name").textContent = me.name || "(sem apelido)";
     show("admin", me.admin === true);
+    applyLook();
     renderSettings();
     renderMeChip();
     proceed();
@@ -507,7 +653,37 @@ function fillTimeSelect(sel, values, current) {
   if (current) sel.value = current;
 }
 
+function renderPalettes() {
+  const wrap = $("palettes");
+  if (!wrap) return;
+  const pals = (FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : { espresso: DEFAULT_PALETTE };
+  const current = (me && me.palette) || "espresso";
+  const forced = todayOcc && todayOcc.palette && getPalette(todayOcc.palette);
+  $("palette-forced").textContent = forced ? `Hoje o tema é obrigatório (${todayOcc.banner || todayOcc.id}). Sua escolha volta amanhã. 😌` : "";
+  show("palette-forced", !!forced);
+  wrap.innerHTML = "";
+  Object.entries(pals)
+    .filter(([, p]) => p && typeof p === "object" && !p.onlyOccasions)
+    .sort((a, b) => String(a[1].name || a[0]).localeCompare(String(b[1].name || b[0])))
+    .forEach(([id, raw]) => {
+      const p = { ...DEFAULT_PALETTE, ...raw };
+      const b = document.createElement("button");
+      b.className = "palette" + (id === current ? " selected" : "");
+      const dots = [p.bg, p.surface, p.accent, p.highlight].filter((c) => HEX.test(String(c)))
+        .map((c) => `<i style="background:${c}"></i>`).join("");
+      b.innerHTML = `<span class="dots">${dots}</span><span>${esc(p.name || id)}</span>`;
+      b.onclick = async () => {
+        try {
+          await setDoc(doc(db, "users", auth.currentUser.uid), { palette: id, updatedAt: serverTimestamp() }, { merge: true });
+          toast(forced ? "Salvo. Mas hoje o tema é obrigatório. 🙃" : `Tema ${p.name || id}. ☕`);
+        } catch (err) { toast(friendlyError(err)); }
+      };
+      wrap.appendChild(b);
+    });
+}
+
 function renderSettings() {
+  renderPalettes();
   const q = (me && me.quiet) || {};
   $("quiet-on").checked = !!q.on;
   show("quiet-times", !!q.on);

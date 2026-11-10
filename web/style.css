@@ -1,14 +1,22 @@
 /* Coffee house palette: espresso, crema, caramel, steamed milk */
 :root {
+  /* Palette base colors — set at runtime from config/fun palettes (6 per palette) */
   --bg: #1a1210;
-  --bg-2: #241915;
-  --card: rgba(48, 34, 27, 0.72);
-  --line: rgba(226, 195, 155, 0.16);
+  --surface: #30221b;
   --fg: #f2e6d6;
   --muted: #b39d87;
-  --caramel: #c98b4f;
-  --caramel-2: #a86a33;
-  --crema: #e2c39b;
+  --caramel: #c98b4f;   /* accent */
+  --crema: #e2c39b;     /* highlight */
+  /* Derived from the base colors, so a palette only needs 6 values */
+  --bg-2: color-mix(in srgb, var(--bg) 90%, var(--surface));
+  --card: color-mix(in srgb, var(--surface) 72%, transparent);
+  --line: color-mix(in srgb, var(--crema) 16%, transparent);
+  --caramel-2: color-mix(in srgb, var(--caramel) 78%, black);
+  --pin-1: color-mix(in srgb, var(--caramel) 45%, var(--surface));
+  --pin-2: color-mix(in srgb, var(--surface) 85%, black);
+  --dlg-1: color-mix(in srgb, var(--surface) 88%, white);
+  --dlg-2: color-mix(in srgb, var(--surface) 96%, black);
+  --on-accent: var(--bg);
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
@@ -31,9 +39,9 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   /* Warm light pooling from the top, like a café lamp, plus a faint coffee-ring stain */
   background:
-    radial-gradient(120% 60% at 50% -10%, rgba(201, 139, 79, 0.22), transparent 60%),
-    radial-gradient(circle at 88% 78%, transparent 54px, rgba(201, 139, 79, 0.07) 55px, rgba(201, 139, 79, 0.07) 58px, transparent 59px),
-    radial-gradient(circle at 92% 82%, transparent 40px, rgba(201, 139, 79, 0.05) 41px, rgba(201, 139, 79, 0.05) 43px, transparent 44px),
+    radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--caramel) 22%, transparent), transparent 60%),
+    radial-gradient(circle at 88% 78%, transparent 54px, color-mix(in srgb, var(--caramel) 7%, transparent) 55px, color-mix(in srgb, var(--caramel) 7%, transparent) 58px, transparent 59px),
+    radial-gradient(circle at 92% 82%, transparent 40px, color-mix(in srgb, var(--caramel) 5%, transparent) 41px, color-mix(in srgb, var(--caramel) 5%, transparent) 43px, transparent 44px),
     linear-gradient(180deg, var(--bg-2), var(--bg) 60%);
   background-attachment: fixed;
 }
@@ -117,7 +125,7 @@ button:disabled { opacity: 0.55; }
 }
 .primary {
   background: linear-gradient(180deg, var(--caramel), var(--caramel-2));
-  color: #1a1210;
+  color: var(--on-accent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .secondary { background: transparent; border: 1px solid var(--line); color: var(--fg); }
@@ -143,11 +151,11 @@ button:focus:not(:focus-visible) { outline: none; }
   gap: 18px;
   text-align: left;
   padding: 22px 22px;
-  border: 1px solid rgba(226, 195, 155, 0.25);
+  border: 1px solid color-mix(in srgb, var(--crema) 25%, transparent);
   border-radius: 20px;
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(226, 195, 155, 0.28), transparent 55%),
-    linear-gradient(135deg, #6b4126, #3d2416);
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--crema) 28%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--pin-1), var(--pin-2));
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--fg);
   font-size: 1.1rem;
@@ -163,7 +171,7 @@ button:focus:not(:focus-visible) { outline: none; }
   display: grid; place-items: center;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(226, 195, 155, 0.2);
+  border: 1px solid color-mix(in srgb, var(--crema) 20%, transparent);
   flex: none;
 }
 
@@ -184,7 +192,7 @@ button:focus:not(:focus-visible) { outline: none; }
   border-radius: 16px;
   padding: 16px 18px;
 }
-.trip.highlight { border-color: var(--caramel); box-shadow: 0 0 0 3px rgba(201, 139, 79, 0.2); }
+.trip.highlight { border-color: var(--caramel); box-shadow: 0 0 0 3px color-mix(in srgb, var(--caramel) 20%, transparent); }
 .trip .head { font-size: 1.02rem; line-height: 1.45; }
 .trip .when { color: var(--crema); font-family: var(--serif); font-style: italic; font-size: 1.08rem; }
 .trip .riders { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
@@ -197,12 +205,12 @@ dialog {
   width: min(420px, calc(100vw - 32px));
   border: 1px solid var(--line);
   border-radius: 20px;
-  background: linear-gradient(180deg, #2c201a, #211814);
+  background: linear-gradient(180deg, var(--dlg-1), var(--dlg-2));
   color: var(--fg);
   padding: 26px 24px;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
-dialog::backdrop { background: rgba(14, 9, 7, 0.78); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+dialog::backdrop { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
 dialog form { margin-top: 8px; }
 
 .row-buttons { display: flex; gap: 10px; margin-top: 20px; }
@@ -216,7 +224,7 @@ dialog form { margin-top: 8px; }
   background: rgba(0, 0, 0, 0.18);
   font-size: 0.92rem;
 }
-.chip.selected { background: var(--crema); color: #2a1c14; border-color: var(--crema); font-weight: 600; }
+.chip.selected { background: var(--crema); color: var(--on-accent); border-color: var(--crema); font-weight: 600; }
 
 .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .days label {
@@ -239,7 +247,7 @@ footer {
 #version {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.72rem;
-  color: rgba(179, 157, 135, 0.55);
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
   letter-spacing: 0.02em;
 }
 
@@ -249,7 +257,7 @@ footer {
   bottom: calc(44px + env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(20px);
   background: var(--crema);
-  color: #1a1210;
+  color: var(--on-accent);
   padding: 11px 18px;
   border-radius: 999px;
   font-size: 0.95rem;
@@ -377,7 +385,7 @@ dialog { overscroll-behavior: contain; touch-action: pan-y; }
 .rounds { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 12px; }
 .round { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
 .round.closed { opacity: 0.6; }
-.round.highlight { border-color: var(--caramel); box-shadow: 0 0 0 3px rgba(201, 139, 79, 0.2); }
+.round.highlight { border-color: var(--caramel); box-shadow: 0 0 0 3px color-mix(in srgb, var(--caramel) 20%, transparent); }
 .round-head { display: flex; gap: 12px; align-items: center; }
 .round-emoji { font-size: 1.6rem; }
 .round-title { font-family: var(--serif); font-size: 1.12rem; color: var(--crema); }
@@ -432,8 +440,8 @@ header { padding-top: 14px; gap: 12px; }
 .pin {
   flex: 0 0 auto; display: flex; align-items: center; gap: 8px; max-width: 220px;
   padding: 12px 16px; border-radius: 16px; color: var(--fg); text-align: left;
-  border: 1px solid rgba(226, 195, 155, 0.28);
-  background: radial-gradient(120% 140% at 0% 0%, rgba(226, 195, 155, 0.22), transparent 55%), linear-gradient(135deg, #6b4126, #3d2416);
+  border: 1px solid color-mix(in srgb, var(--crema) 28%, transparent);
+  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--crema) 22%, transparent), transparent 55%), linear-gradient(135deg, var(--pin-1), var(--pin-2));
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 .pin:active { transform: scale(0.97); }
@@ -443,7 +451,7 @@ header { padding-top: 14px; gap: 12px; }
 .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin: 4px 0 18px;
   background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); border-radius: 14px; }
 .tab { padding: 10px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
-.tab.selected { background: var(--crema); color: #2a1c14; }
+.tab.selected { background: var(--crema); color: var(--on-accent); }
 
 /* ---------- Chamados tab ---------- */
 .chamados { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 10px; }
@@ -609,8 +617,37 @@ dialog h2 { margin-bottom: 4px; }
 .uname-wrap .uname { padding: 8px 10px; margin: -8px -10px; }
 .me-chip { padding: 7px 16px; }
 
-#footer-version { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.68rem; color: rgba(179, 157, 135, 0.55); }
+#footer-version { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.68rem; color: color-mix(in srgb, var(--muted) 55%, transparent); }
 #version { font-size: inherit; }
 .who-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
 .who-row #who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .who-row .link { flex: none; }
+
+/* ---------- Occasions: banner, emoji decor, effects ---------- */
+.banner-occ {
+  text-align: center; font-family: var(--serif); font-style: italic; font-size: 1rem; color: var(--crema);
+  padding: 8px 12px; margin: 0 0 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--caramel) 18%, transparent); border: 1px solid var(--line);
+}
+.preview-tag { font-family: var(--sans); font-style: normal; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 2px 6px; border-radius: 6px; background: var(--crema); color: var(--on-accent); vertical-align: middle; }
+.decor-emoji { position: absolute; user-select: none; -webkit-user-select: none; filter: saturate(0.85); }
+#fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
+.confetti { position: absolute; top: -20px; border-radius: 2px; animation: confetti-fall linear forwards; }
+@keyframes confetti-fall {
+  to { transform: translate(var(--drift), 105vh) rotate(var(--spin)); opacity: 0.6; }
+}
+.snow { position: absolute; top: -20px; color: #fff; font-style: normal; animation: snow-fall linear infinite; }
+@keyframes snow-fall {
+  to { transform: translate(var(--drift), 105vh); }
+}
+
+/* ---------- Palette picker ---------- */
+.palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.palette {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; text-align: left;
+  background: rgba(0, 0, 0, 0.18); border: 1px solid var(--line); color: var(--fg); font-size: 0.84rem;
+}
+.palette.selected { border-color: var(--crema); box-shadow: 0 0 0 1px var(--crema) inset; }
+.palette .dots { display: inline-flex; flex: none; }
+.palette .dots i { width: 12px; height: 12px; border-radius: 50%; margin-right: -3px; border: 1px solid rgba(0, 0, 0, 0.4); }

@@ -29,6 +29,7 @@
 </head>
 <body>
   <div id="decor" aria-hidden="true"></div>
+  <div id="fx" aria-hidden="true"></div>
   <header id="topbar" hidden>
     <div class="topbar-row">
       <h1>Ela gosta de sorvete?</h1>
@@ -73,6 +74,7 @@
 
     <!-- Main app -->
     <section id="view-app" hidden>
+      <div id="banner" class="banner-occ" hidden></div>
       <div id="pins" class="pins" hidden></div>
 
       <div class="tabs" role="tablist">
@@ -234,6 +236,10 @@
     <h2>Configurações</h2>
     <h3>Apelido</h3>
     <p><span id="settings-name"></span> · <button id="change-name" class="link">trocar</button></p>
+
+    <h3>Aparência</h3>
+    <p class="muted small" id="palette-forced" hidden></p>
+    <div id="palettes" class="palettes"></div>
 
     <h3>Não me perturbe</h3>
     <label class="toggle"><input type="checkbox" id="quiet-on"> <span>Segurar notificações num horário</span></label>
