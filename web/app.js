@@ -59,6 +59,11 @@ function matchesPattern(pat, t) {
     const [a, b] = [m[1], m[2]];
     return a <= b ? t.md >= a && t.md <= b : t.md >= a || t.md <= b; // ranges may wrap the new year
   }
+  if ((m = pat.match(/^(\d{4}-\d\d-\d\d)\.\.(\d{4}-\d\d-\d\d)$/))) return t.key >= m[1] && t.key <= m[2];
+  if ((m = pat.match(/^easter([+-]\d+)?\.\.easter([+-]\d+)?$/))) {
+    const diff = Math.round((Date.UTC(t.y, t.m - 1, t.d) - easter(t.y)) / 86400000);
+    return diff >= Number(m[1] || 0) && diff <= Number(m[2] || 0);
+  }
   if (/^\d{4}-\d\d-\d\d$/.test(pat)) return pat === t.key;
   if (/^\d\d-\d\d$/.test(pat)) return pat === t.md;
   if ((m = pat.match(/^([a-z]{3})-(\d\d?)$/)) && m[1] in WD) return t.weekday === WD[m[1]] && t.d === Number(m[2]);
@@ -1552,7 +1557,8 @@ function renderAdminOccasions() {
       const li = document.createElement("li");
       li.innerHTML = `<button class="adm-row"><span class="dots">${pal ? paletteDots(pal) : ""}</span>
         <span class="adm-row-text"><b>${esc(id)}${o.enabled === false ? ` <span class="badge off">desativada</span>` : ""}${next && next.i === 0 ? ` <span class="badge">hoje</span>` : ""}</b>
-        <span class="muted small">${esc(o.when || "(sem data)")} · ${next ? "próxima: " + fmtDate(next) : "nunca"}</span></span></button>`;
+        <span class="muted small">${esc(describeWhen(o.when))}</span>
+        <span class="muted small">${next ? "Próxima: " + fmtDate(next) : "Nunca"}</span></span></button>`;
       li.querySelector("button").onclick = () => openOccasionEditor(id);
       list.appendChild(li);
     });
@@ -1576,7 +1582,7 @@ function renderWhenInfo() {
   const when = $("occ-when").value.trim();
   if (!when) { $("occ-when-info").textContent = "Sem data: só aparece na prévia."; return; }
   const next = nextDates(when, 3);
-  $("occ-when-info").textContent = next.length ? `${next[0].i === 0 ? "✓ Bate hoje · " : ""}Próximas: ${next.map(fmtDate).join(", ")}` : "⚠ Não bate em nenhum dia dos próximos 2 anos. Confere o formato.";
+  $("occ-when-info").textContent = next.length ? `${next[0].i === 0 ? "✓ Hoje é dia! · " : ""}Próximas: ${next.map(fmtDate).join(", ")}` : "⚠ Não cai em nenhum dia dos próximos 2 anos.";
 }
 function openOccasionEditor(id) {
   occEditing = id;
@@ -1584,7 +1590,8 @@ function openOccasionEditor(id) {
   $("occ-title").textContent = id ? `Ocasião: ${id}` : "Nova ocasião";
   $("occ-id").value = id || "";
   $("occ-id").readOnly = !!id;
-  $("occ-when").value = o.when || "";
+  occRules = mergeRules(String(o.when || "").split(",").map((x) => x.trim()).filter(Boolean).map((p) => normalizeRule(ruleFromPattern(p))));
+  if (!occRules.length) occRules = [newRule()];
   $("occ-banner").value = o.banner || "";
   $("occ-version").value = o.version || "";
   $("occ-decor").value = o.decor || "";
@@ -1597,10 +1604,9 @@ function openOccasionEditor(id) {
   sel.value = o.palette || "";
   show("occ-delete", !!id);
   renderDecorPicker("occ-decor-picker", "occ-decor");
-  renderWhenInfo();
+  renderRules();
   $("dlg-occ").showModal();
 }
-$("occ-when").addEventListener("input", renderWhenInfo);
 $("adm-occ-new").addEventListener("click", () => openOccasionEditor(null));
 $("occ-cancel").addEventListener("click", () => $("dlg-occ").close());
 $("occ-try").addEventListener("click", () => {
@@ -1625,6 +1631,215 @@ $("occ-delete").addEventListener("click", async () => {
   const ok = await withBusy($("occ-delete"), async () => { await updateDoc(funRef(), new FieldPath("occasions", occEditing), deleteField()); return true; }, "…");
   if (ok) { $("dlg-occ").close(); toast("Ocasião apagada."); }
 });
+
+
+// ---------- Date-rule builder (no typing: pick a type, then dropdowns) ----------
+const MONTHS_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const WEEKDAYS_PT = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const WD_CODES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+const RULE_TYPES = [
+  ["annual", "Todo ano"],
+  ["once", "Um ano só"],
+  ["nth", "Nº dia da semana do mês"],
+  ["wdday", "Dia da semana + dia do mês"],
+  ["easter", "Páscoa"],
+];
+const daysIn = (m, y = 2024) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // 2024: leap year, so Feb has 29
+const dayMonth = (d, m) => `${d} de ${MONTHS_PT[m - 1]}`;
+const fem = (wd) => wd > 0 && wd < 6;                              // segunda…sexta are feminine
+const wdName = (wd) => WEEKDAYS_PT[wd] + (fem(wd) ? "-feira" : ""); // "sexta-feira", "domingo"
+
+function ruleFromPattern(p) {
+  p = String(p || "").trim().toLowerCase();
+  let m;
+  if ((m = p.match(/^(\d\d)-(\d\d)(?:\.\.(\d\d)-(\d\d))?$/))) {
+    return { type: "annual", fm: +m[1], fd: +m[2], tm: +(m[3] || m[1]), td: +(m[4] || m[2]) };
+  }
+  if ((m = p.match(/^(\d{4})-(\d\d)-(\d\d)(?:\.\.(\d{4})-(\d\d)-(\d\d))?$/))) {
+    return { type: "once", fy: +m[1], fm: +m[2], fd: +m[3], ty: +(m[4] || m[1]), tm: +(m[5] || m[2]), td: +(m[6] || m[3]) };
+  }
+  if ((m = p.match(/^(\d|last)([a-z]{3})-(\d\d)$/)) && m[2] in WD) return { type: "nth", n: m[1] === "last" ? "last" : +m[1], wd: WD[m[2]], m: +m[3] };
+  if ((m = p.match(/^([a-z]{3})-(\d\d?)$/)) && m[1] in WD) return { type: "wdday", wd: WD[m[1]], d: +m[2] };
+  if ((m = p.match(/^easter([+-]\d+)?(?:\.\.easter([+-]\d+)?)?$/))) {
+    const a = Number(m[1] || 0), b = m[0].includes("..") ? Number(m[2] || 0) : a;
+    return { type: "easter", off: a, len: Math.max(1, b - a + 1) };
+  }
+  return { type: "raw", text: p };
+}
+
+function patternFromRule(r) {
+  const md = (mo, d) => `${pad2s(mo)}-${pad2s(d)}`;
+  const sg = (n) => (n === 0 ? "" : n > 0 ? `+${n}` : `${n}`);
+  switch (r.type) {
+    case "annual": { const a = md(r.fm, r.fd), b = md(r.tm, r.td); return a === b ? a : `${a}..${b}`; }
+    case "once": {
+      const a = `${r.fy}-${md(r.fm, r.fd)}`, b = `${r.ty}-${md(r.tm, r.td)}`;
+      return a === b ? a : a < b ? `${a}..${b}` : `${b}..${a}`;
+    }
+    case "nth": return `${r.n === "last" ? "last" : r.n}${WD_CODES[r.wd]}-${pad2s(r.m)}`;
+    case "wdday": return `${WD_CODES[r.wd]}-${pad2s(r.d)}`;
+    case "easter": return r.len > 1 ? `easter${sg(r.off)}..easter${sg(r.off + r.len - 1)}` : `easter${sg(r.off)}`;
+    default: return r.text || "";
+  }
+}
+
+function describeRule(r) {
+  switch (r.type) {
+    case "annual": {
+      const same = r.fm === r.tm && r.fd === r.td;
+      if (same) return `Todo ano, ${dayMonth(r.fd, r.fm)}`;
+      const wraps = r.tm * 100 + r.td < r.fm * 100 + r.fd;
+      return `Todo ano, de ${dayMonth(r.fd, r.fm)} a ${dayMonth(r.td, r.tm)}${wraps ? " (do ano seguinte)" : ""}`;
+    }
+    case "once": {
+      const a = `${dayMonth(r.fd, r.fm)} de ${r.fy}`, b = `${dayMonth(r.td, r.tm)} de ${r.ty}`;
+      return a === b ? `Só em ${a}` : `De ${a} a ${b}`;
+    }
+    case "nth": return `Todo ano, ${r.n === "last" ? (fem(r.wd) ? "última" : "último") : r.n + (fem(r.wd) ? "ª" : "º")} ${wdName(r.wd)} de ${MONTHS_PT[r.m - 1]}`;
+    case "wdday": return `${fem(r.wd) ? "Toda" : "Todo"} ${wdName(r.wd)} que cair no dia ${r.d}`;
+    case "easter": {
+      const n = Math.abs(r.off);
+      const base = r.off === 0 ? "No domingo de Páscoa" : `${n} dia${n > 1 ? "s" : ""} ${r.off < 0 ? "antes" : "depois"} da Páscoa`;
+      return r.len > 1 ? `${base}, por ${r.len} dias` : base;
+    }
+    default: return `Código: ${r.text}`;
+  }
+}
+
+function describeWhen(when) {
+  const parts = String(when || "").split(",").map((x) => x.trim()).filter(Boolean);
+  return parts.length ? mergeRules(parts.map(ruleFromPattern)).map(describeRule).join(" + ") : "Sem data";
+}
+
+// Joins old-style lists of single days into ranges: "easter-48,easter-47" → one 2-day rule.
+function mergeRules(rules) {
+  const out = [];
+  for (const r of rules) {
+    const prev = out[out.length - 1];
+    if (prev && prev.type === "easter" && r.type === "easter" && r.off === prev.off + prev.len) { prev.len += r.len; continue; }
+    if (prev && prev.type === "annual" && r.type === "annual" && r.fm === r.tm && r.fd === r.td &&
+        prev.tm === r.fm && prev.td + 1 === r.fd) { prev.td = r.td; continue; }
+    out.push({ ...r });
+  }
+  return out;
+}
+
+function newRule() {
+  const t = spToday();
+  return { type: "annual", fm: t.m, fd: t.d, tm: t.m, td: t.d };
+}
+// Fills the fields a type needs, keeping whatever already makes sense.
+function normalizeRule(r) {
+  const t = spToday();
+  const base = {
+    annual: { fm: t.m, fd: t.d, tm: t.m, td: t.d },
+    once: { fy: t.y, fm: t.m, fd: t.d, ty: t.y, tm: t.m, td: t.d },
+    nth: { n: 1, wd: 0, m: t.m },
+    wdday: { wd: 5, d: 13 },
+    easter: { off: 0, len: 1 },
+  }[r.type] || {};
+  const out = { ...base, ...r };
+  if (out.fd && out.fm) out.fd = Math.min(out.fd, daysIn(out.fm, out.fy));
+  if (out.td && out.tm) out.td = Math.min(out.td, daysIn(out.tm, out.ty));
+  return out;
+}
+
+let occRules = [];
+function selectEl(options, value, onChange, cls = "") {
+  const sel = document.createElement("select");
+  if (cls) sel.className = cls;
+  for (const [v, label] of options) sel.add(new Option(label, String(v)));
+  sel.value = String(value);
+  sel.onchange = () => onChange(sel.value);
+  return sel;
+}
+const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+
+function renderRules() {
+  const wrap = $("occ-rules");
+  wrap.innerHTML = "";
+  occRules.forEach((r, idx) => {
+    const card = document.createElement("div");
+    card.className = "rule";
+    const head = document.createElement("div");
+    head.className = "rule-head";
+    const types = r.type === "raw" ? RULE_TYPES.concat([["raw", "Código antigo"]]) : RULE_TYPES;
+    head.appendChild(selectEl(types, r.type, (v) => { occRules[idx] = normalizeRule({ type: v }); renderRules(); }, "rule-type"));
+    if (occRules.length > 1) {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "rule-del";
+      del.textContent = "×";
+      del.setAttribute("aria-label", "Remover");
+      del.onclick = () => { occRules.splice(idx, 1); renderRules(); };
+      head.appendChild(del);
+    }
+    card.appendChild(head);
+
+    const body = document.createElement("div");
+    body.className = "rule-body";
+    const set = (patch) => { occRules[idx] = normalizeRule({ ...r, ...patch }); renderRules(); };
+    const label = (txt) => { const s = document.createElement("span"); s.className = "rule-label"; s.textContent = txt; return s; };
+    const monthSel = (v, f) => selectEl(MONTHS_PT.map((n, i) => [i + 1, n]), v, (x) => f(+x));
+    const daySel = (v, mo, y, f) => selectEl(range(1, daysIn(mo, y)).map((d) => [d, d]), v, (x) => f(+x), "narrow");
+    const wdSel = (v, f) => selectEl(WEEKDAYS_PT.map((n, i) => [i, wdName(i)]), v, (x) => f(+x));
+    const row = (...els) => { const d = document.createElement("div"); d.className = "rule-row"; els.forEach((e) => d.appendChild(e)); return d; };
+
+    if (r.type === "annual") {
+      // Moving the start drags the end along when it was a single day.
+      const single = r.fm === r.tm && r.fd === r.td;
+      body.append(
+        row(label("De"), daySel(r.fd, r.fm, 2024, (v) => set(single ? { fd: v, td: v } : { fd: v })),
+          monthSel(r.fm, (v) => set(single ? { fm: v, tm: v } : { fm: v }))),
+        row(label("Até"), daySel(r.td, r.tm, 2024, (v) => set({ td: v })), monthSel(r.tm, (v) => set({ tm: v }))),
+      );
+    } else if (r.type === "once") {
+      const single = r.fy === r.ty && r.fm === r.tm && r.fd === r.td;
+      const years = range(spToday().y, spToday().y + 3).map((y) => [y, y]);
+      body.append(
+        row(label("De"), daySel(r.fd, r.fm, r.fy, (v) => set(single ? { fd: v, td: v } : { fd: v })),
+          monthSel(r.fm, (v) => set(single ? { fm: v, tm: v } : { fm: v })),
+          selectEl(years, r.fy, (v) => set(single ? { fy: +v, ty: +v } : { fy: +v }), "narrow")),
+        row(label("Até"), daySel(r.td, r.tm, r.ty, (v) => set({ td: v })), monthSel(r.tm, (v) => set({ tm: v })),
+          selectEl(years, r.ty, (v) => set({ ty: +v }), "narrow")),
+      );
+    } else if (r.type === "nth") {
+      body.append(
+        row(selectEl([1, 2, 3, 4].map((n) => [n, n + (fem(r.wd) ? "ª" : "º")]).concat([["last", fem(r.wd) ? "última" : "último"]]), r.n, (v) => set({ n: v === "last" ? "last" : +v }), "narrow"),
+          wdSel(r.wd, (v) => set({ wd: v }))),
+        row(label("de"), monthSel(r.m, (v) => set({ m: v }))),
+      );
+    } else if (r.type === "wdday") {
+      body.append(row(label(fem(r.wd) ? "Toda" : "Todo"), wdSel(r.wd, (v) => set({ wd: v })), label("no dia"),
+        selectEl(range(1, 31).map((d) => [d, d]), r.d, (v) => set({ d: +v }), "narrow")));
+    } else if (r.type === "easter") {
+      const n = Math.abs(r.off), dir = r.off === 0 ? 0 : r.off < 0 ? -1 : 1;
+      body.append(
+        row(selectEl(range(0, 60).map((x) => [x, x]), n, (v) => set({ off: (dir || (+v ? -1 : 0)) * +v }), "narrow"),
+          label("dias"), selectEl([[-1, "antes"], [1, "depois"]], dir || -1, (v) => set({ off: +v * n }), ""), label("da Páscoa")),
+        row(label("Dura"), selectEl(range(1, 14).map((x) => [x, x]), r.len, (v) => set({ len: +v }), "narrow"), label("dia(s)")),
+      );
+    } else {
+      const inp = document.createElement("input");
+      inp.value = r.text || "";
+      inp.oninput = () => { occRules[idx] = ruleFromPattern(inp.value); syncWhen(); };
+      body.append(inp);
+    }
+    card.appendChild(body);
+    const desc = document.createElement("div");
+    desc.className = "rule-desc";
+    desc.textContent = describeRule(r);
+    card.appendChild(desc);
+    wrap.appendChild(card);
+  });
+  syncWhen();
+}
+
+function syncWhen() {
+  $("occ-when").value = occRules.map(patternFromRule).filter(Boolean).join(",");
+  renderWhenInfo();
+}
+$("occ-rule-add").addEventListener("click", () => { occRules.push(newRule()); renderRules(); });
 
 // ---------- Drawings ----------
 function renderAdminDrawings() {

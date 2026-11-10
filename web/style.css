@@ -744,3 +744,17 @@ input[readonly] { opacity: 0.6; }
   background: var(--crema); color: var(--on-accent); font-size: 0.85rem; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 #preview-bar button { border: 0; border-radius: 999px; padding: 6px 12px; background: var(--on-accent); color: var(--crema); font-weight: 700; }
+
+/* ---------- Date-rule builder ---------- */
+.rules { display: grid; gap: 8px; margin-top: 6px; }
+.rule { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: rgba(0, 0, 0, 0.18); display: grid; gap: 8px; }
+.rule-head { display: flex; gap: 8px; align-items: center; }
+.rule-head .rule-type { flex: 1; }
+.rule-del { background: none; border: 0; color: var(--muted); font-size: 1.3rem; line-height: 1; padding: 4px 6px; }
+.rule-body { display: grid; gap: 6px; }
+.rule-row { display: flex; gap: 6px; align-items: center; }
+.rule-row select { flex: 1 1 auto; min-width: 0; }
+.rule-row select.narrow { flex: 0 0 auto; width: auto; min-width: 64px; }
+.rule-label { font-size: 0.8rem; color: var(--muted); flex: none; min-width: 26px; }
+.rule-desc { font-size: 0.8rem; color: var(--crema); font-style: italic; }
+#occ-rule-add { margin-top: 4px; }
