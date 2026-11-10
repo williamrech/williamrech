@@ -386,6 +386,7 @@ const api = {
   closeRound: call("closeRound"),
   deleteRound: call("deleteRound"),
   muteTemplate: call("muteTemplate"),
+  sendOnce: call("sendOnce"),
   adminHealth: call("adminHealth"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
@@ -1114,6 +1115,7 @@ function renderChamados() {
   }
 }
 $("chamados-new").addEventListener("click", () => openEditor(null));
+$("fab").addEventListener("click", () => openEditor(null, { quick: true }));
 
 // Tabs (remembered per browser, just a convenience)
 function setAdminVisible(on) {
@@ -1163,7 +1165,8 @@ function renderRounds() {
 
   for (const r of visible) {
     const li = document.createElement("li");
-    li.className = "round" + (r.open ? "" : " closed") + (r.id === highlightRound ? " highlight" : "");
+    const collapsed = !r.open && !expandedRounds.has(r.id) && r.id !== highlightRound;
+    li.className = "round" + (r.open ? "" : " closed") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
     const mine = r.ownerUid === uid;
     const isRecipient = r.recipients.includes(uid);
     const myAnswer = r.answers && r.answers[uid];
@@ -1192,10 +1195,24 @@ function renderRounds() {
       if (!canSeeAll) answersHtml += `<div class="muted small">Só ${esc(r.ownerName)} vê as respostas.</div>`;
     }
 
+    // One-line result for collapsed (ended) rounds.
+    const answered = Object.values(r.answers || {});
+    let closedSummary = "";
+    if (!r.open) {
+      if (r.answerType === "none") closedSummary = "aviso";
+      else if (!canSeeAll) closedSummary = r.answers && r.answers[uid] ? `você: ${r.answers[uid].value}` : "sem resposta sua";
+      else if (r.answerType === "text") closedSummary = `${answered.length} resposta${answered.length === 1 ? "" : "s"}`;
+      else {
+        const counts = {};
+        answered.forEach((a) => (counts[a.value] = (counts[a.value] || 0) + 1));
+        closedSummary = Object.entries(counts).map(([v, n]) => `${v} ${n}`).join(" · ") || "ninguém respondeu";
+      }
+    }
     li.innerHTML = `
       <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
         <div><div class="round-title">${esc(r.title)}</div>
-        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)} · ${r.open ? closesText(r.closesAt) : "encerrado"}</div></div>
+        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)} · ${r.open ? closesText(r.closesAt) : "encerrado"}</div>
+        ${r.open ? "" : `<div class="closed-summary small">${collapsed ? esc(closedSummary) + " " : ""}<span class="chev">${collapsed ? "▾" : "▴ recolher"}</span></div>`}</div>
         <div class="round-corner"></div></div>
       ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
       ${answersHtml}
@@ -1203,6 +1220,15 @@ function renderRounds() {
       <div class="round-foot"></div>`;
     const actions = li.querySelector(".actions");
     const foot = li.querySelector(".round-foot");
+    if (!r.open) {
+      // Tap the header of an ended round to expand / collapse it.
+      li.querySelector(".round-head").addEventListener("click", (e) => {
+        if (e.target.closest("button")) return;
+        expandedRounds.has(r.id) ? expandedRounds.delete(r.id) : expandedRounds.add(r.id);
+        if (highlightRound === r.id) highlightRound = null;
+        renderRounds();
+      });
+    }
 
     if (isRecipient && r.open && r.answerType !== "none") {
       if (r.answerType === "text") {
@@ -1256,7 +1282,7 @@ function renderRounds() {
       }
       li.querySelector(".round-corner").appendChild(b);
     }
-    if (isRecipient && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
+    if (isRecipient && r.templateId && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
       const b = document.createElement("button");
       b.className = "link small";
       b.textContent = `silenciar ${T.esse} ${T.one}`;
@@ -1284,6 +1310,7 @@ async function answer(r, value, btn) {
 }
 
 let textRound = null;
+const expandedRounds = new Set(); // closed rounds the user opened (this session only)
 function openTextAnswer(r) {
   textRound = r;
   $("text-title").textContent = `${r.emoji || "🔔"} ${r.title}`;
@@ -1396,9 +1423,27 @@ function loadEditor(t) {
   syncEditorVisibility();
 }
 
-function openEditor(t) {
+let edQuick = false; // opened from the feed's ＋: sends now, saving is optional
+
+function syncQuickMode() {
+  const keep = $("ed-keep").checked;
+  show("ed-keep-wrap", edQuick);
+  // A schedule (and muting future ones) only makes sense for a saved recado.
+  show("ed-when-wrap", !edQuick || keep);
+  show("ed-mute-wrap", !edQuick || keep);
+  if (edQuick && !keep) segSelect("ed-when", "button");
+  syncEditorVisibility();
+  $("ed-save").textContent = edQuick ? (keep && segValue("ed-when") === "schedule" ? `Salvar e ${T.verb.toLowerCase()} agora` : T.verb) : "Salvar";
+}
+$("ed-keep").addEventListener("change", syncQuickMode);
+$("ed-when").addEventListener("click", () => setTimeout(syncQuickMode, 0));
+
+function openEditor(t, opts = {}) {
+  edQuick = !!opts.quick;
   edId = t ? t.id : null;
-  $("editor-title").textContent = t ? `Editar ${T.one}` : `${T.novo} ${T.one}`;
+  $("editor-title").textContent = edQuick ? `${T.verb} agora` : t ? `Editar ${T.one}` : `${T.novo} ${T.one}`;
+  $("ed-keep").checked = false;
+  $("ed-keep-label").textContent = `Salvar nos meus ${T.many}`;
   show("ed-delete", !!t);
   show("starter-wrap", !t);
   const chips = $("starter-chips");
@@ -1410,12 +1455,14 @@ function openEditor(t) {
     b.textContent = `${st.emoji} ${st.label}`;
     b.onclick = () => {
       loadEditor(st);
+      syncQuickMode();
       chips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c === b));
       if (Array.isArray(st.recipients) && !st.recipients.length) toast("Agora escolhe pra quem. 👇");
     };
     chips.appendChild(b);
   }
   loadEditor(t || BLANK);
+  syncQuickMode();
   $("dlg-editor").showModal();
 }
 
@@ -1449,6 +1496,26 @@ $("editor-form").addEventListener("submit", async (e) => {
   if (data.recipients !== "all" && !data.recipients.length) return toast("Pra quem? Escolhe alguém.");
   if (type === "options" && options.length < 2) return toast("Coloca pelo menos 2 opções.");
   if (scheduleOn && !data.schedule.days.length) return toast("Escolhe pelo menos um dia.");
+
+  if (edQuick) {
+    // Send now; optionally also save it as a recado.
+    const keep = $("ed-keep").checked;
+    const res = await withBusy($("ed-save"), async () => {
+      if (keep) {
+        const ref = await addDoc(collection(db, "templates"), { ...data, ownerUid: auth.currentUser.uid, createdAt: serverTimestamp() });
+        return api.fireTemplate({ templateId: ref.id });
+      }
+      const { updatedAt, schedule, allowMute, ...once } = data;
+      return api.sendOnce(once);
+    });
+    if (!res) return;
+    $("dlg-editor").close();
+    setTab("feed");
+    highlightRound = res.data.id;
+    renderRounds();
+    toast(`${T.done(res.data.recipients)}${keep ? ` E ficou salv${T.o}. ✨` : ""}`, 4000);
+    return;
+  }
 
   const ok = await withBusy($("ed-save"), async () => {
     if (edId) await updateDoc(doc(db, "templates", edId), data);

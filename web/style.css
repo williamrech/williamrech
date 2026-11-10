@@ -790,3 +790,29 @@ input[readonly] { opacity: 0.6; }
   .banner-occ { background: rgba(201, 139, 79, 0.18); }
 }
 .desktop-url { font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; color: var(--crema); word-break: break-all; padding: 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }
+
+/* ---------- Floating ＋ (feed) ---------- */
+.fab {
+  position: fixed; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); z-index: 15;
+  width: 56px; height: 56px; border-radius: 50%; border: 0;
+  background: linear-gradient(180deg, var(--caramel), var(--caramel-2)); color: var(--on-accent);
+  font-size: 1.9rem; line-height: 1; font-weight: 400;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  display: grid; place-items: center;
+}
+.fab:active { transform: scale(0.94); }
+#tab-feed { padding-bottom: 72px; } /* room so the last card isn't hidden behind the ＋ */
+#toast { z-index: 40; }
+.keep-toggle { margin-top: 14px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.18); }
+
+/* ---------- Ended rounds collapse to one line ---------- */
+.round.collapsed { padding: 10px 14px; opacity: 0.75; }
+.round.closed .round-head { cursor: pointer; }
+.round.collapsed .round-body, .round.collapsed .answers, .round.collapsed .summary,
+.round.collapsed .actions, .round.collapsed .round-foot, .round.collapsed > .muted { display: none; }
+.round.collapsed .round-emoji { font-size: 1.1rem; }
+.round.collapsed .round-title { font-size: 0.95rem; }
+.closed-summary { color: var(--crema); margin-top: 2px; }
+.closed-summary .chev { color: var(--muted); margin-left: 4px; }
+.round.closed:not(.collapsed) { opacity: 0.9; }
+#toast { max-width: calc(100vw - 110px); }

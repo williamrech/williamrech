@@ -105,6 +105,7 @@
       </div>
 
       <div id="tab-feed" role="tabpanel">
+        <button id="fab" class="fab" aria-label="Mandar agora">＋</button>
         <ul id="rounds" class="rounds"></ul>
         <p id="rounds-empty" class="muted empty" hidden>Nada rolando. Silêncio suspeito. 🤨</p>
       </div>
@@ -255,6 +256,9 @@
       </select>
       <p class="muted small">Depois disso fecha sozinho (ninguém mais responde e para de insistir). Dá pra encerrar antes.</p>
 
+      <label class="toggle keep-toggle" id="ed-keep-wrap" hidden><input type="checkbox" id="ed-keep"> <span id="ed-keep-label">Salvar nos meus recados</span></label>
+
+      <div id="ed-when-wrap">
       <p class="muted small pick-label">Quando</p>
       <div class="chips seg" id="ed-when">
         <button type="button" class="chip" data-v="button">Quando eu apertar</button>
@@ -265,7 +269,9 @@
         <select id="ed-time" aria-label="Horário"></select>
       </div>
 
-      <label class="toggle"><input type="checkbox" id="ed-mute"> <span>Deixar as pessoas silenciarem</span></label>
+      </div>
+
+      <label class="toggle" id="ed-mute-wrap"><input type="checkbox" id="ed-mute"> <span>Deixar as pessoas silenciarem</span></label>
 
       <div class="row-buttons">
         <button type="button" id="ed-delete" class="danger" hidden>Apagar</button>

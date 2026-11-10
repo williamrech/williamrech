@@ -179,7 +179,7 @@ async function createRound(tplRef, tpl, owner, { users, tokens } = {}) {
   const durationHours = Math.min(Math.max(Number(tpl.durationHours) || 12, 1), 72);
   const now = Date.now();
   const round = {
-    templateId: tplRef.id,
+    templateId: tplRef ? tplRef.id : null, // null = one-off (sent from the feed without saving)
     ownerUid: tpl.ownerUid,
     ownerName: owner.name,
     ownerGender: owner.gender || "m",
@@ -189,7 +189,7 @@ async function createRound(tplRef, tpl, owner, { users, tokens } = {}) {
     answerType,
     options: answerType === "yesno" ? ["Sim", "Não"] : answerType === "options" ? (tpl.options || []).slice(0, 6) : [],
     visibility: tpl.visibility === "owner" ? "owner" : "all",
-    allowMute: tpl.allowMute !== false,
+    allowMute: tplRef ? tpl.allowMute !== false : false, // nothing to mute on a one-off
     nagEveryMin: answerType === "none" ? 0 : Number(tpl.nagEveryMin) || 0,
     recipients,
     recipientNames: Object.fromEntries(recipients.map((u) => [u, users[u].name || "?"])),
@@ -223,6 +223,34 @@ handlers.fireTemplate = async (req) => {
   if (last && Date.now() - last.toMillis() < 15000) throw new HttpsError("resource-exhausted", "Calma. Espera uns segundinhos.");
   await ref.update({ lastManualAt: FieldValue.serverTimestamp() });
   return createRound(ref, snap.data(), await profile(auth));
+};
+
+// Send once from the feed, without saving a recado. Same fields as a template.
+handlers.sendOnce = async (req) => {
+  const auth = requireAuth(req);
+  const d = req.data || {};
+  const str = (v, max) => String(v || "").trim().slice(0, max);
+  const tpl = {
+    ownerUid: auth.uid,
+    emoji: str(d.emoji, 16) || "🔔",
+    title: str(d.title, 80),
+    body: str(d.body, 160),
+    answerType: ANSWER_TYPES.includes(d.answerType) ? d.answerType : "none",
+    options: Array.isArray(d.options) ? d.options.map((o) => str(o, 40)).filter(Boolean).slice(0, 6) : [],
+    recipients: d.recipients === "all" ? "all" : (Array.isArray(d.recipients) ? d.recipients.map(String).slice(0, 50) : []),
+    visibility: d.visibility === "owner" ? "owner" : "all",
+    nagEveryMin: [0, 15, 30, 60, 120].includes(Number(d.nagEveryMin)) ? Number(d.nagEveryMin) : 0,
+    durationHours: Number(d.durationHours) || 12,
+  };
+  if (!tpl.title) throw new HttpsError("invalid-argument", "Dá um título, vai.");
+  if (tpl.answerType === "options" && tpl.options.length < 2) throw new HttpsError("invalid-argument", "Coloca pelo menos 2 opções.");
+  if (tpl.recipients !== "all" && !tpl.recipients.length) throw new HttpsError("invalid-argument", "Pra quem? Escolhe alguém.");
+  // Same anti-spam pause as the saved ones.
+  const cd = db.doc(`cooldowns/${auth.uid}`);
+  const last = await cd.get();
+  if (last.exists && Date.now() - (last.get("sendOnce") || 0) < 15000) throw new HttpsError("resource-exhausted", "Calma. Espera uns segundinhos.");
+  await cd.set({ sendOnce: Date.now() }, { merge: true });
+  return createRound(null, tpl, await profile(auth));
 };
 
 handlers.answerRound = async (req) => {
@@ -295,6 +323,7 @@ handlers.muteTemplate = async (req) => {
     if (!r.exists || !r.get("recipients").includes(auth.uid)) throw new HttpsError("not-found", "Não achei.");
     if (mute && r.get("allowMute") === false) throw new HttpsError("permission-denied", "Esse aqui não dá pra silenciar. Sinto muito (mentira).");
     templateId = r.get("templateId");
+    if (!templateId) throw new HttpsError("failed-precondition", "Esse foi avulso, não tem o que silenciar. Dá pra ocultar quando fechar.");
   }
   const tRef = db.doc(`templates/${String(templateId || "")}`);
   const tSnap = await tRef.get();
