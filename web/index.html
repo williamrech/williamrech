@@ -282,23 +282,6 @@
   </dialog>
 
   <!-- Modal: customize your name -->
-  <dialog id="dlg-style">
-    <h2>Seu nome, seu estilo</h2>
-    <div id="style-preview" class="style-preview"></div>
-    <p class="muted small pick-label">Cor</p>
-    <div class="chips" id="style-colors"></div>
-    <p class="muted small pick-label">Letra</p>
-    <div class="chips" id="style-fonts"></div>
-    <p class="muted small pick-label">Efeito</p>
-    <div class="chips" id="style-effects"></div>
-    <p class="muted small pick-label">Emblema</p>
-    <div class="chips" id="style-badges"></div>
-    <p class="small"><button id="style-rename" class="link">trocar apelido</button></p>
-    <div class="row-buttons">
-      <button id="style-cancel" class="secondary">Cancelar</button>
-      <button id="style-save" class="primary">Salvar</button>
-    </div>
-  </dialog>
 
   <!-- Admin: palette editor -->
   <dialog id="dlg-pal">
@@ -401,28 +384,51 @@
 
   <!-- Modal: settings -->
   <dialog id="dlg-settings">
-    <h2>Configurações</h2>
-    <h3>Apelido</h3>
-    <p><span id="settings-name"></span> · <button id="change-name" class="link">trocar</button></p>
-
-    <h3>Aparência</h3>
-    <p class="muted small" id="palette-forced" hidden></p>
-    <div id="palettes" class="palettes"></div>
-
-    <h3>Não me perturbe</h3>
-    <label class="toggle"><input type="checkbox" id="quiet-on"> <span>Segurar notificações num horário</span></label>
-    <div class="pick-row" id="quiet-times" hidden>
-      <select id="quiet-start" aria-label="Das"></select>
-      <select id="quiet-end" aria-label="Até"></select>
+    <div class="tabs dlg-tabs" role="tablist">
+      <button class="tab selected" data-stab="general" role="tab">Configurações</button>
+      <button class="tab" data-stab="name" role="tab" id="stab-btn-name">Seu nome<span class="new-dot" id="name-dot" hidden></span></button>
     </div>
-    <p class="muted small" id="quiet-hint" hidden>Perguntas que chegarem nesse horário te esperam acordar. Avisos de resposta são pulados.</p>
 
-    <h3 id="muted-title">Recados que você silenciou</h3>
-    <ul id="muted-list" class="plain-list"></ul>
-    <div class="row-buttons">
-      <button id="settings-close" class="primary">Fechar</button>
+    <!-- Tab: general settings -->
+    <div id="stab-general" role="tabpanel">
+      <h3>Aparência</h3>
+      <p class="muted small" id="palette-forced" hidden></p>
+      <div id="palettes" class="palettes"></div>
+
+      <h3>Não me perturbe</h3>
+      <label class="toggle"><input type="checkbox" id="quiet-on"> <span>Segurar notificações num horário</span></label>
+      <div class="pick-row" id="quiet-times" hidden>
+        <select id="quiet-start" aria-label="Das"></select>
+        <select id="quiet-end" aria-label="Até"></select>
+      </div>
+      <p class="muted small" id="quiet-hint" hidden>Perguntas que chegarem nesse horário te esperam acordar. Avisos de resposta são pulados.</p>
+
+      <h3 id="muted-title">Recados que você silenciou</h3>
+      <ul id="muted-list" class="plain-list"></ul>
+      <div class="row-buttons">
+        <button id="settings-close" class="primary">Fechar</button>
+      </div>
+      <p class="muted small who-row"><span id="who"></span><button id="logout" class="link small">sair</button></p>
     </div>
-    <p class="muted small who-row"><span id="who"></span><button id="logout" class="link small">sair</button></p>
+
+    <!-- Tab: name & style (everyone sees it in the feed) -->
+    <div id="stab-name" role="tabpanel" hidden>
+      <div id="style-preview" class="style-preview"></div>
+      <p class="small center"><span class="muted">Apelido:</span> <span id="settings-name"></span> · <button id="change-name" class="link small">trocar</button></p>
+      <p class="muted small pick-label">Cor</p>
+      <div class="chips" id="style-colors"></div>
+      <p class="muted small pick-label">Letra</p>
+      <div class="chips" id="style-fonts"></div>
+      <p class="muted small pick-label">Efeito</p>
+      <div class="chips" id="style-effects"></div>
+      <p class="muted small pick-label">Emblema</p>
+      <div class="chips" id="style-badges"></div>
+      <p class="muted small">Todo mundo vê seu nome assim no feed.</p>
+      <div class="row-buttons">
+        <button id="style-cancel" class="secondary">Fechar</button>
+        <button id="style-save" class="primary">Salvar estilo</button>
+      </div>
+    </div>
   </dialog>
 
   <footer><span id="footer-version" hidden>versão <span id="version"></span></span></footer>

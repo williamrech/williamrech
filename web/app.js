@@ -700,6 +700,7 @@ onAuthStateChanged(auth, async (user) => {
     applyLook();
     renderSettings();
     renderMeChip();
+    renderNameNudge();
     proceed();
   }));
 
@@ -875,7 +876,7 @@ async function saveQuiet() {
 }
 ["quiet-on", "quiet-start", "quiet-end"].forEach((id) => $(id).addEventListener("change", saveQuiet));
 
-$("open-settings").addEventListener("click", () => $("dlg-settings").showModal());
+$("open-settings").addEventListener("click", () => openSettings("general"));
 $("settings-close").addEventListener("click", () => $("dlg-settings").close());
 $("change-name").addEventListener("click", () => { $("dlg-settings").close(); openNamePicker(); });
 $("dlg-name").addEventListener("close", () => { if (me && me.name && me.gender) return; setTimeout(proceed, 50); });
@@ -961,19 +962,40 @@ function renderStyleEditor() {
   mk("style-badges", NAME_BADGES.map((e) => [e, e || "nenhum"]), "badge", (b, v, l) => { b.textContent = l; });
 }
 
-$("me-chip").addEventListener("click", () => {
-  draftStyle = cleanStyle(me && me.style);
-  renderStyleEditor();
-  $("dlg-style").showModal();
-});
-$("style-cancel").addEventListener("click", () => $("dlg-style").close());
-$("style-rename").addEventListener("click", () => { $("dlg-style").close(); openNamePicker(); });
+// One popup, two tabs: the gear opens "Configurações", the name chip opens "Seu nome".
+function setSettingsTab(name) {
+  document.querySelectorAll("[data-stab]").forEach((b) => b.classList.toggle("selected", b.dataset.stab === name));
+  show("stab-general", name === "general");
+  show("stab-name", name === "name");
+  if (name === "name") {
+    draftStyle = cleanStyle(me && me.style);
+    renderStyleEditor();
+    // First visit to the name tab: stop the "look here" glow for good.
+    if (me && !me.seenStyle && auth.currentUser) {
+      setDoc(doc(db, "users", auth.currentUser.uid), { seenStyle: true }, { merge: true }).catch(() => {});
+    }
+  }
+}
+function openSettings(tab) {
+  setSettingsTab(tab);
+  if (!$("dlg-settings").open) $("dlg-settings").showModal();
+}
+document.querySelectorAll("[data-stab]").forEach((b) => b.addEventListener("click", () => setSettingsTab(b.dataset.stab)));
+$("me-chip").addEventListener("click", () => openSettings("name"));
+$("style-cancel").addEventListener("click", () => $("dlg-settings").close());
+
+// Gentle glow on the name chip (and a dot on the tab) until the person has opened "Seu nome" once.
+function renderNameNudge() {
+  const nudge = !!(me && me.name && !me.seenStyle);
+  $("me-chip").classList.toggle("nudge", nudge);
+  show("name-dot", nudge);
+}
 $("style-save").addEventListener("click", async () => {
   const ok = await withBusy($("style-save"), async () => {
     await setDoc(doc(db, "users", auth.currentUser.uid), { style: draftStyle, updatedAt: serverTimestamp() }, { merge: true });
     return true;
   }, "Salvando…");
-  if (ok) { $("dlg-style").close(); toast("Lindo. Todo mundo vai ver. ✨"); }
+  if (ok) toast("Lindo. Todo mundo vai ver. ✨");
 });
 
 // ---------- Chamados: buttons, live feed, editor ----------
@@ -1126,7 +1148,7 @@ function setAdminVisible(on) {
 }
 
 function setTab(name) {
-  document.querySelectorAll(".tab").forEach((b) => {
+  document.querySelectorAll(".tab[data-tab]").forEach((b) => {
     const on = b.dataset.tab === name;
     b.classList.toggle("selected", on);
     b.setAttribute("aria-selected", on);
@@ -1137,7 +1159,7 @@ function setTab(name) {
   if (name === "admin") { renderAdmin(); if (authUsers === null) loadAuthUsers(); }
   try { localStorage.setItem("tab", name); } catch {}
 }
-document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+document.querySelectorAll(".tab[data-tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 setTab((() => { try { const t = localStorage.getItem("tab") || "feed"; return t === "admin" ? "feed" : t; } catch { return "feed"; } })());
 
 async function fire(t, btn) {

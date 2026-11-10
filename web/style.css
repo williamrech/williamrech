@@ -486,8 +486,8 @@ header { padding-top: 14px; gap: 12px; }
 .style-preview { text-align: center; font-size: 1.8rem; padding: 18px 8px; margin: 8px 0 4px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }
 .chip.swatch { width: 34px; height: 34px; padding: 0; border-radius: 50%; background: var(--sw); border: 2px solid transparent; }
 .chip.swatch.selected { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg) inset; background: var(--sw); }
-#dlg-style .chip.selected .uname.x-rainbow { -webkit-text-fill-color: transparent; }
-#dlg-style .chip.selected:not(.swatch) { background: rgba(255, 255, 255, 0.08); border-color: var(--crema); color: var(--fg); }
+#stab-name .chip.selected .uname.x-rainbow { -webkit-text-fill-color: transparent; }
+#stab-name .chip.selected:not(.swatch) { background: rgba(255, 255, 255, 0.08); border-color: var(--crema); color: var(--fg); }
 
 /* ---------- Top bar v2: title + gear on one line, name centered below ---------- */
 header { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 22px 2px; }
@@ -816,3 +816,15 @@ input[readonly] { opacity: 0.6; }
 .closed-summary .chev { color: var(--muted); margin-left: 4px; }
 .round.closed:not(.collapsed) { opacity: 0.9; }
 #toast { max-width: calc(100vw - 110px); }
+
+/* ---------- Settings popup tabs + "look here" nudge ---------- */
+.dlg-tabs { margin: 0 0 6px; }
+.center { text-align: center; }
+.new-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--caramel); margin-left: 6px; vertical-align: middle; box-shadow: 0 0 0 2px color-mix(in srgb, var(--caramel) 35%, transparent); }
+.tab.selected .new-dot { background: var(--on-accent); }
+.me-chip.nudge { animation: nudge-glow 2.4s ease-in-out infinite; border-color: color-mix(in srgb, var(--crema) 55%, transparent); }
+@keyframes nudge-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--crema) 0%, transparent); }
+  50% { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--crema) 45%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .me-chip.nudge { animation: none; box-shadow: 0 0 10px 1px color-mix(in srgb, var(--crema) 40%, transparent); } }

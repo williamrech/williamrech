@@ -21,7 +21,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == uid
-        && changed().hasOnly(['name', 'gender', 'quiet', 'style', 'palette', 'hidden', 'skipDays', 'updatedAt'])
+        && changed().hasOnly(['name', 'gender', 'quiet', 'style', 'palette', 'hidden', 'seenStyle', 'skipDays', 'updatedAt'])
         && (!('style' in request.resource.data) || request.resource.data.style is map)
         && (!('name' in request.resource.data) ||
             (request.resource.data.name is string && request.resource.data.name.size() > 0
