@@ -167,6 +167,13 @@ function friendlyError(err) {
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const isStandalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+const iosVersion = () => {
+  const m = navigator.userAgent.match(/OS (\d+)_(\d+)/);
+  return isIOS && m ? [Number(m[1]), Number(m[2])] : null;
+};
+// iPhone in Safari: install to the Home Screen first, before even logging in
+// (the Home Screen app has its own storage, so logging in here would be wasted).
+const needsInstall = isIOS && !isStandalone;
 
 // URL params from notification links
 const params = new URLSearchParams(location.search);
@@ -179,10 +186,27 @@ let messaging = null;
 let swReg = null;
 let currentToken = null;
 
+// Why push isn't available on this device (shown in the gate so we can debug it).
+let pushProblem = "";
+
 async function initMessaging() {
-  if (!("serviceWorker" in navigator) || !(await isSupported())) return false;
-  swReg = await navigator.serviceWorker.register("./firebase-messaging-sw.js");
-  messaging = getMessaging(app);
+  const missing = ["serviceWorker", "PushManager", "Notification", "indexedDB"]
+    .filter((f) => !(f === "serviceWorker" ? f in navigator : f in window));
+  if (missing.length) { pushProblem = `faltando: ${missing.join(", ")}`; return false; }
+  try {
+    swReg = await navigator.serviceWorker.register("./firebase-messaging-sw.js");
+  } catch (e) {
+    pushProblem = `service worker: ${e && e.message}`;
+    return false;
+  }
+  // Firebase's own check is stricter than needed on some iOS versions; log it but carry on.
+  try { if (!(await isSupported())) console.warn("firebase isSupported() = false, trying anyway"); } catch {}
+  try {
+    messaging = getMessaging(app);
+  } catch (e) {
+    pushProblem = `firebase: ${e && e.message}`;
+    return false;
+  }
   onMessage(messaging, (payload) => {
     const n = payload.notification || {};
     toast(`${n.title || ""} ${n.body || ""}`, 5000);
@@ -209,7 +233,7 @@ async function registerDevice() {
     });
   } catch (err) {
     console.error("registerDevice failed", err);
-    toast("Não consegui ativar as notificações neste aparelho.");
+    toast(`Não consegui ativar as notificações neste aparelho. (${err && (err.code || err.message)})`, 6000);
   }
 }
 
@@ -235,6 +259,7 @@ const GATE_COPY = {
   unsupported: {
     title: "Esse navegador não serve 🙅",
     body: "Ele não recebe notificações, e sem notificação não tem app. Tenta no Chrome ou, no iPhone, pelo Safari.",
+    button: "Tentar de novo",
   },
   denied: {
     title: "Você bloqueou a gente 😤",
@@ -272,7 +297,16 @@ async function checkGate() {
   $("gate-body").innerHTML = copy.body;
   const btn = $("gate-button");
   btn.hidden = !copy.button;
-  if (copy.button) {
+  if (state === "unsupported") {
+    const v = iosVersion();
+    if (v && (v[0] < 16 || (v[0] === 16 && v[1] < 4))) {
+      $("gate-body").innerHTML = `Seu iPhone está no iOS ${v.join(".")}. Notificação de app web só funciona do <b>iOS 16.4</b> pra cima.
+        Atualiza o iPhone (Ajustes → Geral → Atualização de Software) e volta aqui.`;
+    }
+    $("gate-body").innerHTML += `<br><br><span class="muted small tech">Detalhe técnico: ${esc(pushProblem || "desconhecido")}
+      · app: ${isStandalone ? "sim" : "não"} · ${esc(navigator.userAgent.match(/\(([^)]+)\)/)?.[1] || "")}</span>`;
+    btn.onclick = () => location.reload();
+  } else if (copy.button) {
     btn.textContent = copy.button;
     btn.onclick = async () => {
       // Must come straight from a tap — iOS requires it.
@@ -318,6 +352,13 @@ onAuthStateChanged(auth, async (user) => {
   tripsLoaded = false;
   trips = [];
 
+  if (needsInstall) {
+    show("view-app", false);
+    show("topbar", false);
+    show("view-login", false);
+    show("view-install");
+    return;
+  }
   if (!user) {
     show("view-app", false);
     show("topbar", false);
@@ -653,7 +694,9 @@ $("adm-health").addEventListener("click", async () => {
   const supported = await messagingReady;
   lines.push([true, `Config Firebase: ${config.projectId}`]);
   lines.push([supported, `Navegador suporta push: ${supported ? "sim" : "não"}`]);
-  lines.push([Notification.permission === "granted", `Permissão de notificação: ${Notification.permission}`]);
+  const perm = "Notification" in window ? Notification.permission : "indisponível";
+  lines.push([perm === "granted", `Permissão de notificação: ${perm}`]);
+  if (pushProblem) lines.push([false, `Problema de push: ${pushProblem}`]);
   const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : null;
   lines.push([!!(reg && reg.active), `Service worker: ${reg && reg.active ? "ativo" : "não encontrado"}`]);
   lines.push([!isIOS || isStandalone, `Modo app (Tela de Início): ${isStandalone ? "sim" : "não"}`]);
@@ -714,3 +757,23 @@ document.addEventListener("visibilitychange", () => {
   checkGate();
   if (gatePassed && meLoaded && me && me.name) maybeAskDaily();
 });
+
+// ---------- Lock the page behind open popups (iOS lets you drag it otherwise) ----------
+(function lockScrollUnderDialogs() {
+  let savedY = 0;
+  const update = () => {
+    const anyOpen = !!document.querySelector("dialog[open]");
+    const root = document.documentElement;
+    if (anyOpen && !root.classList.contains("modal-open")) {
+      savedY = window.scrollY;
+      document.body.style.top = `-${savedY}px`;
+      root.classList.add("modal-open");
+    } else if (!anyOpen && root.classList.contains("modal-open")) {
+      root.classList.remove("modal-open");
+      document.body.style.top = "";
+      window.scrollTo(0, savedY);
+    }
+  };
+  const obs = new MutationObserver(update);
+  document.querySelectorAll("dialog").forEach((d) => obs.observe(d, { attributes: true, attributeFilter: ["open"] }));
+})();

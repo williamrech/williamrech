@@ -349,3 +349,11 @@ select:invalid, select option[value=""] { color: var(--muted); }
 #decor { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
 #decor img { position: absolute; height: auto; user-select: none; -webkit-user-select: none; }
 header, main, footer { position: relative; z-index: 1; }
+
+/* ---------- Install steps & scroll lock ---------- */
+.steps { padding-left: 20px; line-height: 1.6; margin: 10px 0 14px; }
+.steps li { margin-bottom: 6px; }
+.tech { word-break: break-word; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; }
+html.modal-open, html.modal-open body { overflow: hidden; overscroll-behavior: none; }
+html.modal-open body { position: fixed; left: 0; right: 0; width: 100%; touch-action: none; }
+dialog { overscroll-behavior: contain; touch-action: pan-y; }
