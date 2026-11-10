@@ -79,9 +79,6 @@ const db = getFirestore(app);
 const functions = getFunctions(app, "us-central1");
 const call = (name) => httpsCallable(functions, name);
 const api = {
-  createTrip: call("createTrip"),
-  toggleRide: call("toggleRide"),
-  cancelTrip: call("cancelTrip"),
   fireTemplate: call("fireTemplate"),
   answerRound: call("answerRound"),
   closeRound: call("closeRound"),
@@ -184,7 +181,6 @@ const needsInstall = isIOS && !isStandalone;
 
 // URL params from notification links
 const params = new URLSearchParams(location.search);
-let highlightTrip = params.get("viagem");
 let highlightRound = params.get("rodada");
 if (params.toString()) history.replaceState(null, "", location.pathname);
 
@@ -340,12 +336,10 @@ function proceed() {
 // ---------- State ----------
 let me = null;          // users/{uid} data
 let meLoaded = false;
-let trips = [];
 let templates = [];     // my chamados
 let rounds = [];        // rounds I'm part of
 let roundsLoaded = false;
 let family = {};        // uid -> user profile
-let tripsLoaded = false;
 let unsubs = [];
 
 // ---------- Auth flow ----------
@@ -361,8 +355,6 @@ onAuthStateChanged(auth, async (user) => {
   rounds = [];
   roundsLoaded = false;
   family = {};
-  tripsLoaded = false;
-  trips = [];
 
   if (needsInstall) {
     show("view-app", false);
@@ -381,8 +373,8 @@ onAuthStateChanged(auth, async (user) => {
   show("view-app");
   show("topbar");
   $("who").textContent = user.email;
-  renderTrips(); // shows the loading state until data arrives
-  renderButtons();
+  renderPins();
+  renderChamados();
   renderRounds();
 
   // First person to log in after setup becomes admin (no-op once an admin exists).
@@ -396,20 +388,23 @@ onAuthStateChanged(auth, async (user) => {
     $("settings-name").textContent = me.name || "(sem apelido)";
     show("admin", me.admin === true);
     renderSettings();
+    renderMeChip();
     proceed();
   }));
 
   // Family (names for pickers and lists)
   unsubs.push(onSnapshot(collection(db, "users"), (snap) => {
     family = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+    renderMeChip();
+    renderRounds(); // names/styles may have changed
   }, (err) => console.error("users", err)));
 
   // My chamados
   unsubs.push(onSnapshot(query(collection(db, "templates"), where("ownerUid", "==", user.uid)), (snap) => {
     templates = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-    renderButtons();
-    if ($("dlg-manage").open) renderManage();
+    renderPins();
+    renderChamados();
   }, (err) => console.error("templates", err)));
 
   // Rounds I'm part of
@@ -420,15 +415,6 @@ onAuthStateChanged(auth, async (user) => {
     roundsLoaded = true;
     renderRounds();
   }, (err) => console.error("rounds", err)));
-
-  // Upcoming trips
-  const since = Timestamp.fromMillis(Date.now() - 3 * 3600000);
-  const q = query(collection(db, "trips"), where("when", ">=", since), orderBy("when"));
-  unsubs.push(onSnapshot(q, (snap) => {
-    trips = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    tripsLoaded = true;
-    renderTrips();
-  }, (err) => console.error("trips", err)));
 
   checkGate();
 });
@@ -497,155 +483,8 @@ $("name-form").addEventListener("submit", async (e) => {
   if (ok) { $("dlg-name").close(); toast(`Prazer, ${name}. ☕`); }
 });
 
-// ---------- When picker / create trip ----------
-// Custom day + time selects (instead of the native date picker, which shows the
-// phone's language and its own arrow).
-const pad2 = (n) => String(n).padStart(2, "0");
-const localDayKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-const localTime = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-const WEEK_SHORT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-
-function fillWhenSelects() {
-  const now = new Date();
-  const day = $("when-day");
-  day.innerHTML = `<option value="" disabled selected>Dia</option>`;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    const label = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${WEEK_SHORT[d.getDay()]}, ${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
-    day.add(new Option(label, localDayKey(d)));
-  }
-  const time = $("when-time");
-  time.innerHTML = `<option value="" disabled selected>Hora</option>`;
-  for (let m = 0; m < 24 * 60; m += 15) time.add(new Option(`${pad2(m / 60 | 0)}:${pad2(m % 60)}`, `${pad2(m / 60 | 0)}:${pad2(m % 60)}`));
-}
-
-// Puts a specific date into the selects (adds an exact time option if needed, e.g. "Agora").
-function setWhen(date) {
-  $("when-day").value = localDayKey(date);
-  const t = localTime(date);
-  const sel = $("when-time");
-  if (![...sel.options].some((o) => o.value === t)) {
-    const opt = new Option(t, t);
-    const before = [...sel.options].find((o) => o.value && o.value > t);
-    sel.add(opt, before || null);
-  }
-  sel.value = t;
-  updateWhenSubmit();
-}
-
-function chosenWhen() {
-  const d = $("when-day").value;
-  const t = $("when-time").value;
-  return d && t ? new Date(`${d}T${t}:00`) : null;
-}
-
-function updateWhenSubmit() {
-  $("when-submit").disabled = !chosenWhen();
-}
-
-function openWhenPicker() {
-  const now = new Date();
-  const chips = $("when-chips");
-  chips.innerHTML = "";
-  const at = (h, addDays = 0) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + addDays, h, 0);
-  const options = [
-    ["Agora", new Date(now.getTime() + 5 * 60000)],
-    ["Daqui 1h", new Date(now.getTime() + 60 * 60000)],
-    // After 18h, today's 18h is gone, so it rolls over to tomorrow.
-    now.getHours() < 18 ? ["Às 18h", at(18)] : ["Amanhã 18h", at(18, 1)],
-    ["Amanhã cedo", at(9, 1)],
-  ];
-  for (const [label, date] of options) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    b.textContent = label;
-    b.onclick = () => {
-      setWhen(date);
-      chips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c === b));
-    };
-    chips.appendChild(b);
-  }
-  fillWhenSelects();
-  updateWhenSubmit();
-  $("dlg-when").showModal();
-}
-
-$("btn-market").addEventListener("click", openWhenPicker);
-$("when-cancel").addEventListener("click", () => $("dlg-when").close());
-for (const id of ["when-day", "when-time"]) {
-  $(id).addEventListener("change", () => {
-    $("when-chips").querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
-    updateWhenSubmit();
-  });
-}
-
-$("when-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const when = chosenWhen();
-  if (!when) return toast("Escolhe dia e hora.");
-  $("when-cancel").disabled = true;
-  const res = await withBusy($("when-submit"), () => api.createTrip({ when: when.toISOString() }), "Avisando geral…");
-  $("when-cancel").disabled = false;
-  if (!res) return updateWhenSubmit();
-  $("dlg-when").close();
-  toast(res.data.sent ? `Avisei ${res.data.sent} aparelho(s). Agora aguenta. 📣` : "Criado. Mas ninguém mais tem notificação ativada. 🦗");
-});
-
-// ---------- Trips list ----------
-function renderTrips() {
-  const list = $("trips");
-  const uid = auth.currentUser && auth.currentUser.uid;
-  const cutoff = Date.now() - 60 * 60000; // keep showing for 1h after it starts
-  const visible = trips.filter((t) => t.when && t.when.toMillis() >= cutoff);
-
-  // Don't redraw while a trip button is mid-action (keeps its loading state).
-  if (list.querySelector(".busy")) return;
-  list.innerHTML = "";
-  show("trips-loading", !tripsLoaded);
-  show("trips-empty", tripsLoaded && visible.length === 0);
-
-  for (const t of visible) {
-    const li = document.createElement("li");
-    li.className = "trip" + (t.id === highlightTrip ? " highlight" : "");
-    const riders = Object.values(t.riders || {});
-    const mine = t.uid === uid;
-    const joined = !!(t.riders && t.riders[uid]);
-    li.innerHTML = `
-      <div class="head">🛒 <b>${esc(mine ? "Você" : t.name)}</b> vai no mercado
-        <span class="when">${esc(whenText(t.when.toDate()))}</span></div>
-      <div class="riders">${riders.length ? "Vão junto: " + riders.map(esc).join(", ") : "Ninguém vai junto ainda."}</div>
-      <div class="actions"></div>`;
-    const actions = li.querySelector(".actions");
-    const btn = document.createElement("button");
-    if (mine) {
-      btn.className = "secondary";
-      btn.textContent = "Cancelar mercado";
-      btn.onclick = () => act(btn, () => api.cancelTrip({ tripId: t.id }), "Cancelado. Todo mundo ficou sabendo. 😬");
-    } else {
-      btn.className = joined ? "secondary" : "primary";
-      btn.textContent = joined ? "Desisti" : "Vou junto 🙋";
-      btn.onclick = () => act(btn, () => api.toggleRide({ tripId: t.id }),
-        joined ? "Desistiu. Todo mundo vai saber. 🐔" : "Você vai junto! 🚗");
-    }
-    actions.appendChild(btn);
-    list.appendChild(li);
-  }
-
-  if (highlightTrip) {
-    const el = list.querySelector(".highlight");
-    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); highlightTrip = null; }
-  }
-}
-setInterval(renderTrips, 60000);
-
-async function act(btn, fn, okMsg) {
-  const res = await withBusy(btn, fn);
-  if (res) toast(okMsg);
-  renderTrips(); // pick up any update that arrived while busy
-}
-
 // ---------- Settings ----------
+const TIMES_15 = Array.from({ length: 96 }, (_, i) => `${String(i / 4 | 0).padStart(2, "0")}:${String((i % 4) * 15).padStart(2, "0")}`);
 const TIMES_30 = Array.from({ length: 48 }, (_, i) => `${String(i / 2 | 0).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
 function fillTimeSelect(sel, values, current) {
   sel.innerHTML = "";
@@ -713,6 +552,81 @@ $("logout").addEventListener("click", async () => {
   $("dlg-settings").close();
 });
 
+// ---------- Styled names (color, font, effect, badge) — everyone sees them ----------
+const NAME_COLORS = ["#e2c39b", "#c98b4f", "#f0a594", "#ff8fb1", "#b9a4ff", "#7fc8f8", "#8fd694", "#f5d76e", "#ffffff"];
+const NAME_FONTS = { classic: "Clássica", bold: "Negrito", round: "Fofa", script: "Cursiva", mono: "Máquina" };
+const NAME_EFFECTS = { none: "Normal", glow: "Brilho", rainbow: "Arco-íris", wavy: "Ondinha", shadow: "Sombra" };
+const NAME_BADGES = ["", "👑", "☕", "🍦", "✨", "🔥", "💅", "🐸", "🦄", "🌵", "🍕", "🐔"];
+
+function cleanStyle(st) {
+  st = st || {};
+  return {
+    color: NAME_COLORS.includes(st.color) ? st.color : NAME_COLORS[0],
+    font: st.font in NAME_FONTS ? st.font : "classic",
+    effect: st.effect in NAME_EFFECTS ? st.effect : "none",
+    badge: typeof st.badge === "string" ? st.badge.slice(0, 4) : "",
+  };
+}
+
+function styledName(name, style) {
+  const st = cleanStyle(style);
+  return `<span class="uname f-${st.font} x-${st.effect}" style="--uc:${st.color}">${esc(name)}</span>` +
+    (st.badge ? `<span class="ubadge">${esc(st.badge)}</span>` : "");
+}
+
+function nameHtml(uid, fallback) {
+  const p = family[uid];
+  return styledName((p && p.name) || fallback || "?", p && p.style);
+}
+
+function renderMeChip() {
+  const chip = $("me-chip");
+  if (!chip || !auth.currentUser) return;
+  const p = family[auth.currentUser.uid] || me || {};
+  chip.innerHTML = p.name ? styledName(p.name, p.style) : "…";
+}
+
+let draftStyle = null;
+function renderStyleEditor() {
+  const p = me || {};
+  $("style-preview").innerHTML = styledName(p.name || "Você", draftStyle);
+  const mk = (wrapId, entries, key, render) => {
+    const wrap = $(wrapId);
+    wrap.innerHTML = "";
+    for (const [value, label] of entries) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (draftStyle[key] === value ? " selected" : "");
+      render(b, value, label);
+      b.onclick = () => { draftStyle[key] = value; renderStyleEditor(); };
+      wrap.appendChild(b);
+    }
+  };
+  mk("style-colors", NAME_COLORS.map((c) => [c, c]), "color", (b, c) => {
+    b.className += " swatch";
+    b.style.setProperty("--sw", c);
+    b.setAttribute("aria-label", c);
+  });
+  mk("style-fonts", Object.entries(NAME_FONTS), "font", (b, v, l) => { b.innerHTML = `<span class="f-${v}">${l}</span>`; });
+  mk("style-effects", Object.entries(NAME_EFFECTS), "effect", (b, v, l) => { b.innerHTML = `<span class="uname x-${v}" style="--uc:${draftStyle.color}">${l}</span>`; });
+  mk("style-badges", NAME_BADGES.map((e) => [e, e || "nenhum"]), "badge", (b, v, l) => { b.textContent = l; });
+}
+
+$("me-chip").addEventListener("click", () => {
+  draftStyle = cleanStyle(me && me.style);
+  renderStyleEditor();
+  $("dlg-style").showModal();
+});
+$("style-cancel").addEventListener("click", () => $("dlg-style").close());
+$("style-rename").addEventListener("click", () => { $("dlg-style").close(); openNamePicker(); });
+$("style-save").addEventListener("click", async () => {
+  const ok = await withBusy($("style-save"), async () => {
+    await setDoc(doc(db, "users", auth.currentUser.uid), { style: draftStyle, updatedAt: serverTimestamp() }, { merge: true });
+    return true;
+  }, "Salvando…");
+  if (ok) { $("dlg-style").close(); toast("Lindo. Todo mundo vai ver. ✨"); }
+});
+
 // ---------- Chamados: buttons, live feed, editor ----------
 const STARTERS = [
   { emoji: "🍝", title: "Vai ter almoço hoje?", body: "Responde logo que a gente precisa se organizar.", answerType: "options",
@@ -724,6 +638,9 @@ const STARTERS = [
   { emoji: "🛒", title: "Vai no mercado hoje?", body: "Sim ou não, sem enrolação.", answerType: "yesno",
     options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 8,
     schedule: { on: true, days: [0, 1, 2, 3, 4, 5, 6], time: "12:00" }, allowMute: true, label: "Mercado do dia" },
+  { emoji: "🚗", title: "Tô indo no mercado, quem vai junto?", body: "Saindo daqui a pouco.", answerType: "options",
+    options: ["Vou junto 🙋", "Não vou"], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 2,
+    schedule: { on: false, days: [], time: "18:00" }, allowMute: true, label: "Quem vai junto?" },
   { emoji: "🍕", title: "Bora pedir janta?", body: "", answerType: "yesno",
     options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 2,
     schedule: { on: false, days: [], time: "19:00" }, allowMute: true, label: "Janta?" },
@@ -771,24 +688,85 @@ function confirmBox(title, body, yes = "Mandar") {
   });
 }
 
-// Home: my button-style chamados
-function renderButtons() {
-  const wrap = $("buttons");
+// Pinned favorites (manual chamados with ★), shown above the tabs.
+function renderPins() {
+  const wrap = $("pins");
   if (!wrap) return;
+  const favs = templates.filter((t) => t.favorite && !(t.schedule && t.schedule.on));
   wrap.innerHTML = "";
-  for (const t of templates.filter((t) => !(t.schedule && t.schedule.on))) {
+  show("pins", favs.length > 0);
+  for (const t of favs) {
     const b = document.createElement("button");
-    b.className = "btn-tile";
+    b.className = "pin";
     b.innerHTML = `<span class="tile-emoji">${esc(t.emoji || "🔔")}</span><span class="tile-title">${esc(t.title)}</span>`;
     b.onclick = () => fire(t, b);
     wrap.appendChild(b);
   }
-  const add = document.createElement("button");
-  add.className = "btn-tile add";
-  add.innerHTML = `<span class="tile-emoji">＋</span><span class="tile-title">Novo chamado</span>`;
-  add.onclick = () => openEditor(null);
-  wrap.appendChild(add);
 }
+
+// "Chamados" tab: everything I created, with send / favorite / edit.
+function renderChamados() {
+  const list = $("chamados-list");
+  if (!list) return;
+  if (list.querySelector(".busy")) return;
+  list.innerHTML = templates.length ? "" : `<li class="muted empty">Nenhum chamado ainda. Cria um! ✨</li>`;
+  const sorted = [...templates].sort((a, b) =>
+    (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) ||
+    (a.schedule && a.schedule.on ? 1 : 0) - (b.schedule && b.schedule.on ? 1 : 0) ||
+    (a.title || "").localeCompare(b.title || ""));
+  for (const t of sorted) {
+    const scheduled = !!(t.schedule && t.schedule.on);
+    const li = document.createElement("li");
+    li.className = "chamado";
+    const muted = Object.values(t.mutedBy || {});
+    li.innerHTML = `
+      <button class="chamado-main">
+        <span class="tile-emoji">${esc(t.emoji || "🔔")}</span>
+        <span class="manage-text"><b>${esc(t.title)}</b>
+          <span class="muted small">${esc(scheduleText(t.schedule))} · ${esc(recipientsText(t.recipients))}</span>
+          ${muted.length ? `<span class="muted-by small">🔕 ${muted.map(esc).join(", ")} silenciou</span>` : ""}
+        </span>
+      </button>
+      <div class="chamado-actions"></div>`;
+    li.querySelector(".chamado-main").onclick = () => openEditor(t);
+    const actions = li.querySelector(".chamado-actions");
+    if (!scheduled) {
+      const star = document.createElement("button");
+      star.className = "star" + (t.favorite ? " on" : "");
+      star.setAttribute("aria-label", t.favorite ? "Desafixar" : "Fixar no topo");
+      star.textContent = t.favorite ? "★" : "☆";
+      star.onclick = async () => {
+        star.disabled = true;
+        try {
+          await updateDoc(doc(db, "templates", t.id), { favorite: !t.favorite, updatedAt: serverTimestamp() });
+          toast(t.favorite ? "Desafixado." : "Fixado no topo. ⭐");
+        } catch (err) { toast(friendlyError(err)); star.disabled = false; }
+      };
+      actions.appendChild(star);
+    }
+    const send = document.createElement("button");
+    send.className = "secondary small-btn";
+    send.textContent = scheduled ? "Mandar agora" : "Mandar";
+    send.onclick = () => fire(t, send);
+    actions.appendChild(send);
+    list.appendChild(li);
+  }
+}
+$("chamados-new").addEventListener("click", () => openEditor(null));
+
+// Tabs (remembered per browser, just a convenience)
+function setTab(name) {
+  document.querySelectorAll(".tab").forEach((b) => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle("selected", on);
+    b.setAttribute("aria-selected", on);
+  });
+  show("tab-feed", name === "feed");
+  show("tab-chamados", name === "chamados");
+  try { localStorage.setItem("tab", name); } catch {}
+}
+document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+setTab((() => { try { return localStorage.getItem("tab") || "feed"; } catch { return "feed"; } })());
 
 async function fire(t, btn) {
   const who = recipientsText(t.recipients);
@@ -825,7 +803,7 @@ function renderRounds() {
         .filter((u) => canSeeAll || u === uid)
         .map((u) => {
           const a = r.answers && r.answers[u];
-          const who = esc(u === uid ? "Você" : (r.recipientNames && r.recipientNames[u]) || nameOf(u));
+          const who = u === uid ? "Você" : nameHtml(u, r.recipientNames && r.recipientNames[u]);
           if (!a) return `<li class="waiting">${who} <span>…esperando</span></li>`;
           const changed = a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "";
           return `<li>${who} <b>${esc(a.value)}</b>${changed}</li>`;
@@ -844,7 +822,7 @@ function renderRounds() {
     li.innerHTML = `
       <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
         <div><div class="round-title">${esc(r.title)}</div>
-        <div class="muted small">${esc(mine ? "Você" : r.ownerName)} · ${relTime(r.createdAt)}${r.open ? "" : " · encerrado"}</div></div></div>
+        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)}${r.open ? "" : " · encerrado"}</div></div></div>
       ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
       ${answersHtml}
       <div class="actions"></div>
@@ -927,36 +905,6 @@ $("text-form").addEventListener("submit", async (e) => {
   $("dlg-text").close();
   toast(res.data.changes ? "Resposta trocada. 🌀" : "Respondido! ✓");
 });
-
-// Manage list
-function renderManage() {
-  const list = $("manage-list");
-  list.innerHTML = templates.length ? "" : `<li class="muted">Nenhum chamado ainda. Cria um! ✨</li>`;
-  for (const t of templates) {
-    const li = document.createElement("li");
-    const muted = Object.values(t.mutedBy || {});
-    li.innerHTML = `
-      <button class="manage-item">
-        <span class="tile-emoji">${esc(t.emoji || "🔔")}</span>
-        <span class="manage-text"><b>${esc(t.title)}</b>
-          <span class="muted small">${esc(scheduleText(t.schedule))} · ${esc(recipientsText(t.recipients))}</span>
-          ${muted.length ? `<span class="muted-by small">🔕 ${muted.map(esc).join(", ")} silenciou</span>` : ""}
-        </span>
-      </button>`;
-    li.querySelector(".manage-item").onclick = () => { $("dlg-manage").close(); openEditor(t); };
-    if (t.schedule && t.schedule.on) {
-      const b = document.createElement("button");
-      b.className = "link small";
-      b.textContent = "mandar agora";
-      b.onclick = () => fire(t, b);
-      li.appendChild(b);
-    }
-    list.appendChild(li);
-  }
-}
-$("open-manage").addEventListener("click", () => { renderManage(); $("dlg-manage").showModal(); });
-$("manage-close").addEventListener("click", () => $("dlg-manage").close());
-$("manage-new").addEventListener("click", () => { $("dlg-manage").close(); openEditor(null); });
 
 // Editor
 let ed = null;       // working copy
@@ -1042,9 +990,9 @@ function loadEditor(t) {
   segSelect("ed-when", ed.schedule.on ? "schedule" : "button");
   $("ed-nag").value = String(ed.nagEveryMin || 0);
   $("ed-duration").value = String(ed.durationHours || 12);
-  fillTimeSelect($("ed-time"), TIMES_30.concat().sort(), ed.schedule.time || "12:00");
-  if (![...$("ed-time").options].some((o) => o.value === ed.schedule.time)) $("ed-time").add(new Option(ed.schedule.time, ed.schedule.time));
-  $("ed-time").value = ed.schedule.time;
+  // Only quarter hours: the server checks schedules every 15 minutes.
+  const snap = (hm) => { const [h, m] = String(hm || "12:00").split(":").map(Number); const q = Math.round(m / 15) * 15; return `${String((h + (q === 60 ? 1 : 0)) % 24).padStart(2, "0")}:${String(q % 60).padStart(2, "0")}`; };
+  fillTimeSelect($("ed-time"), TIMES_15, snap(ed.schedule.time));
   $("ed-mute").checked = ed.allowMute !== false;
   renderRecipients();
   renderEdDays();
@@ -1145,7 +1093,6 @@ $("adm-health").addEventListener("click", async () => {
   lines.push([true, `Aparelhos: ${h.devices}`]);
   lines.push([h.devicesWithoutProfile === 0, `Aparelhos sem perfil: ${h.devicesWithoutProfile}`]);
   lines.push([h.deadTokensRemoved === 0, `Tokens mortos removidos: ${h.deadTokensRemoved}`]);
-  lines.push([true, `Mercados: ${h.tripsUpcoming} futuros, ${h.tripsPast} passados`]);
   lines.push([true, `Chamados: ${h.templates} (${h.scheduledTemplates} agendados) · rodadas abertas: ${h.openRounds}`]);
   adminOut(lines);
 });

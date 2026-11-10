@@ -53,7 +53,8 @@ header h1 {
   font-family: var(--serif);
   font-weight: 400;
   font-style: italic;
-  font-size: 1.45rem;
+  font-size: 1.02rem;
+  opacity: 0.9;
   letter-spacing: 0.01em;
   margin: 0;
   color: var(--crema);
@@ -415,3 +416,69 @@ dialog { overscroll-behavior: contain; touch-action: pan-y; }
 
 .plain-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 .plain-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.92rem; }
+
+/* ---------- Top bar: me chip ---------- */
+header { padding-top: 14px; gap: 12px; }
+.topbar-right { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.me-chip {
+  background: rgba(0, 0, 0, 0.22); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 12px; max-width: 52vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 0.95rem;
+}
+
+/* ---------- Pinned favorites ---------- */
+.pins { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 14px; margin: 0 -2px 4px; scrollbar-width: none; }
+.pins::-webkit-scrollbar { display: none; }
+.pin {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; max-width: 220px;
+  padding: 12px 16px; border-radius: 16px; color: var(--fg); text-align: left;
+  border: 1px solid rgba(226, 195, 155, 0.28);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(226, 195, 155, 0.22), transparent 55%), linear-gradient(135deg, #6b4126, #3d2416);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.pin:active { transform: scale(0.97); }
+.pin .tile-title { font-size: 0.9rem; }
+
+/* ---------- Tabs ---------- */
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin: 4px 0 18px;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); border-radius: 14px; }
+.tab { padding: 10px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
+.tab.selected { background: var(--crema); color: #2a1c14; }
+
+/* ---------- Chamados tab ---------- */
+.chamados { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 10px; }
+.chamado { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 6px 10px 6px 6px; }
+.chamado-main { flex: 1; min-width: 0; display: flex; gap: 10px; align-items: center; text-align: left; background: none; border: 0; padding: 8px; }
+.chamado-main .manage-text b { display: block; overflow: hidden; text-overflow: ellipsis; }
+.chamado-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.star { background: none; border: 0; font-size: 1.35rem; color: var(--muted); padding: 4px 6px; line-height: 1; }
+.star.on { color: #f5d76e; }
+.small-btn { padding: 8px 12px; font-size: 0.85rem; border-radius: 10px; }
+.wide-tile { width: 100%; justify-content: center; }
+
+/* ---------- Styled names ---------- */
+.uname { color: var(--uc, var(--crema)); font-weight: 600; }
+.ubadge { margin-left: 4px; }
+.f-classic { font-family: var(--serif); font-style: italic; font-weight: 500; }
+.f-bold { font-family: var(--sans); font-weight: 800; letter-spacing: -0.01em; }
+.f-round { font-family: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Nunito", var(--sans); font-weight: 700; }
+.f-script { font-family: "Snell Roundhand", "Segoe Script", "Brush Script MT", "Apple Chancery", cursive; font-weight: 600; font-size: 1.12em; }
+.f-mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 600; }
+.x-glow { text-shadow: 0 0 6px var(--uc), 0 0 14px var(--uc); }
+.x-shadow { text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.75), 3px 3px 0 color-mix(in srgb, var(--uc) 35%, transparent); }
+.x-wavy { text-decoration: underline wavy var(--uc); text-underline-offset: 4px; text-decoration-thickness: 1.5px; }
+.x-rainbow {
+  background: linear-gradient(90deg, #ff8fb1, #f5d76e, #8fd694, #7fc8f8, #b9a4ff, #ff8fb1);
+  background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: rainbow 4s linear infinite;
+}
+@keyframes rainbow { to { background-position: 200% center; } }
+@media (prefers-reduced-motion: reduce) { .x-rainbow { animation: none; } }
+
+.style-preview { text-align: center; font-size: 1.8rem; padding: 18px 8px; margin: 8px 0 4px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }
+.chip.swatch { width: 34px; height: 34px; padding: 0; border-radius: 50%; background: var(--sw); border: 2px solid transparent; }
+.chip.swatch.selected { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg) inset; background: var(--sw); }
+#dlg-style .chip.selected .uname.x-rainbow { -webkit-text-fill-color: transparent; }
+#dlg-style .chip.selected:not(.swatch) { background: rgba(255, 255, 255, 0.08); border-color: var(--crema); color: var(--fg); }

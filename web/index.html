@@ -20,9 +20,12 @@
   <div id="decor" aria-hidden="true"></div>
   <header id="topbar" hidden>
     <h1>Ela gosta de sorvete?</h1>
+    <div class="topbar-right">
+    <button id="me-chip" class="me-chip" aria-label="Personalizar seu nome"></button>
     <button id="open-settings" class="icon" aria-label="Configurações">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
+    </div>
   </header>
 
   <main>
@@ -57,25 +60,22 @@
 
     <!-- Main app -->
     <section id="view-app" hidden>
-      <button id="btn-market" class="feature">
-        <span class="emoji">🛒</span>
-        <span>Tô indo no mercado,<br><b>quem vai junto?</b></span>
-      </button>
+      <div id="pins" class="pins" hidden></div>
 
-      <div class="section-head">
-        <h2 class="section-title">Seus chamados</h2>
-        <button id="open-manage" class="link small">gerenciar</button>
+      <div class="tabs" role="tablist">
+        <button class="tab selected" data-tab="feed" role="tab">Feed</button>
+        <button class="tab" data-tab="chamados" role="tab">Chamados</button>
       </div>
-      <div id="buttons" class="buttons-grid"></div>
 
-      <h2 class="section-title">Rolando agora</h2>
-      <ul id="rounds" class="rounds"></ul>
-      <p id="rounds-empty" class="muted empty" hidden>Nada rolando. Silêncio suspeito. 🤨</p>
+      <div id="tab-feed" role="tabpanel">
+        <ul id="rounds" class="rounds"></ul>
+        <p id="rounds-empty" class="muted empty" hidden>Nada rolando. Silêncio suspeito. 🤨</p>
+      </div>
 
-      <h2 class="section-title spaced">Quem vai no mercado</h2>
-      <ul id="trips" class="trips"></ul>
-      <p id="trips-loading" class="muted empty loading" hidden><span class="cup" aria-hidden="true"></span> Passando o café…</p>
-      <p id="trips-empty" class="muted empty">Ninguém vai no mercado. A geladeira chora. 😢</p>
+      <div id="tab-chamados" role="tabpanel" hidden>
+        <ul id="chamados-list" class="chamados"></ul>
+        <button id="chamados-new" class="btn-tile add wide-tile"><span class="tile-emoji">＋</span><span class="tile-title">Novo chamado</span></button>
+      </div>
     </section>
   </main>
 
@@ -99,23 +99,6 @@
         <button type="button" class="chip" data-g="f">Menina 👧</button>
       </div>
       <button type="submit" class="primary">É isso</button>
-    </form>
-  </dialog>
-
-  <!-- Modal: when -->
-  <dialog id="dlg-when">
-    <form method="dialog" id="when-form">
-      <h2>Vai quando?</h2>
-      <div class="chips" id="when-chips"></div>
-      <p class="muted small pick-label">Ou escolhe:</p>
-      <div class="pick-row">
-        <select id="when-day" aria-label="Dia" required></select>
-        <select id="when-time" aria-label="Hora" required></select>
-      </div>
-      <div class="row-buttons">
-        <button type="button" id="when-cancel" class="secondary">Cancelar</button>
-        <button type="submit" id="when-submit" class="primary" disabled>Avisar geral</button>
-      </div>
     </form>
   </dialog>
 
@@ -192,13 +175,22 @@
     </form>
   </dialog>
 
-  <!-- Modal: my chamados -->
-  <dialog id="dlg-manage">
-    <h2>Seus chamados</h2>
-    <ul id="manage-list" class="manage-list"></ul>
+  <!-- Modal: customize your name -->
+  <dialog id="dlg-style">
+    <h2>Seu nome, seu estilo</h2>
+    <div id="style-preview" class="style-preview"></div>
+    <p class="muted small pick-label">Cor</p>
+    <div class="chips" id="style-colors"></div>
+    <p class="muted small pick-label">Letra</p>
+    <div class="chips" id="style-fonts"></div>
+    <p class="muted small pick-label">Efeito</p>
+    <div class="chips" id="style-effects"></div>
+    <p class="muted small pick-label">Emblema</p>
+    <div class="chips" id="style-badges"></div>
+    <p class="small"><button id="style-rename" class="link">trocar apelido</button></p>
     <div class="row-buttons">
-      <button id="manage-new" class="secondary">+ Novo</button>
-      <button id="manage-close" class="primary">Fechar</button>
+      <button id="style-cancel" class="secondary">Cancelar</button>
+      <button id="style-save" class="primary">Salvar</button>
     </div>
   </dialog>
 

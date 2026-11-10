@@ -4,11 +4,12 @@ Family nag app (pt-BR UI). Features:
 - **Chamados:** personal saved notifications. Each has a look (emoji/title/text), answer type (none, Sim/Não, options, free text), recipients, who sees answers, nagging (every X min for Y hours), mute permission, and a trigger (button or weekly schedule).
 - **Rounds:** each firing creates a round; answers are live, changes are announced ("mudou de ideia, 2ª vez"), creators see who muted their chamados.
 - **Quiet hours:** per person, off by default. Questions wait; answer broadcasts are skipped.
-- **Market trips:** "Tô indo no mercado, quem vai junto?" with ride-along.
+- **Home:** pinned favorite chamados on top, then Feed / Chamados tabs. Schedules use 15-minute steps (the server checks every 15 min).
+- **Styled names:** each user picks color, font, effect and badge; everyone sees it.
 - **Gendered copy:** each user picks menino/menina at onboarding.
 
-Data: `users/{uid}` (name, gender, quiet, mutes, admin), `templates/{id}`, `rounds/{id}`, `trips/{id}`, `devices/{token}`.
-Functions: `fireTemplate`, `answerRound`, `closeRound`, `muteTemplate`, `createTrip`, `toggleRide`, `cancelTrip`, admin tools, and `tick` (every 15 min: scheduled chamados, delayed deliveries, nagging, closing).
+Data: `users/{uid}` (name, gender, quiet, style, mutes, admin), `templates/{id}`, `rounds/{id}`, `devices/{token}`.
+Functions: `fireTemplate`, `answerRound`, `closeRound`, `muteTemplate`, admin tools, and `tick` (every 15 min: scheduled chamados, delayed deliveries, nagging, closing).
 
 ## How it fits together
 
