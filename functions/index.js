@@ -389,10 +389,10 @@ exports.muteTemplate = onCall(opts, async (req) => {
 });
 
 // ---------------------------------------------------------------------------
-// Every 5 minutes: fire scheduled templates, deliver delayed (quiet-hours)
+// Every 15 minutes: fire scheduled templates, deliver delayed (quiet-hours)
 // notifications, nag people who haven't answered, close expired rounds.
 // ---------------------------------------------------------------------------
-exports.tick = onSchedule({ schedule: "*/5 * * * *", timeZone: TZ, region: REGION }, async () => {
+exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGION }, async () => {
   const sp = spParts();
   const nowMin = toMin(sp.hm);
   const now = Date.now();

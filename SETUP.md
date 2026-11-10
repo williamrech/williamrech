@@ -8,7 +8,7 @@ Family nag app (pt-BR UI). Features:
 - **Gendered copy:** each user picks menino/menina at onboarding.
 
 Data: `users/{uid}` (name, gender, quiet, mutes, admin), `templates/{id}`, `rounds/{id}`, `trips/{id}`, `devices/{token}`.
-Functions: `fireTemplate`, `answerRound`, `closeRound`, `muteTemplate`, `createTrip`, `toggleRide`, `cancelTrip`, admin tools, and `tick` (every 5 min: scheduled chamados, delayed deliveries, nagging, closing).
+Functions: `fireTemplate`, `answerRound`, `closeRound`, `muteTemplate`, `createTrip`, `toggleRide`, `cancelTrip`, admin tools, and `tick` (every 15 min: scheduled chamados, delayed deliveries, nagging, closing).
 
 ## How it fits together
 
