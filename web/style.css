@@ -482,3 +482,14 @@ header { padding-top: 14px; gap: 12px; }
 .chip.swatch.selected { border-color: var(--fg); box-shadow: 0 0 0 2px var(--bg) inset; background: var(--sw); }
 #dlg-style .chip.selected .uname.x-rainbow { -webkit-text-fill-color: transparent; }
 #dlg-style .chip.selected:not(.swatch) { background: rgba(255, 255, 255, 0.08); border-color: var(--crema); color: var(--fg); }
+
+/* ---------- Top bar v2: title + gear on one line, name centered below ---------- */
+header { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 22px 2px; }
+.topbar-row { display: flex; align-items: center; justify-content: space-between; }
+header h1 { font-size: 0.88rem; opacity: 0.75; }
+header .icon { padding: 4px; }
+.me-row { display: flex; justify-content: center; }
+.me-chip { font-size: 1.08rem; padding: 8px 18px; max-width: 90%; overflow: visible; }
+.uname-wrap { white-space: nowrap; display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; }
+.uname-wrap .uname { overflow: visible; }
+.ubadge { margin-left: 0; flex: none; }

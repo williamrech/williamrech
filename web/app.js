@@ -570,8 +570,9 @@ function cleanStyle(st) {
 
 function styledName(name, style) {
   const st = cleanStyle(style);
-  return `<span class="uname f-${st.font} x-${st.effect}" style="--uc:${st.color}">${esc(name)}</span>` +
-    (st.badge ? `<span class="ubadge">${esc(st.badge)}</span>` : "");
+  // Badge goes on the left, same line as the name.
+  return `<span class="uname-wrap">${st.badge ? `<span class="ubadge">${esc(st.badge)}</span>` : ""}` +
+    `<span class="uname f-${st.font} x-${st.effect}" style="--uc:${st.color}">${esc(name)}</span></span>`;
 }
 
 function nameHtml(uid, fallback) {
