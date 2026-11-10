@@ -303,7 +303,8 @@ footer {
   40% { opacity: 0.9; }
   100% { transform: translateY(-4px); opacity: 0; }
 }
-button.busy { display: inline-flex; align-items: center; justify-content: center; }
+button.busy { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden; }
+.busy-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 button.busy:disabled { opacity: 0.92; cursor: progress; }
 .loading { display: flex; align-items: center; justify-content: center; gap: 4px; }
 .days.saving { opacity: 0.6; transition: opacity 0.15s; }

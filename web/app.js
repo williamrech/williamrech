@@ -117,12 +117,17 @@ function busy(btn, on, label) {
   if (on) {
     if (btn.classList.contains("busy")) return;
     btn.dataset.html = btn.innerHTML;
+    // Keep the exact size it had, so the loading text never makes it grow.
+    btn.style.height = `${btn.offsetHeight}px`;
+    btn.style.width = `${btn.offsetWidth}px`;
     btn.disabled = true;
     btn.classList.add("busy");
-    btn.innerHTML = `<span class="cup" aria-hidden="true"></span><span>${esc(label || BUSY_LINES[Math.floor(Math.random() * BUSY_LINES.length)])}</span>`;
+    btn.innerHTML = `<span class="cup" aria-hidden="true"></span><span class="busy-text">${esc(label || BUSY_LINES[Math.floor(Math.random() * BUSY_LINES.length)])}</span>`;
   } else {
     if (btn.dataset.html != null) btn.innerHTML = btn.dataset.html;
     delete btn.dataset.html;
+    btn.style.height = "";
+    btn.style.width = "";
     btn.disabled = false;
     btn.classList.remove("busy");
   }
