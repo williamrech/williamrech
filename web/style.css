@@ -358,3 +358,60 @@ header, main, footer { position: relative; z-index: 1; }
 html.modal-open, html.modal-open body { overflow: hidden; overscroll-behavior: none; }
 html.modal-open body { position: fixed; left: 0; right: 0; width: 100%; touch-action: none; }
 dialog { overscroll-behavior: contain; touch-action: pan-y; }
+
+/* ---------- Chamados ---------- */
+.section-head { display: flex; justify-content: space-between; align-items: baseline; }
+.section-title.spaced { margin-top: 30px; }
+.buttons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 30px; }
+.btn-tile {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  padding: 14px; border-radius: 16px; min-height: 64px;
+  background: var(--card); border: 1px solid var(--line); color: var(--fg);
+}
+.btn-tile:active { transform: scale(0.98); }
+.btn-tile.add { border-style: dashed; color: var(--muted); }
+.tile-emoji { font-size: 1.5rem; flex: none; width: 32px; text-align: center; }
+.tile-title { font-size: 0.92rem; line-height: 1.3; font-weight: 600; }
+
+.rounds { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 12px; }
+.round { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+.round.closed { opacity: 0.6; }
+.round.highlight { border-color: var(--caramel); box-shadow: 0 0 0 3px rgba(201, 139, 79, 0.2); }
+.round-head { display: flex; gap: 12px; align-items: center; }
+.round-emoji { font-size: 1.6rem; }
+.round-title { font-family: var(--serif); font-size: 1.12rem; color: var(--crema); }
+.round-body { margin: 8px 0 0; color: var(--fg); font-size: 0.95rem; }
+.summary { margin-top: 10px; font-size: 0.85rem; color: var(--crema); letter-spacing: 0.02em; }
+.answers { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; font-size: 0.92rem; }
+.answers b { color: var(--crema); font-weight: 600; }
+.answers .waiting { color: var(--muted); }
+.answers .waiting span { font-style: italic; }
+.answers .changed { color: #f0b46a; font-size: 0.8rem; }
+.round .actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.round .actions:empty { display: none; }
+.round .actions button { flex: 1 1 30%; padding: 10px; }
+.round-foot { display: flex; justify-content: flex-end; gap: 14px; margin-top: 6px; }
+.round-foot:empty { display: none; }
+
+.manage-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
+.manage-list li { display: grid; gap: 4px; }
+.manage-list li > .link { justify-self: end; }
+.manage-item {
+  display: flex; gap: 12px; align-items: center; text-align: left; width: 100%;
+  padding: 12px 14px; border-radius: 14px; background: rgba(0, 0, 0, 0.18); border: 1px solid var(--line);
+}
+.manage-text { display: grid; gap: 2px; }
+.muted-by { color: #f0b46a; }
+
+.title-row { display: grid; grid-template-columns: 64px 1fr; gap: 10px; }
+#ed-emoji { text-align: center; font-size: 1.4rem; padding: 8px; }
+#editor-form .pick-label { margin: 8px 0 -4px; }
+#ed-schedule { display: grid; gap: 10px; }
+.chips.seg .chip { flex: 1 1 auto; text-align: center; }
+
+.toggle { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; margin: 6px 0; }
+.toggle input { width: 22px; height: 22px; accent-color: var(--caramel); flex: none; }
+#quiet-times { margin-top: 8px; }
+
+.plain-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.plain-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.92rem; }

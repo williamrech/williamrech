@@ -62,7 +62,17 @@
         <span>Tô indo no mercado,<br><b>quem vai junto?</b></span>
       </button>
 
-      <h2 class="section-title">Quem vai no mercado</h2>
+      <div class="section-head">
+        <h2 class="section-title">Seus chamados</h2>
+        <button id="open-manage" class="link small">gerenciar</button>
+      </div>
+      <div id="buttons" class="buttons-grid"></div>
+
+      <h2 class="section-title">Rolando agora</h2>
+      <ul id="rounds" class="rounds"></ul>
+      <p id="rounds-empty" class="muted empty" hidden>Nada rolando. Silêncio suspeito. 🤨</p>
+
+      <h2 class="section-title spaced">Quem vai no mercado</h2>
       <ul id="trips" class="trips"></ul>
       <p id="trips-loading" class="muted empty loading" hidden><span class="cup" aria-hidden="true"></span> Passando o café…</p>
       <p id="trips-empty" class="muted empty">Ninguém vai no mercado. A geladeira chora. 😢</p>
@@ -83,18 +93,13 @@
       <p class="muted">Escolhe um apelido. Ou inventa um pior.</p>
       <div id="name-chips" class="chips"></div>
       <input id="name-custom" maxlength="40" placeholder="Outro apelido…">
+      <p class="muted small pick-label">E você é…</p>
+      <div class="chips" id="gender-chips">
+        <button type="button" class="chip" data-g="m">Menino 👦</button>
+        <button type="button" class="chip" data-g="f">Menina 👧</button>
+      </div>
       <button type="submit" class="primary">É isso</button>
     </form>
-  </dialog>
-
-  <!-- Modal: daily question -->
-  <dialog id="dlg-daily">
-    <h2>Vai no mercado hoje? 🛒</h2>
-    <p class="muted" id="daily-hint"></p>
-    <div class="row-buttons">
-      <button id="daily-no" class="secondary">Não</button>
-      <button id="daily-yes" class="primary">Sim</button>
-    </div>
   </dialog>
 
   <!-- Modal: when -->
@@ -114,14 +119,127 @@
     </form>
   </dialog>
 
+  <!-- Modal: create / edit a chamado -->
+  <dialog id="dlg-editor">
+    <form id="editor-form">
+      <h2 id="editor-title">Novo chamado</h2>
+      <div id="starter-wrap">
+        <p class="muted small pick-label">Começar de um modelo:</p>
+        <div class="chips" id="starter-chips"></div>
+      </div>
+
+      <div class="title-row">
+        <input id="ed-emoji" maxlength="4" placeholder="🔔" aria-label="Emoji">
+        <input id="ed-title" maxlength="80" placeholder="Título (ex: Vai ter almoço?)" required>
+      </div>
+      <input id="ed-body" maxlength="160" placeholder="Mensagem (opcional)">
+
+      <p class="muted small pick-label">Resposta</p>
+      <div class="chips seg" id="ed-type">
+        <button type="button" class="chip" data-v="none">Só aviso</button>
+        <button type="button" class="chip" data-v="yesno">Sim / Não</button>
+        <button type="button" class="chip" data-v="options">Opções</button>
+        <button type="button" class="chip" data-v="text">Texto livre</button>
+      </div>
+      <input id="ed-options" maxlength="200" placeholder="Opções separadas por vírgula (ex: Sim, Não, Talvez)" hidden>
+
+      <p class="muted small pick-label">Pra quem</p>
+      <div class="chips" id="ed-recipients"></div>
+
+      <div id="ed-answer-opts">
+        <p class="muted small pick-label">Quem vê as respostas</p>
+        <div class="chips seg" id="ed-visibility">
+          <button type="button" class="chip" data-v="all">Todo mundo</button>
+          <button type="button" class="chip" data-v="owner">Só eu</button>
+        </div>
+        <p class="muted small pick-label">Insistir até responder</p>
+        <div class="pick-row">
+          <select id="ed-nag" aria-label="Insistir">
+            <option value="0">Não insistir</option>
+            <option value="15">A cada 15 min</option>
+            <option value="30">A cada 30 min</option>
+            <option value="60">A cada 1 h</option>
+            <option value="120">A cada 2 h</option>
+          </select>
+          <select id="ed-duration" aria-label="Por quanto tempo">
+            <option value="1">Por 1 h</option>
+            <option value="2">Por 2 h</option>
+            <option value="4">Por 4 h</option>
+            <option value="8">Por 8 h</option>
+            <option value="12">Por 12 h</option>
+            <option value="24">Por 1 dia</option>
+          </select>
+        </div>
+      </div>
+
+      <p class="muted small pick-label">Quando</p>
+      <div class="chips seg" id="ed-when">
+        <button type="button" class="chip" data-v="button">Quando eu apertar</button>
+        <button type="button" class="chip" data-v="schedule">Repetir</button>
+      </div>
+      <div id="ed-schedule" hidden>
+        <div class="days" id="ed-days"></div>
+        <select id="ed-time" aria-label="Horário"></select>
+      </div>
+
+      <label class="toggle"><input type="checkbox" id="ed-mute"> <span>Deixar as pessoas silenciarem</span></label>
+
+      <div class="row-buttons">
+        <button type="button" id="ed-delete" class="danger" hidden>Apagar</button>
+        <button type="button" id="ed-cancel" class="secondary">Cancelar</button>
+        <button type="submit" id="ed-save" class="primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modal: my chamados -->
+  <dialog id="dlg-manage">
+    <h2>Seus chamados</h2>
+    <ul id="manage-list" class="manage-list"></ul>
+    <div class="row-buttons">
+      <button id="manage-new" class="secondary">+ Novo</button>
+      <button id="manage-close" class="primary">Fechar</button>
+    </div>
+  </dialog>
+
+  <!-- Modal: generic confirm -->
+  <dialog id="dlg-confirm">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-body" class="muted"></p>
+    <div class="row-buttons">
+      <button id="confirm-no" class="secondary">Cancelar</button>
+      <button id="confirm-yes" class="primary">Mandar</button>
+    </div>
+  </dialog>
+
+  <!-- Modal: free-text answer -->
+  <dialog id="dlg-text">
+    <form id="text-form">
+      <h2 id="text-title"></h2>
+      <input id="text-input" maxlength="200" placeholder="Sua resposta…" required>
+      <div class="row-buttons">
+        <button type="button" id="text-cancel" class="secondary">Cancelar</button>
+        <button type="submit" id="text-send" class="primary">Responder</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Modal: settings -->
   <dialog id="dlg-settings">
     <h2>Configurações</h2>
-    <h3>Me pergunta do mercado nesses dias:</h3>
-    <div id="days" class="days"></div>
-    <p class="muted small">Sexta é obrigatório. Não adianta reclamar.</p>
     <h3>Apelido</h3>
     <p><span id="settings-name"></span> · <button id="change-name" class="link">trocar</button></p>
+
+    <h3>Não me perturbe</h3>
+    <label class="toggle"><input type="checkbox" id="quiet-on"> <span>Segurar notificações num horário</span></label>
+    <div class="pick-row" id="quiet-times" hidden>
+      <select id="quiet-start" aria-label="Das"></select>
+      <select id="quiet-end" aria-label="Até"></select>
+    </div>
+    <p class="muted small" id="quiet-hint" hidden>Perguntas que chegarem nesse horário te esperam acordar. Avisos de resposta são pulados.</p>
+
+    <h3>Chamados que você silenciou</h3>
+    <ul id="muted-list" class="plain-list"></ul>
     <div id="admin" hidden>
       <h3>Admin</h3>
       <div class="admin-grid">

@@ -2,6 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function changed() {
+      return request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys();
+    }
 
     // Each device saves its own push token. Only the Cloud Functions read the list.
     match /devices/{token} {
@@ -9,23 +12,42 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
-    // Profiles: everyone in the family can see names; you can only edit your own
-    // name and skipped days. lastAnswered is written by the functions.
+    // Profiles: the family can see names; you edit only your own name, gender and
+    // quiet hours. admin / mutes are written by the functions.
     match /users/{uid} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys()
-             .hasOnly(['name', 'skipDays', 'updatedAt'])
+        && changed().hasOnly(['name', 'gender', 'quiet', 'skipDays', 'updatedAt'])
         && (!('name' in request.resource.data) ||
             (request.resource.data.name is string && request.resource.data.name.size() > 0
              && request.resource.data.name.size() <= 40))
-        && (!('skipDays' in request.resource.data) || request.resource.data.skipDays is list);
+        && (!('gender' in request.resource.data) || request.resource.data.gender in ['m', 'f']);
     }
 
-    // Market trips: readable by the family, written only through the functions
-    // (so every change sends a notification).
+    // Market trips: readable by the family, written only through the functions.
     match /trips/{id} {
       allow read: if signedIn();
+    }
+
+    // Chamados (templates) are personal: only the owner sees and edits them.
+    // mutedBy / lastFiredKey / lastManualAt are written by the functions.
+    match /templates/{id} {
+      allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
+        && !('mutedBy' in request.resource.data) && !('lastFiredKey' in request.resource.data)
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80;
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && changed().hasOnly(['emoji', 'title', 'body', 'answerType', 'options', 'recipients',
+             'visibility', 'allowMute', 'nagEveryMin', 'durationHours', 'schedule', 'updatedAt'])
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80;
+    }
+
+    // Rounds: visible to the people involved; written only through the functions.
+    match /rounds/{id} {
+      allow read: if signedIn() && request.auth.uid in resource.data.participants;
     }
   }
 }

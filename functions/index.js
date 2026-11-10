@@ -10,24 +10,14 @@ const db = getFirestore();
 const REGION = "us-central1";
 const TZ = "America/Sao_Paulo";
 const APP_URL = "https://williamrech.github.io/williamrech/";
-const FRIDAY = 5;
 const DAY_NAMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
 // ---------------------------------------------------------------------------
-// Sassy copy (pt-BR). {name}, {owner}, {when}, {day} get replaced.
+// Sassy copy (pt-BR).
+//   {name}, {owner}, {when}, {title}, {value}, {n} → replaced from vars
+//   {o|a} → gendered by the subject's gender ("m" → first, "f" → second)
 // ---------------------------------------------------------------------------
 const COPY = {
-  nag: [
-    ["Vai no mercado hoje? 🛒", "Responde logo, a geladeira tá esperando."],
-    ["Pergunta do dia 🛒", "Vai no mercado ou vai deixar todo mundo passar fome?"],
-    ["Oi, sumida(o) 👀", "Vai no mercado hoje? Sim ou não, sem enrolação."],
-    ["Mercado? 🥦", "Só responde. Não dói. Prometo."],
-    ["Hora da verdade ⏰", "Hoje tem mercado ou não tem?"],
-  ],
-  nagFriday: [
-    ["Sexta-feira, meu bem 🛒", "Sexta é obrigatório. Vai no mercado hoje?"],
-    ["É SEXTA 🎉", "E na sexta a gente pergunta, sim. Vai no mercado?"],
-  ],
   trip: [
     ["🛒 {name} vai no mercado", "{when}. Quem vai junto?"],
     ["Alerta de mercado 🚨", "{name} vai {when}. Se manifesta quem quer ir."],
@@ -36,25 +26,49 @@ const COPY = {
   join: [
     ["{name} vai junto 🙋", "Com {owner}, {when}. Que lindo, que união."],
     ["Carona confirmada 🚗", "{name} vai no mercado com {owner}. Alguém mais?"],
-    ["{name} se convidou 💅", "Vai junto com {owner} {when}."],
+    ["{name} se convidou 💅", "Vai junt{o|a} com {owner} {when}."],
   ],
   leave: [
     ["{name} desistiu 💔", "Não vai mais com {owner}. Traição registrada."],
     ["Ih, {name} amarelou 🐔", "Desistiu de ir no mercado com {owner}."],
+    ["{name} é um{|a} traidor{|a} 🐍", "Largou {owner} sozinh{o|a}. Quer dizer, largou o mercado."],
   ],
   cancel: [
     ["Mercado cancelado ❌", "{owner} não vai mais. Ninguém vai comer hoje."],
     ["{owner} desistiu do mercado 🙄", "Plano cancelado. Se vira aí."],
   ],
-  no: [
-    ["{name} não vai no mercado hoje 🙅", "Anotado. Com decepção, mas anotado."],
-    ["Hoje não, diz {name} 😒", "Alguém mais corajoso se habilita?"],
-    ["{name} pulou fora 🏃", "Não vai no mercado hoje. Típico."],
+  answer: [
+    ["{emoji} {name} respondeu", "“{title}” → {value}"],
+    ["{emoji} Temos resposta!", "{name}: {value}"],
+    ["{emoji} {name} se manifestou", "{value}. Anotado."],
+  ],
+  changed: [
+    ["🌀 {name} mudou de ideia", "“{title}” → agora é {value} ({n}ª vez)"],
+    ["🙄 Indecis{o|a}, hein?", "{name} mudou pra {value}. Já é a {n}ª vez."],
+    ["Plot twist 🔄", "{name} agora diz {value} (mudança nº {n})"],
+  ],
+  nag: [
+    ["{emoji} Ainda esperando…", "{owner} quer saber: {title}"],
+    ["{emoji} Ô, {name}!", "{title} Responde aí, não custa nada."],
+    ["{emoji} Lembrete carinhoso 💌", "{title} (a gente vai continuar perguntando)"],
+    ["{emoji} {name}, cadê você? 👀", "{owner} tá esperando: {title}"],
+  ],
+  muted: [
+    ["🔕 {name} silenciou “{title}”", "{O|A} {name} não quer mais saber disso. Que deselegante."],
+    ["🔕 Ignorad{o|a}", "{name} silenciou “{title}”. Pensa no que você fez."],
+  ],
+  unmuted: [
+    ["🔔 {name} voltou atrás", "Reativou “{title}”. Perdão concedido."],
   ],
 };
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+function fill(s, vars) {
+  const female = vars.gender === "f";
+  return s
+    .replace(/\{(\w*)\|(\w*)\}/g, (_, m, f) => (female ? f : m))
+    .replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ""));
+}
 function message(kind, vars) {
   const [t, b] = pick(COPY[kind]);
   return { title: fill(t, vars), body: fill(b, vars) };
@@ -71,29 +85,43 @@ function spParts(date = new Date()) {
     }).formatToParts(date).map((p) => [p.type, p.value])
   );
   const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
-  return { key: `${parts.year}-${parts.month}-${parts.day}`, weekday, hour: parts.hour, minute: parts.minute };
+  const hour = String(Number(parts.hour) % 24).padStart(2, "0");
+  return { key: `${parts.year}-${parts.month}-${parts.day}`, weekday, hour, minute: parts.minute, hm: `${hour}:${parts.minute}` };
 }
+const toMin = (hm) => { const [h, m] = String(hm).split(":").map(Number); return h * 60 + m; };
 
 // "hoje às 18:30" / "amanhã às 10:00" / "sexta (14/11) às 09:00"
 function whenText(date) {
   const now = spParts();
   const d = spParts(date);
   const tomorrow = spParts(new Date(Date.now() + 86400000));
-  const time = `${d.hour}:${d.minute}`;
-  if (d.key === now.key) return `hoje às ${time}`;
-  if (d.key === tomorrow.key) return `amanhã às ${time}`;
+  if (d.key === now.key) return `hoje às ${d.hm}`;
+  if (d.key === tomorrow.key) return `amanhã às ${d.hm}`;
   const [, m, day] = d.key.split("-");
-  return `${DAY_NAMES[d.weekday]} (${day}/${m}) às ${time}`;
+  return `${DAY_NAMES[d.weekday]} (${day}/${m}) às ${d.hm}`;
+}
+
+// Quiet hours: user.quiet = { on, start: "22:00", end: "08:00" } (Brasília time).
+function isQuiet(user, now = spParts()) {
+  const q = user && user.quiet;
+  if (!q || !q.on || !q.start || !q.end) return false;
+  const t = toMin(now.hm), s = toMin(q.start), e = toMin(q.end);
+  return s <= e ? t >= s && t < e : t >= s || t < e; // handles overnight ranges
 }
 
 // ---------------------------------------------------------------------------
 // Push helpers
 // ---------------------------------------------------------------------------
-async function tokensFor({ onlyUid, excludeUid } = {}) {
-  let q = db.collection("devices");
-  if (onlyUid) q = q.where("uid", "==", onlyUid);
-  const snap = await q.get();
-  return snap.docs.filter((d) => d.get("uid") !== excludeUid).map((d) => d.id);
+async function loadUsers() {
+  const snap = await db.collection("users").get();
+  return Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+}
+
+async function tokensByUid() {
+  const snap = await db.collection("devices").get();
+  const map = {};
+  for (const d of snap.docs) (map[d.get("uid")] ||= []).push(d.id);
+  return map;
 }
 
 async function send(tokens, { title, body }, path = "") {
@@ -126,12 +154,25 @@ async function send(tokens, { title, body }, path = "") {
   return { sent, failed };
 }
 
-// Notifies everyone except the person who did the action.
-const broadcast = async (actorUid, msg, path) => send(await tokensFor({ excludeUid: actorUid }), msg, path);
+// Sends to a list of users, skipping anyone in their quiet hours.
+async function sendToUids(uids, msg, path, { users, tokens } = {}) {
+  users ||= await loadUsers();
+  tokens ||= await tokensByUid();
+  const now = spParts();
+  const list = [...new Set(uids)].filter((u) => !isQuiet(users[u], now)).flatMap((u) => tokens[u] || []);
+  return send(list, msg, path);
+}
 
-async function displayName(auth) {
+// Notifies everyone except the person who did the action.
+async function broadcast(actorUid, msg, path) {
+  const users = await loadUsers();
+  return sendToUids(Object.keys(users).filter((u) => u !== actorUid), msg, path, { users });
+}
+
+async function profile(auth) {
   const snap = await db.doc(`users/${auth.uid}`).get();
-  return (snap.exists && snap.get("name")) || (auth.token.email || "Alguém").split("@")[0];
+  const data = snap.exists ? snap.data() : {};
+  return { ...data, name: data.name || (auth.token.email || "Alguém").split("@")[0], gender: data.gender || "m" };
 }
 
 function requireAuth(req) {
@@ -142,7 +183,7 @@ function requireAuth(req) {
 const opts = { region: REGION, maxInstances: 5 };
 
 // ---------------------------------------------------------------------------
-// "Tô indo no mercado" — create a trip and tell everyone.
+// Market trips (built-in feature)
 // ---------------------------------------------------------------------------
 exports.createTrip = onCall(opts, async (req) => {
   const auth = requireAuth(req);
@@ -151,27 +192,24 @@ exports.createTrip = onCall(opts, async (req) => {
   if (isNaN(when) || when.getTime() < now - 30 * 60000 || when.getTime() > now + 7 * 86400000) {
     throw new HttpsError("invalid-argument", "Horário estranho. Escolhe de novo.");
   }
-  const name = await displayName(auth);
+  const me = await profile(auth);
   const ref = await db.collection("trips").add({
     uid: auth.uid,
-    name,
+    name: me.name,
+    gender: me.gender,
     when: Timestamp.fromDate(when),
     riders: {},
     createdAt: FieldValue.serverTimestamp(),
   });
-  // Volunteering counts as answering today's question.
-  await db.doc(`users/${auth.uid}`).set({ lastAnswered: spParts().key }, { merge: true });
-
-  const result = await broadcast(auth.uid, message("trip", { name, when: whenText(when) }), `?viagem=${ref.id}`);
+  const result = await broadcast(auth.uid, message("trip", { name: me.name, gender: me.gender, when: whenText(when) }), `?viagem=${ref.id}`);
   return { id: ref.id, ...result };
 });
 
-// "Vou junto" / "Desisti" — toggle riding along.
 exports.toggleRide = onCall(opts, async (req) => {
   const auth = requireAuth(req);
   const tripId = req.data && String(req.data.tripId || "");
   if (!tripId) throw new HttpsError("invalid-argument", "Qual mercado?");
-  const name = await displayName(auth);
+  const me = await profile(auth);
   const ref = db.doc(`trips/${tripId}`);
 
   const { joined, trip } = await db.runTransaction(async (t) => {
@@ -180,16 +218,15 @@ exports.toggleRide = onCall(opts, async (req) => {
     const trip = snap.data();
     if (trip.uid === auth.uid) throw new HttpsError("failed-precondition", "Você já vai, né? É seu mercado.");
     const joined = !(trip.riders && trip.riders[auth.uid]);
-    t.update(ref, { [`riders.${auth.uid}`]: joined ? name : FieldValue.delete() });
+    t.update(ref, { [`riders.${auth.uid}`]: joined ? me.name : FieldValue.delete() });
     return { joined, trip };
   });
 
-  const vars = { name, owner: trip.name, when: whenText(trip.when.toDate()) };
+  const vars = { name: me.name, gender: me.gender, owner: trip.name, when: whenText(trip.when.toDate()) };
   await broadcast(auth.uid, message(joined ? "join" : "leave", vars), `?viagem=${tripId}`);
   return { joined };
 });
 
-// Owner cancels their trip.
 exports.cancelTrip = onCall(opts, async (req) => {
   const auth = requireAuth(req);
   const tripId = req.data && String(req.data.tripId || "");
@@ -198,47 +235,216 @@ exports.cancelTrip = onCall(opts, async (req) => {
   if (!snap.exists) throw new HttpsError("not-found", "Esse mercado não existe mais.");
   if (snap.get("uid") !== auth.uid) throw new HttpsError("permission-denied", "Só quem vai pode cancelar.");
   await ref.delete();
-  await broadcast(auth.uid, message("cancel", { owner: snap.get("name") }));
+  await broadcast(auth.uid, message("cancel", { owner: snap.get("name"), gender: snap.get("gender") }));
   return { ok: true };
 });
 
-// Answer to the daily question. "Sim" goes on to createTrip from the app.
-exports.answerNo = onCall(opts, async (req) => {
-  const auth = requireAuth(req);
-  const today = spParts();
-  const update = { lastAnswered: today.key };
-  if (today.weekday !== FRIDAY) update.skipDays = FieldValue.arrayUnion(today.weekday);
-  await db.doc(`users/${auth.uid}`).set(update, { merge: true });
+// ---------------------------------------------------------------------------
+// Chamados: personal templates (templates/{id}) that create rounds (rounds/{id}).
+//
+// template: ownerUid, emoji, title, body, answerType ("none"|"yesno"|"options"|"text"),
+//   options[], recipients ("all" | [uid]), visibility ("all"|"owner"), allowMute,
+//   nagEveryMin (0 = never), durationHours, schedule { on, days[], time "HH:MM" },
+//   mutedBy { uid: name }  ← server only, lastFiredKey ← server only
+//
+// round: copy of the template's look + recipients/participants, answers { uid: {value,name,changes,at} },
+//   notified { uid: millis }, open, closesAt
+// ---------------------------------------------------------------------------
+const ANSWER_TYPES = ["none", "yesno", "options", "text"];
 
-  const name = await displayName(auth);
-  await broadcast(auth.uid, message("no", { name }));
-  return { skipped: today.weekday !== FRIDAY ? DAY_NAMES[today.weekday] : null };
+async function createRound(tplRef, tpl, owner, { users, tokens } = {}) {
+  users ||= await loadUsers();
+  tokens ||= await tokensByUid();
+  const muted = tpl.mutedBy || {};
+  const pool = tpl.recipients === "all"
+    ? Object.keys(users).filter((u) => u !== tpl.ownerUid)
+    : (tpl.recipients || []).filter((u) => users[u]);
+  const recipients = pool.filter((u) => !muted[u]);
+  if (!recipients.length) throw new HttpsError("failed-precondition", "Ninguém pra receber (ou todo mundo silenciou 🙃).");
+
+  const answerType = ANSWER_TYPES.includes(tpl.answerType) ? tpl.answerType : "none";
+  const durationHours = Math.min(Math.max(Number(tpl.durationHours) || 12, 1), 72);
+  const now = Date.now();
+  const round = {
+    templateId: tplRef.id,
+    ownerUid: tpl.ownerUid,
+    ownerName: owner.name,
+    ownerGender: owner.gender || "m",
+    emoji: tpl.emoji || "🔔",
+    title: tpl.title,
+    body: tpl.body || "",
+    answerType,
+    options: answerType === "yesno" ? ["Sim", "Não"] : answerType === "options" ? (tpl.options || []).slice(0, 6) : [],
+    visibility: tpl.visibility === "owner" ? "owner" : "all",
+    allowMute: tpl.allowMute !== false,
+    nagEveryMin: answerType === "none" ? 0 : Number(tpl.nagEveryMin) || 0,
+    recipients,
+    recipientNames: Object.fromEntries(recipients.map((u) => [u, users[u].name || "?"])),
+    participants: [...new Set([...recipients, tpl.ownerUid])],
+    answers: {},
+    notified: {},
+    open: true,
+    closesAt: Timestamp.fromMillis(now + durationHours * 3600000),
+    createdAt: FieldValue.serverTimestamp(),
+  };
+
+  // Notify now everyone not in quiet hours; the rest get it when their quiet hours end (tick).
+  const sp = spParts();
+  const awake = recipients.filter((u) => !isQuiet(users[u], sp));
+  const ref = db.collection("rounds").doc();
+  for (const u of awake) round.notified[u] = now;
+  await ref.set(round);
+
+  const msg = { title: `${round.emoji} ${round.title}`, body: round.body || `${owner.name} quer saber.` };
+  const res = await send(awake.flatMap((u) => tokens[u] || []), msg, `?rodada=${ref.id}`);
+  return { id: ref.id, recipients: recipients.length, delayed: recipients.length - awake.length, ...res };
+}
+
+exports.fireTemplate = onCall(opts, async (req) => {
+  const auth = requireAuth(req);
+  const id = req.data && String(req.data.templateId || "");
+  const ref = db.doc(`templates/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.get("ownerUid") !== auth.uid) throw new HttpsError("not-found", "Chamado não encontrado.");
+  const last = snap.get("lastManualAt");
+  if (last && Date.now() - last.toMillis() < 15000) throw new HttpsError("resource-exhausted", "Calma. Espera uns segundinhos.");
+  await ref.update({ lastManualAt: FieldValue.serverTimestamp() });
+  return createRound(ref, snap.data(), await profile(auth));
+});
+
+exports.answerRound = onCall(opts, async (req) => {
+  const auth = requireAuth(req);
+  const roundId = req.data && String(req.data.roundId || "");
+  let value = req.data && typeof req.data.value === "string" ? req.data.value.trim() : "";
+  const me = await profile(auth);
+  const ref = db.doc(`rounds/${roundId}`);
+
+  const { round, changes } = await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Isso não existe mais.");
+    const round = snap.data();
+    if (!round.recipients.includes(auth.uid)) throw new HttpsError("permission-denied", "Não perguntaram pra você. 💅");
+    if (!round.open) throw new HttpsError("failed-precondition", "Já encerrou. Chegou tarde.");
+    if (round.answerType === "none") throw new HttpsError("failed-precondition", "Isso é só um aviso.");
+    if (round.answerType === "text") {
+      if (!value) throw new HttpsError("invalid-argument", "Escreve alguma coisa.");
+      value = value.slice(0, 200);
+    } else if (!round.options.includes(value)) {
+      throw new HttpsError("invalid-argument", "Opção inválida.");
+    }
+    const prev = round.answers && round.answers[auth.uid];
+    if (prev && prev.value === value) throw new HttpsError("already-exists", "Você já respondeu isso. 😉");
+    const changes = prev ? (prev.changes || 0) + 1 : 0;
+    t.update(ref, { [`answers.${auth.uid}`]: { value, name: me.name, gender: me.gender, changes, at: Date.now() } });
+    return { round, changes };
+  });
+
+  const vars = { name: me.name, gender: me.gender, title: round.title, value, emoji: round.emoji, n: changes };
+  const msg = message(changes ? "changed" : "answer", vars);
+  const targets = round.visibility === "all"
+    ? round.participants.filter((u) => u !== auth.uid)
+    : [round.ownerUid].filter((u) => u !== auth.uid);
+  await sendToUids(targets, msg, `?rodada=${roundId}`);
+  return { ok: true, changes };
+});
+
+exports.closeRound = onCall(opts, async (req) => {
+  const auth = requireAuth(req);
+  const ref = db.doc(`rounds/${String((req.data && req.data.roundId) || "")}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Isso não existe mais.");
+  if (snap.get("ownerUid") !== auth.uid) throw new HttpsError("permission-denied", "Só quem criou pode encerrar.");
+  await ref.update({ open: false });
+  return { ok: true };
+});
+
+// Mute / unmute a template (from a round card, or by templateId from settings).
+exports.muteTemplate = onCall(opts, async (req) => {
+  const auth = requireAuth(req);
+  const mute = !(req.data && req.data.mute === false);
+  let templateId = req.data && req.data.templateId;
+  if (!templateId && req.data && req.data.roundId) {
+    const r = await db.doc(`rounds/${req.data.roundId}`).get();
+    if (!r.exists || !r.get("recipients").includes(auth.uid)) throw new HttpsError("not-found", "Não achei.");
+    if (mute && r.get("allowMute") === false) throw new HttpsError("permission-denied", "Esse aqui não dá pra silenciar. Sinto muito (mentira).");
+    templateId = r.get("templateId");
+  }
+  const tRef = db.doc(`templates/${String(templateId || "")}`);
+  const tSnap = await tRef.get();
+  if (!tSnap.exists) throw new HttpsError("not-found", "Esse chamado não existe mais.");
+  const tpl = tSnap.data();
+  if (mute && tpl.allowMute === false) throw new HttpsError("permission-denied", "Esse aqui não dá pra silenciar.");
+  const me = await profile(auth);
+
+  await Promise.all([
+    tRef.update({ [`mutedBy.${auth.uid}`]: mute ? me.name : FieldValue.delete() }),
+    db.doc(`users/${auth.uid}`).set({
+      mutes: { [tSnap.id]: mute ? { title: tpl.title, emoji: tpl.emoji || "🔔", owner: (await profile({ uid: tpl.ownerUid, token: {} })).name } : FieldValue.delete() },
+    }, { merge: true }),
+  ]);
+  if (tpl.ownerUid !== auth.uid) {
+    await sendToUids([tpl.ownerUid], message(mute ? "muted" : "unmuted", { name: me.name, gender: me.gender, title: tpl.title }));
+  }
+  return { muted: mute };
 });
 
 // ---------------------------------------------------------------------------
-// Daily nag at noon, Brasília time. Each user individually.
+// Every 5 minutes: fire scheduled templates, deliver delayed (quiet-hours)
+// notifications, nag people who haven't answered, close expired rounds.
 // ---------------------------------------------------------------------------
-exports.noonNag = onSchedule({ schedule: "0 12 * * *", timeZone: TZ, region: REGION }, async () => {
-  const today = spParts();
-  const [users, devices] = await Promise.all([db.collection("users").get(), db.collection("devices").get()]);
-  const userById = Object.fromEntries(users.docs.map((d) => [d.id, d.data()]));
+exports.tick = onSchedule({ schedule: "*/5 * * * *", timeZone: TZ, region: REGION }, async () => {
+  const sp = spParts();
+  const nowMin = toMin(sp.hm);
+  const now = Date.now();
+  const [users, tokens] = await Promise.all([loadUsers(), tokensByUid()]);
 
-  const tokensByUid = {};
-  for (const d of devices.docs) (tokensByUid[d.get("uid")] ||= []).push(d.id);
+  // 1) Scheduled templates due today (fire within 60 min after their time, once per day).
+  const scheduled = await db.collection("templates").where("schedule.on", "==", true).get();
+  for (const doc of scheduled.docs) {
+    const tpl = doc.data();
+    const s = tpl.schedule || {};
+    if (!Array.isArray(s.days) || !s.days.includes(sp.weekday) || !s.time) continue;
+    const diff = nowMin - toMin(s.time);
+    if (diff < 0 || diff > 60 || tpl.lastFiredKey === sp.key) continue;
+    await doc.ref.update({ lastFiredKey: sp.key });
+    const owner = users[tpl.ownerUid] || {};
+    try {
+      await createRound(doc.ref, tpl, { name: owner.name || "Alguém", gender: owner.gender || "m" }, { users, tokens });
+    } catch (e) {
+      console.warn("scheduled fire skipped", doc.id, e.message);
+    }
+  }
 
-  for (const [uid, tokens] of Object.entries(tokensByUid)) {
-    const u = userById[uid] || {};
-    if (u.lastAnswered === today.key) continue; // already volunteered/answered today
-    const skip = Array.isArray(u.skipDays) ? u.skipDays : [];
-    if (today.weekday !== FRIDAY && skip.includes(today.weekday)) continue;
-    const msg = message(today.weekday === FRIDAY ? "nagFriday" : "nag", {});
-    await send(tokens, msg, "?pergunta=mercado");
+  // 2) Open rounds: close, deliver delayed, nag.
+  const open = await db.collection("rounds").where("open", "==", true).get();
+  for (const doc of open.docs) {
+    const r = doc.data();
+    if (r.closesAt && r.closesAt.toMillis() <= now) { await doc.ref.update({ open: false }); continue; }
+
+    const muted = await (async () => {
+      const t = await db.doc(`templates/${r.templateId}`).get();
+      return (t.exists && t.get("mutedBy")) || {};
+    })();
+    const updates = {};
+    for (const u of r.recipients) {
+      if (muted[u] || (r.answers && r.answers[u]) || isQuiet(users[u], sp)) continue;
+      const last = r.notified && r.notified[u];
+      let msg = null;
+      if (!last) {
+        msg = { title: `${r.emoji} ${r.title}`, body: r.body || `${r.ownerName} quer saber.` };
+      } else if (r.nagEveryMin > 0 && now - last >= r.nagEveryMin * 60000 - 30000) {
+        msg = message("nag", { emoji: r.emoji, title: r.title, owner: r.ownerName, name: (users[u] || {}).name || "", gender: (users[u] || {}).gender });
+      }
+      if (!msg) continue;
+      await send(tokens[u] || [], msg, `?rodada=${doc.id}`);
+      updates[`notified.${u}`] = now;
+    }
+    if (Object.keys(updates).length) await doc.ref.update(updates);
   }
 });
 
 // ---------------------------------------------------------------------------
-// Admin tools. To make someone admin: Firestore console → users/{uid} → add
-// field `admin` (boolean) = true. Clients can't set it themselves (see rules).
+// Admin tools. The first person to log in claims admin (see claimAdmin).
 // ---------------------------------------------------------------------------
 async function requireAdmin(req) {
   const auth = requireAuth(req);
@@ -247,18 +453,17 @@ async function requireAdmin(req) {
   return auth;
 }
 
-// Health check: counts, orphans, and validates every push token (dry run, nothing is shown).
 exports.adminHealth = onCall(opts, async (req) => {
   const auth = await requireAdmin(req);
   const myToken = req.data && String(req.data.token || "");
-  const [users, devices, trips] = await Promise.all([
+  const [users, devices, trips, templates, rounds] = await Promise.all([
     db.collection("users").get(), db.collection("devices").get(), db.collection("trips").get(),
+    db.collection("templates").get(), db.collection("rounds").where("open", "==", true).get(),
   ]);
   const userIds = new Set(users.docs.map((d) => d.id));
   const deviceUids = new Set(devices.docs.map((d) => d.get("uid")));
   const now = Date.now();
 
-  // Dry-run every token to find dead ones, and clean them up.
   const tokens = devices.docs.map((d) => d.id);
   const dead = [];
   for (let i = 0; i < tokens.length; i += 500) {
@@ -271,7 +476,7 @@ exports.adminHealth = onCall(opts, async (req) => {
 
   const today = spParts();
   return {
-    serverTime: `${today.key} ${today.hour}:${today.minute} (${DAY_NAMES[today.weekday]}, Brasília)`,
+    serverTime: `${today.key} ${today.hm} (${DAY_NAMES[today.weekday]}, Brasília)`,
     users: users.size,
     names: users.docs.map((d) => d.get("name") || "(sem apelido)"),
     usersWithoutDevices: users.docs.filter((d) => !deviceUids.has(d.id)).map((d) => d.get("name") || d.id),
@@ -282,28 +487,25 @@ exports.adminHealth = onCall(opts, async (req) => {
     myDevices: devices.docs.filter((d) => d.get("uid") === auth.uid).length,
     tripsUpcoming: trips.docs.filter((d) => d.get("when").toMillis() >= now).length,
     tripsPast: trips.docs.filter((d) => d.get("when").toMillis() < now).length,
+    templates: templates.size,
+    scheduledTemplates: templates.docs.filter((d) => d.get("schedule.on") === true).length,
+    openRounds: rounds.size,
   };
 });
 
-// Sends a test notification to the admin's own devices only.
 exports.adminTest = onCall(opts, async (req) => {
   const auth = await requireAdmin(req);
-  return send(await tokensFor({ onlyUid: auth.uid }),
-    { title: "Teste ☕", body: "Se você tá lendo isso, as notificações funcionam." });
+  const tokens = await tokensByUid();
+  return send(tokens[auth.uid] || [], { title: "Teste ☕", body: "Se você tá lendo isso, as notificações funcionam." });
 });
 
-// scope "me": wipe my profile, devices, trips and rides. scope "all": wipe everything.
-// Admin flags survive so you can log back in as admin.
 exports.adminReset = onCall({ ...opts, timeoutSeconds: 120 }, async (req) => {
   const auth = await requireAdmin(req);
   const scope = req.data && req.data.scope;
 
   if (scope === "all") {
-    await Promise.all([
-      db.recursiveDelete(db.collection("devices")),
-      db.recursiveDelete(db.collection("trips")),
-      db.recursiveDelete(db.collection("cooldowns")),
-    ]);
+    await Promise.all(["devices", "trips", "cooldowns", "templates", "rounds"]
+      .map((c) => db.recursiveDelete(db.collection(c))));
     const users = await db.collection("users").get();
     await Promise.all(users.docs.map((d) =>
       d.get("admin") === true ? d.ref.set({ admin: true }) : d.ref.delete()));
@@ -311,16 +513,17 @@ exports.adminReset = onCall({ ...opts, timeoutSeconds: 120 }, async (req) => {
   }
 
   if (scope === "me") {
-    const [devices, trips] = await Promise.all([
+    const [devices, trips, templates, rounds] = await Promise.all([
       db.collection("devices").where("uid", "==", auth.uid).get(),
       db.collection("trips").get(),
+      db.collection("templates").where("ownerUid", "==", auth.uid).get(),
+      db.collection("rounds").where("ownerUid", "==", auth.uid).get(),
     ]);
-    const writes = devices.docs.map((d) => d.ref.delete());
+    const writes = [...devices.docs, ...templates.docs, ...rounds.docs].map((d) => d.ref.delete());
     for (const t of trips.docs) {
       if (t.get("uid") === auth.uid) writes.push(t.ref.delete());
       else if (t.get(`riders.${auth.uid}`)) writes.push(t.ref.update({ [`riders.${auth.uid}`]: FieldValue.delete() }));
     }
-    writes.push(db.doc(`cooldowns/${auth.uid}`).delete());
     writes.push(db.doc(`users/${auth.uid}`).set({ admin: true }));
     await Promise.all(writes);
     return { ok: true, scope };
@@ -329,8 +532,6 @@ exports.adminReset = onCall({ ...opts, timeoutSeconds: 120 }, async (req) => {
   throw new HttpsError("invalid-argument", "scope deve ser 'me' ou 'all'.");
 });
 
-// Bootstrap: if nobody is admin yet, the caller becomes admin. The app calls this
-// automatically after login, so the first person to open it after setup gets the crown.
 exports.claimAdmin = onCall(opts, async (req) => {
   const auth = requireAuth(req);
   return db.runTransaction(async (t) => {

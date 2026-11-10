@@ -3,8 +3,8 @@ import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
-  getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query, where, orderBy,
-  serverTimestamp, Timestamp,
+  getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
+  orderBy, limit, serverTimestamp, Timestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-functions.js";
 import {
@@ -82,7 +82,10 @@ const api = {
   createTrip: call("createTrip"),
   toggleRide: call("toggleRide"),
   cancelTrip: call("cancelTrip"),
-  answerNo: call("answerNo"),
+  fireTemplate: call("fireTemplate"),
+  answerRound: call("answerRound"),
+  closeRound: call("closeRound"),
+  muteTemplate: call("muteTemplate"),
   adminHealth: call("adminHealth"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
@@ -91,7 +94,6 @@ const api = {
 
 // ---------- Constants ----------
 const TZ = "America/Sao_Paulo";
-const FRIDAY = 5;
 const DAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const DAY_NAMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const NAME_SUGGESTIONS = [
@@ -182,8 +184,8 @@ const needsInstall = isIOS && !isStandalone;
 
 // URL params from notification links
 const params = new URLSearchParams(location.search);
-let wantDailyQuestion = params.get("pergunta") === "mercado";
 let highlightTrip = params.get("viagem");
+let highlightRound = params.get("rodada");
 if (params.toString()) history.replaceState(null, "", location.pathname);
 
 // ---------- Messaging ----------
@@ -329,18 +331,20 @@ async function checkGate() {
 }
 $("dlg-gate").addEventListener("cancel", (e) => e.preventDefault()); // no escaping
 
-// Runs the next popup in line once the gate is passed: name first, then the daily question.
+// Runs the next popup in line once the gate is passed: name + gender first.
 function proceed() {
   if (!gatePassed || !meLoaded) return;
-  if (!me.name) openNamePicker();
-  else if (!askedDaily) { askedDaily = true; maybeAskDaily(); }
+  if (!me.name || !me.gender) openNamePicker();
 }
 
 // ---------- State ----------
 let me = null;          // users/{uid} data
 let meLoaded = false;
-let askedDaily = false;
 let trips = [];
+let templates = [];     // my chamados
+let rounds = [];        // rounds I'm part of
+let roundsLoaded = false;
+let family = {};        // uid -> user profile
 let tripsLoaded = false;
 let unsubs = [];
 
@@ -352,8 +356,11 @@ onAuthStateChanged(auth, async (user) => {
   unsubs = [];
   me = null;
   meLoaded = false;
-  askedDaily = false;
   gatePassed = false;
+  templates = [];
+  rounds = [];
+  roundsLoaded = false;
+  family = {};
   tripsLoaded = false;
   trips = [];
 
@@ -375,6 +382,8 @@ onAuthStateChanged(auth, async (user) => {
   show("topbar");
   $("who").textContent = user.email;
   renderTrips(); // shows the loading state until data arrives
+  renderButtons();
+  renderRounds();
 
   // First person to log in after setup becomes admin (no-op once an admin exists).
   api.claimAdmin().then(({ data }) => { if (data.claimed) toast("Você é o admin agora. 👑", 4000); })
@@ -386,9 +395,31 @@ onAuthStateChanged(auth, async (user) => {
     meLoaded = true;
     $("settings-name").textContent = me.name || "(sem apelido)";
     show("admin", me.admin === true);
-    renderDays();
+    renderSettings();
     proceed();
   }));
+
+  // Family (names for pickers and lists)
+  unsubs.push(onSnapshot(collection(db, "users"), (snap) => {
+    family = Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+  }, (err) => console.error("users", err)));
+
+  // My chamados
+  unsubs.push(onSnapshot(query(collection(db, "templates"), where("ownerUid", "==", user.uid)), (snap) => {
+    templates = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    renderButtons();
+    if ($("dlg-manage").open) renderManage();
+  }, (err) => console.error("templates", err)));
+
+  // Rounds I'm part of
+  const rq = query(collection(db, "rounds"), where("participants", "array-contains", user.uid),
+    orderBy("createdAt", "desc"), limit(30));
+  unsubs.push(onSnapshot(rq, (snap) => {
+    rounds = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    roundsLoaded = true;
+    renderRounds();
+  }, (err) => console.error("rounds", err)));
 
   // Upcoming trips
   const since = Timestamp.fromMillis(Date.now() - 3 * 3600000);
@@ -417,11 +448,20 @@ $("login-form").addEventListener("submit", async (e) => {
 
 // ---------- Name picker ----------
 let chosenName = "";
+let chosenGender = "";
+$("gender-chips").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip");
+  if (!b) return;
+  chosenGender = b.dataset.g;
+  $("gender-chips").querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c === b));
+});
 function openNamePicker() {
   const dlg = $("dlg-name");
   if (dlg.open) return;
   chosenName = "";
-  $("name-custom").value = "";
+  $("name-custom").value = (me && me.name) || "";
+  chosenGender = (me && me.gender) || "";
+  $("gender-chips").querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c.dataset.g === chosenGender));
   const chips = $("name-chips");
   chips.innerHTML = "";
   // Show a random handful so it's different each time.
@@ -444,53 +484,17 @@ $("name-custom").addEventListener("input", () => {
   chosenName = "";
   $("name-chips").querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
 });
-$("dlg-name").addEventListener("cancel", (e) => { if (!me || !me.name) e.preventDefault(); });
+$("dlg-name").addEventListener("cancel", (e) => { if (!me || !me.name || !me.gender) e.preventDefault(); });
 $("name-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = ($("name-custom").value.trim() || chosenName).slice(0, 40);
-  if (!name) { toast("Escolhe um, vai."); return; }
+  if (!name) { toast("Escolhe um apelido, vai."); return; }
+  if (!chosenGender) { toast("Menino ou menina? Pra eu xingar direito."); return; }
   const ok = await withBusy(e.submitter, async () => {
-    await setDoc(doc(db, "users", auth.currentUser.uid), { name, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, "users", auth.currentUser.uid), { name, gender: chosenGender, updatedAt: serverTimestamp() }, { merge: true });
     return true;
   }, "Batizando…");
   if (ok) { $("dlg-name").close(); toast(`Prazer, ${name}. ☕`); }
-});
-
-// ---------- Daily question ----------
-function isNagDayForMe(weekday) {
-  if (weekday === FRIDAY) return true;
-  return !((me && me.skipDays) || []).includes(weekday);
-}
-
-function maybeAskDaily() {
-  if (!gatePassed) return;
-  if ($("dlg-daily").open || $("dlg-when").open || $("dlg-name").open || $("dlg-gate").open) return;
-  const today = spParts();
-  if (me && me.lastAnswered === today.key) { wantDailyQuestion = false; return; }
-  const due = today.hour >= 12 && isNagDayForMe(today.weekday);
-  if (wantDailyQuestion || due) {
-    wantDailyQuestion = false;
-    $("daily-hint").textContent = today.weekday === FRIDAY
-      ? "É sexta. Sexta é obrigatório. 💅"
-      : `Se disser não, nunca mais te pergunto na ${DAY_NAMES[today.weekday]}. (Dá pra mudar nas configurações)`;
-    $("dlg-daily").showModal();
-  }
-}
-
-$("daily-yes").addEventListener("click", () => {
-  $("dlg-daily").close();
-  openWhenPicker();
-});
-
-$("daily-no").addEventListener("click", async () => {
-  $("daily-yes").disabled = true;
-  const res = await withBusy($("daily-no"), () => api.answerNo(), "Anotando…");
-  $("daily-yes").disabled = false;
-  if (!res) return;
-  $("dlg-daily").close();
-  toast(res.data.skipped
-    ? `Beleza. Nunca mais te pergunto na ${res.data.skipped}.`
-    : "Anotado. Mas sexta que vem eu pergunto de novo. 😌", 4500);
 });
 
 // ---------- When picker / create trip ----------
@@ -642,37 +646,58 @@ async function act(btn, fn, okMsg) {
 }
 
 // ---------- Settings ----------
-function renderDays() {
-  const wrap = $("days");
-  wrap.innerHTML = "";
-  const skip = (me && me.skipDays) || [];
-  DAY_SHORT.forEach((label, i) => {
-    const l = document.createElement("label");
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = i === FRIDAY || !skip.includes(i);
-    cb.disabled = i === FRIDAY;
-    cb.onchange = async () => {
-      const current = new Set((me && me.skipDays) || []);
-      cb.checked ? current.delete(i) : current.add(i);
-      wrap.classList.add("saving");
-      wrap.querySelectorAll("input").forEach((x) => (x.disabled = true));
-      try {
-        await setDoc(doc(db, "users", auth.currentUser.uid),
-          { skipDays: [...current].sort(), updatedAt: serverTimestamp() }, { merge: true });
-        toast(cb.checked ? `Ok, volto a perguntar na ${DAY_NAMES[i]}. 😈` : `Ok, ${DAY_NAMES[i]} tá liberada.`);
-      } catch (err) { toast(friendlyError(err)); cb.checked = !cb.checked; }
-      wrap.classList.remove("saving");
-      renderDays();
-    };
-    l.append(label, cb);
-    wrap.appendChild(l);
-  });
+const TIMES_30 = Array.from({ length: 48 }, (_, i) => `${String(i / 2 | 0).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+function fillTimeSelect(sel, values, current) {
+  sel.innerHTML = "";
+  for (const v of values) sel.add(new Option(v, v));
+  if (current) sel.value = current;
 }
+
+function renderSettings() {
+  const q = (me && me.quiet) || {};
+  $("quiet-on").checked = !!q.on;
+  show("quiet-times", !!q.on);
+  show("quiet-hint", !!q.on);
+  if (!$("quiet-start").options.length) {
+    fillTimeSelect($("quiet-start"), TIMES_30, "22:00");
+    fillTimeSelect($("quiet-end"), TIMES_30, "08:00");
+  }
+  $("quiet-start").value = q.start || "22:00";
+  $("quiet-end").value = q.end || "08:00";
+
+  const list = $("muted-list");
+  const mutes = Object.entries((me && me.mutes) || {});
+  list.innerHTML = mutes.length ? "" : `<li class="muted small">Nenhum. Que pessoa paciente. 😇</li>`;
+  for (const [tid, m] of mutes) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${esc(m.emoji || "🔔")} ${esc(m.title)} <span class="muted small">· de ${esc(m.owner || "?")}</span></span>`;
+    const b = document.createElement("button");
+    b.className = "link small";
+    b.textContent = "reativar";
+    b.onclick = async () => {
+      const res = await withBusy(b, () => api.muteTemplate({ templateId: tid, mute: false }), "…");
+      if (res) toast(`Reativado. Bem-vind${g(me, "o", "a")} de volta ao caos. 🔔`);
+    };
+    li.appendChild(b);
+    list.appendChild(li);
+  }
+}
+
+async function saveQuiet() {
+  const quiet = { on: $("quiet-on").checked, start: $("quiet-start").value, end: $("quiet-end").value };
+  show("quiet-times", quiet.on);
+  show("quiet-hint", quiet.on);
+  try {
+    await setDoc(doc(db, "users", auth.currentUser.uid), { quiet, updatedAt: serverTimestamp() }, { merge: true });
+    toast(quiet.on ? `Silêncio das ${quiet.start} às ${quiet.end}. 🌙` : "Não me perturbe desligado. Coragem.");
+  } catch (err) { toast(friendlyError(err)); }
+}
+["quiet-on", "quiet-start", "quiet-end"].forEach((id) => $(id).addEventListener("change", saveQuiet));
 
 $("open-settings").addEventListener("click", () => $("dlg-settings").showModal());
 $("settings-close").addEventListener("click", () => $("dlg-settings").close());
 $("change-name").addEventListener("click", () => { $("dlg-settings").close(); openNamePicker(); });
+$("dlg-name").addEventListener("close", () => { if (me && me.name && me.gender) return; setTimeout(proceed, 50); });
 
 $("logout").addEventListener("click", async () => {
   busy($("logout"), true, "Saindo…");
@@ -686,6 +711,408 @@ $("logout").addEventListener("click", async () => {
   await signOut(auth);
   busy($("logout"), false);
   $("dlg-settings").close();
+});
+
+// ---------- Chamados: buttons, live feed, editor ----------
+const STARTERS = [
+  { emoji: "🍝", title: "Vai ter almoço hoje?", body: "Responde logo que a gente precisa se organizar.", answerType: "options",
+    options: ["Sim", "Não", "Só se alguém ajudar"], recipients: [], visibility: "all", nagEveryMin: 30, durationHours: 4,
+    schedule: { on: true, days: [0], time: "09:00" }, allowMute: false, label: "Almoço de domingo" },
+  { emoji: "🛒", title: "Precisa de algo do mercado?", body: "Tô indo. Fala agora ou cala pra sempre.", answerType: "text",
+    options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 2,
+    schedule: { on: false, days: [], time: "12:00" }, allowMute: true, label: "Precisa de algo?" },
+  { emoji: "🛒", title: "Vai no mercado hoje?", body: "Sim ou não, sem enrolação.", answerType: "yesno",
+    options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 8,
+    schedule: { on: true, days: [0, 1, 2, 3, 4, 5, 6], time: "12:00" }, allowMute: true, label: "Mercado do dia" },
+  { emoji: "🍕", title: "Bora pedir janta?", body: "", answerType: "yesno",
+    options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 2,
+    schedule: { on: false, days: [], time: "19:00" }, allowMute: true, label: "Janta?" },
+];
+const BLANK = { emoji: "🔔", title: "", body: "", answerType: "yesno", options: [], recipients: "all", visibility: "all",
+  nagEveryMin: 0, durationHours: 12, schedule: { on: false, days: [], time: "12:00" }, allowMute: true };
+
+const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
+const nameOf = (uid) => (family[uid] && family[uid].name) || "?";
+
+function relTime(ts) {
+  if (!ts || !ts.toMillis) return "agora";
+  const min = Math.round((Date.now() - ts.toMillis()) / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `há ${h} h`;
+  return `há ${Math.round(h / 24)} d`;
+}
+
+function recipientsText(r) {
+  if (r === "all") return "Todo mundo";
+  const names = (r || []).map(nameOf);
+  return names.length ? names.join(", ") : "ninguém";
+}
+function scheduleText(s) {
+  if (!s || !s.on) return "Botão";
+  const days = (s.days || []).slice().sort();
+  const d = days.length === 7 ? "todo dia" : days.map((i) => DAY_SHORT[i].toLowerCase()).join(", ");
+  return `⏰ ${d} às ${s.time}`;
+}
+
+// Generic confirm popup → Promise<boolean>
+function confirmBox(title, body, yes = "Mandar") {
+  return new Promise((resolve) => {
+    $("confirm-title").textContent = title;
+    $("confirm-body").textContent = body;
+    $("confirm-yes").textContent = yes;
+    const dlg = $("dlg-confirm");
+    const done = (v) => { dlg.close(); resolve(v); };
+    $("confirm-yes").onclick = () => done(true);
+    $("confirm-no").onclick = () => done(false);
+    dlg.oncancel = () => resolve(false);
+    dlg.showModal();
+  });
+}
+
+// Home: my button-style chamados
+function renderButtons() {
+  const wrap = $("buttons");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  for (const t of templates.filter((t) => !(t.schedule && t.schedule.on))) {
+    const b = document.createElement("button");
+    b.className = "btn-tile";
+    b.innerHTML = `<span class="tile-emoji">${esc(t.emoji || "🔔")}</span><span class="tile-title">${esc(t.title)}</span>`;
+    b.onclick = () => fire(t, b);
+    wrap.appendChild(b);
+  }
+  const add = document.createElement("button");
+  add.className = "btn-tile add";
+  add.innerHTML = `<span class="tile-emoji">＋</span><span class="tile-title">Novo chamado</span>`;
+  add.onclick = () => openEditor(null);
+  wrap.appendChild(add);
+}
+
+async function fire(t, btn) {
+  const who = recipientsText(t.recipients);
+  if (!(await confirmBox(`${t.emoji || "🔔"} ${t.title}`, `Mandar pra: ${who}?`))) return;
+  const res = await withBusy(btn, () => api.fireTemplate({ templateId: t.id }), "Mandando…");
+  if (!res) return;
+  const d = res.data;
+  toast(d.delayed ? `Mandado! ${d.delayed} pessoa(s) em modo silêncio recebem depois. 🌙` : `Mandado pra ${d.recipients} pessoa(s). 📣`);
+}
+
+// Home: live feed of rounds
+function renderRounds() {
+  const list = $("rounds");
+  if (!list || !auth.currentUser) return;
+  if (list.querySelector(".busy")) return;
+  const uid = auth.currentUser.uid;
+  const dayAgo = Date.now() - 24 * 3600000;
+  const visible = rounds.filter((r) => r.open || (r.createdAt && r.createdAt.toMillis() > dayAgo));
+  list.innerHTML = "";
+  show("rounds-empty", roundsLoaded && visible.length === 0);
+
+  for (const r of visible) {
+    const li = document.createElement("li");
+    li.className = "round" + (r.open ? "" : " closed") + (r.id === highlightRound ? " highlight" : "");
+    const mine = r.ownerUid === uid;
+    const isRecipient = r.recipients.includes(uid);
+    const myAnswer = r.answers && r.answers[uid];
+    const canSeeAll = mine || r.visibility === "all";
+
+    // Answers summary
+    let answersHtml = "";
+    if (r.answerType !== "none") {
+      const rows = r.recipients
+        .filter((u) => canSeeAll || u === uid)
+        .map((u) => {
+          const a = r.answers && r.answers[u];
+          const who = esc(u === uid ? "Você" : (r.recipientNames && r.recipientNames[u]) || nameOf(u));
+          if (!a) return `<li class="waiting">${who} <span>…esperando</span></li>`;
+          const changed = a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "";
+          return `<li>${who} <b>${esc(a.value)}</b>${changed}</li>`;
+        });
+      if (r.answerType !== "text" && canSeeAll) {
+        const counts = {};
+        Object.values(r.answers || {}).forEach((a) => (counts[a.value] = (counts[a.value] || 0) + 1));
+        const waiting = r.recipients.length - Object.keys(r.answers || {}).length;
+        const summary = Object.entries(counts).map(([v, n]) => `${esc(v)} ${n}`).concat(waiting ? [`esperando ${waiting}`] : []).join(" · ");
+        if (summary) answersHtml += `<div class="summary">${summary}</div>`;
+      }
+      answersHtml += `<ul class="answers">${rows.join("")}</ul>`;
+      if (!canSeeAll) answersHtml += `<div class="muted small">Só ${esc(r.ownerName)} vê as respostas.</div>`;
+    }
+
+    li.innerHTML = `
+      <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
+        <div><div class="round-title">${esc(r.title)}</div>
+        <div class="muted small">${esc(mine ? "Você" : r.ownerName)} · ${relTime(r.createdAt)}${r.open ? "" : " · encerrado"}</div></div></div>
+      ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
+      ${answersHtml}
+      <div class="actions"></div>
+      <div class="round-foot"></div>`;
+    const actions = li.querySelector(".actions");
+    const foot = li.querySelector(".round-foot");
+
+    if (isRecipient && r.open && r.answerType !== "none") {
+      if (r.answerType === "text") {
+        const b = document.createElement("button");
+        b.className = myAnswer ? "secondary" : "primary";
+        b.textContent = myAnswer ? "Mudar resposta" : "Responder";
+        b.onclick = () => openTextAnswer(r);
+        actions.appendChild(b);
+      } else {
+        for (const opt of r.options) {
+          const b = document.createElement("button");
+          const selected = myAnswer && myAnswer.value === opt;
+          b.className = selected ? "primary" : "secondary";
+          b.textContent = opt;
+          b.onclick = () => answer(r, opt, b);
+          actions.appendChild(b);
+        }
+      }
+    }
+    if (mine && r.open && r.answerType !== "none") {
+      const b = document.createElement("button");
+      b.className = "link small";
+      b.textContent = "encerrar";
+      b.onclick = async () => {
+        if (!(await confirmBox("Encerrar?", "Ninguém mais responde e para de insistir.", "Encerrar"))) return;
+        const res = await withBusy(b, () => api.closeRound({ roundId: r.id }), "…");
+        if (res) toast("Encerrado. 🔒");
+      };
+      foot.appendChild(b);
+    }
+    if (isRecipient && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
+      const b = document.createElement("button");
+      b.className = "link small";
+      b.textContent = "silenciar esse chamado";
+      b.onclick = async () => {
+        if (!(await confirmBox("Silenciar?", `Você para de receber “${r.title}”. ${r.ownerName} vai ficar sabendo. 😬`, "Silenciar"))) return;
+        const res = await withBusy(b, () => api.muteTemplate({ roundId: r.id, mute: true }), "…");
+        if (res) toast("Silenciado. Dá pra reativar nas configurações. 🔕");
+      };
+      foot.appendChild(b);
+    }
+    list.appendChild(li);
+  }
+  if (highlightRound) {
+    const el = list.querySelector(".highlight");
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); highlightRound = null; }
+  }
+}
+setInterval(renderRounds, 60000);
+
+async function answer(r, value, btn) {
+  const res = await withBusy(btn, () => api.answerRound({ roundId: r.id, value }), "…");
+  if (!res) return;
+  toast(res.data.changes ? `Mudou de ideia (${res.data.changes}ª vez). Todo mundo vai saber. 🌀` : "Respondido! ✓");
+  renderRounds();
+}
+
+let textRound = null;
+function openTextAnswer(r) {
+  textRound = r;
+  $("text-title").textContent = `${r.emoji || "🔔"} ${r.title}`;
+  const mine = r.answers && r.answers[auth.currentUser.uid];
+  $("text-input").value = mine ? mine.value : "";
+  $("dlg-text").showModal();
+  setTimeout(() => $("text-input").focus(), 50);
+}
+$("text-cancel").addEventListener("click", () => $("dlg-text").close());
+$("text-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const v = $("text-input").value.trim();
+  if (!v || !textRound) return;
+  const res = await withBusy($("text-send"), () => api.answerRound({ roundId: textRound.id, value: v }), "Enviando…");
+  if (!res) return;
+  $("dlg-text").close();
+  toast(res.data.changes ? "Resposta trocada. 🌀" : "Respondido! ✓");
+});
+
+// Manage list
+function renderManage() {
+  const list = $("manage-list");
+  list.innerHTML = templates.length ? "" : `<li class="muted">Nenhum chamado ainda. Cria um! ✨</li>`;
+  for (const t of templates) {
+    const li = document.createElement("li");
+    const muted = Object.values(t.mutedBy || {});
+    li.innerHTML = `
+      <button class="manage-item">
+        <span class="tile-emoji">${esc(t.emoji || "🔔")}</span>
+        <span class="manage-text"><b>${esc(t.title)}</b>
+          <span class="muted small">${esc(scheduleText(t.schedule))} · ${esc(recipientsText(t.recipients))}</span>
+          ${muted.length ? `<span class="muted-by small">🔕 ${muted.map(esc).join(", ")} silenciou</span>` : ""}
+        </span>
+      </button>`;
+    li.querySelector(".manage-item").onclick = () => { $("dlg-manage").close(); openEditor(t); };
+    if (t.schedule && t.schedule.on) {
+      const b = document.createElement("button");
+      b.className = "link small";
+      b.textContent = "mandar agora";
+      b.onclick = () => fire(t, b);
+      li.appendChild(b);
+    }
+    list.appendChild(li);
+  }
+}
+$("open-manage").addEventListener("click", () => { renderManage(); $("dlg-manage").showModal(); });
+$("manage-close").addEventListener("click", () => $("dlg-manage").close());
+$("manage-new").addEventListener("click", () => { $("dlg-manage").close(); openEditor(null); });
+
+// Editor
+let ed = null;       // working copy
+let edId = null;     // template id when editing
+
+function segSelect(id, value) {
+  $(id).querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c.dataset.v === value));
+}
+function segValue(id) {
+  const c = $(id).querySelector(".chip.selected");
+  return c && c.dataset.v;
+}
+for (const id of ["ed-type", "ed-visibility", "ed-when"]) {
+  $(id).addEventListener("click", (e) => {
+    const c = e.target.closest(".chip");
+    if (!c) return;
+    segSelect(id, c.dataset.v);
+    syncEditorVisibility();
+  });
+}
+
+function syncEditorVisibility() {
+  const type = segValue("ed-type");
+  show("ed-options", type === "options");
+  show("ed-answer-opts", type !== "none");
+  show("ed-schedule", segValue("ed-when") === "schedule");
+}
+
+function renderRecipients() {
+  const wrap = $("ed-recipients");
+  wrap.innerHTML = "";
+  const uid = auth.currentUser.uid;
+  const mk = (label, value) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = label;
+    const sel = value === "all" ? ed.recipients === "all" : Array.isArray(ed.recipients) && ed.recipients.includes(value);
+    b.classList.toggle("selected", sel);
+    b.onclick = () => {
+      if (value === "all") ed.recipients = "all";
+      else {
+        const cur = new Set(Array.isArray(ed.recipients) ? ed.recipients : []);
+        cur.has(value) ? cur.delete(value) : cur.add(value);
+        ed.recipients = [...cur];
+      }
+      renderRecipients();
+    };
+    wrap.appendChild(b);
+  };
+  mk("Todo mundo", "all");
+  Object.entries(family).filter(([u, p]) => u !== uid && p.name)
+    .sort((a, b) => a[1].name.localeCompare(b[1].name))
+    .forEach(([u, p]) => mk(p.name, u));
+}
+
+function renderEdDays() {
+  const wrap = $("ed-days");
+  wrap.innerHTML = "";
+  DAY_SHORT.forEach((label, i) => {
+    const l = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = (ed.schedule.days || []).includes(i);
+    cb.onchange = () => {
+      const set = new Set(ed.schedule.days || []);
+      cb.checked ? set.add(i) : set.delete(i);
+      ed.schedule.days = [...set].sort();
+    };
+    l.append(label, cb);
+    wrap.appendChild(l);
+  });
+}
+
+function loadEditor(t) {
+  ed = JSON.parse(JSON.stringify({ ...BLANK, ...t, schedule: { ...BLANK.schedule, ...(t.schedule || {}) } }));
+  $("ed-emoji").value = ed.emoji || "";
+  $("ed-title").value = ed.title || "";
+  $("ed-body").value = ed.body || "";
+  $("ed-options").value = (ed.options || []).join(", ");
+  segSelect("ed-type", ed.answerType);
+  segSelect("ed-visibility", ed.visibility);
+  segSelect("ed-when", ed.schedule.on ? "schedule" : "button");
+  $("ed-nag").value = String(ed.nagEveryMin || 0);
+  $("ed-duration").value = String(ed.durationHours || 12);
+  fillTimeSelect($("ed-time"), TIMES_30.concat().sort(), ed.schedule.time || "12:00");
+  if (![...$("ed-time").options].some((o) => o.value === ed.schedule.time)) $("ed-time").add(new Option(ed.schedule.time, ed.schedule.time));
+  $("ed-time").value = ed.schedule.time;
+  $("ed-mute").checked = ed.allowMute !== false;
+  renderRecipients();
+  renderEdDays();
+  syncEditorVisibility();
+}
+
+function openEditor(t) {
+  edId = t ? t.id : null;
+  $("editor-title").textContent = t ? "Editar chamado" : "Novo chamado";
+  show("ed-delete", !!t);
+  show("starter-wrap", !t);
+  const chips = $("starter-chips");
+  chips.innerHTML = "";
+  for (const st of STARTERS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = `${st.emoji} ${st.label}`;
+    b.onclick = () => {
+      loadEditor(st);
+      chips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c === b));
+      if (Array.isArray(st.recipients) && !st.recipients.length) toast("Agora escolhe pra quem. 👇");
+    };
+    chips.appendChild(b);
+  }
+  loadEditor(t || BLANK);
+  $("dlg-editor").showModal();
+}
+
+$("ed-cancel").addEventListener("click", () => $("dlg-editor").close());
+$("ed-delete").addEventListener("click", async () => {
+  if (!edId || !(await confirmBox("Apagar chamado?", "Some pra sempre. As rodadas antigas continuam no histórico.", "Apagar"))) return;
+  const ok = await withBusy($("ed-delete"), async () => { await deleteDoc(doc(db, "templates", edId)); return true; }, "…");
+  if (ok) { $("dlg-editor").close(); toast("Apagado. 🗑️"); }
+});
+
+$("editor-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const type = segValue("ed-type") || "none";
+  const scheduleOn = segValue("ed-when") === "schedule";
+  const options = $("ed-options").value.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 6);
+  const data = {
+    emoji: $("ed-emoji").value.trim().slice(0, 4) || "🔔",
+    title: $("ed-title").value.trim(),
+    body: $("ed-body").value.trim(),
+    answerType: type,
+    options: type === "options" ? options : [],
+    recipients: ed.recipients === "all" ? "all" : (ed.recipients || []),
+    visibility: segValue("ed-visibility") || "all",
+    allowMute: $("ed-mute").checked,
+    nagEveryMin: type === "none" ? 0 : Number($("ed-nag").value),
+    durationHours: Number($("ed-duration").value),
+    schedule: { on: scheduleOn, days: ed.schedule.days || [], time: $("ed-time").value },
+    updatedAt: serverTimestamp(),
+  };
+  if (!data.title) return toast("Dá um título, vai.");
+  if (data.recipients !== "all" && !data.recipients.length) return toast("Pra quem? Escolhe alguém.");
+  if (type === "options" && options.length < 2) return toast("Coloca pelo menos 2 opções.");
+  if (scheduleOn && !data.schedule.days.length) return toast("Escolhe pelo menos um dia.");
+
+  const ok = await withBusy($("ed-save"), async () => {
+    if (edId) await updateDoc(doc(db, "templates", edId), data);
+    else await addDoc(collection(db, "templates"), { ...data, ownerUid: auth.currentUser.uid, createdAt: serverTimestamp() });
+    return true;
+  }, "Salvando…");
+  if (!ok) return;
+  $("dlg-editor").close();
+  toast(scheduleOn ? `Agendado: ${scheduleText(data.schedule)}. ⏰` : "Salvo! Tá lá nos seus chamados. ✨");
 });
 
 // ---------- Admin ----------
@@ -719,6 +1146,7 @@ $("adm-health").addEventListener("click", async () => {
   lines.push([h.devicesWithoutProfile === 0, `Aparelhos sem perfil: ${h.devicesWithoutProfile}`]);
   lines.push([h.deadTokensRemoved === 0, `Tokens mortos removidos: ${h.deadTokensRemoved}`]);
   lines.push([true, `Mercados: ${h.tripsUpcoming} futuros, ${h.tripsPast} passados`]);
+  lines.push([true, `Chamados: ${h.templates} (${h.scheduledTemplates} agendados) · rodadas abertas: ${h.openRounds}`]);
   adminOut(lines);
 });
 
@@ -756,11 +1184,11 @@ $("adm-reset-me").addEventListener("click", () => adminReset($("adm-reset-me"), 
 $("adm-nuke").addEventListener("click", () => adminReset($("adm-nuke"), "all",
   "Apagar TUDO de todo mundo? (Só o seu status de admin fica.)"));
 
-// Coming back to the app (e.g. from a notification) — re-check the daily question.
+// Coming back to the app (e.g. from a notification) — re-check permission and refresh times.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !auth.currentUser) return;
   checkGate();
-  if (gatePassed && meLoaded && me && me.name) maybeAskDaily();
+  renderRounds(); // refresh "há X min"
 });
 
 // ---------- Lock the page behind open popups (iOS lets you drag it otherwise) ----------

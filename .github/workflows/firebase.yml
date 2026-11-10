@@ -6,7 +6,7 @@ name: Deploy Firebase backend
 on:
   push:
     branches: [main]
-    paths: ["functions/**", "firestore.rules", "firebase.json", ".github/workflows/firebase.yml"]
+    paths: ["functions/**", "firestore.rules", "firestore.indexes.json", "firebase.json", ".github/workflows/firebase.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -49,7 +49,7 @@ jobs:
           echo "$SA_KEY" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           npx --yes firebase-tools@latest deploy \
-            --only functions,firestore:rules \
+            --only functions,firestore:rules,firestore:indexes \
             --project "$PROJECT_ID" \
             --non-interactive --force
           # Auto-delete old function build images so they don't slowly add storage cost.
