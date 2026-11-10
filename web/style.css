@@ -103,7 +103,6 @@ input {
   width: 100%;
 }
 input:focus { outline: none; border-color: var(--caramel); }
-input[type="datetime-local"] { min-height: 48px; color-scheme: dark; }
 
 button { font: inherit; cursor: pointer; color: inherit; }
 button:disabled { opacity: 0.55; }
@@ -324,3 +323,29 @@ dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
 .adm-out { margin-top: 10px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem; line-height: 1.6; }
 .adm-out .ok { color: var(--muted); }
 .adm-out .warn { color: #f0b46a; }
+
+/* ---------- Day/time selects (custom arrow that respects the padding) ---------- */
+.pick-label { margin: 6px 0 0; }
+.pick-row { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; }
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 40px 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23e2c39b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 16px center,
+    rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
+select:focus { outline: none; border-color: var(--caramel); }
+select:invalid, select option[value=""] { color: var(--muted); }
+
+/* ---------- Coffee decorations ---------- */
+#decor { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+#decor img { position: absolute; height: auto; user-select: none; -webkit-user-select: none; }
+header, main, footer { position: relative; z-index: 1; }

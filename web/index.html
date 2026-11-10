@@ -17,6 +17,7 @@
   <script src="firebase-config.js"></script>
 </head>
 <body>
+  <div id="decor" aria-hidden="true"></div>
   <header id="topbar" hidden>
     <h1>Ela gosta de sorvete?</h1>
     <button id="open-settings" class="icon" aria-label="Configurações">
@@ -88,8 +89,11 @@
     <form method="dialog" id="when-form">
       <h2>Vai quando?</h2>
       <div class="chips" id="when-chips"></div>
-      <label class="muted small" for="when-input">Ou escolhe:</label>
-      <input id="when-input" type="datetime-local">
+      <p class="muted small pick-label">Ou escolhe:</p>
+      <div class="pick-row">
+        <select id="when-day" aria-label="Dia" required></select>
+        <select id="when-time" aria-label="Hora" required></select>
+      </div>
       <div class="row-buttons">
         <button type="button" id="when-cancel" class="secondary">Cancelar</button>
         <button type="submit" id="when-submit" class="primary" disabled>Avisar geral</button>

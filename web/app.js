@@ -46,6 +46,26 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
   document.getElementById("version").textContent = v || "1.0.0";
 })();
 
+// ---------- Coffee decorations: random spot & angle on every load (not saved) ----------
+(function placeDecor() {
+  const box = document.getElementById("decor");
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const edgeX = () => (Math.random() < 0.5 ? rnd(-12, 18) : rnd(72, 98)); // keep big ones near the sides
+  const items = [
+    { src: "decor/latte.svg", size: rnd(150, 210), x: edgeX(), y: rnd(-5, 90), op: rnd(0.10, 0.15) },
+    { src: "decor/mug.svg", size: rnd(80, 120), x: edgeX(), y: rnd(0, 92), op: rnd(0.12, 0.18) },
+  ];
+  const beans = 2 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < beans; i++) items.push({ src: "decor/bean.svg", size: rnd(22, 40), x: rnd(0, 95), y: rnd(0, 95), op: rnd(0.16, 0.26) });
+  for (const it of items) {
+    const img = document.createElement("img");
+    img.src = it.src;
+    img.alt = "";
+    img.style.cssText = `width:${it.size}px;left:${it.x}vw;top:${it.y}vh;opacity:${it.op};transform:translate(-50%,-50%) rotate(${rnd(0, 360)}deg)`;
+    box.appendChild(img);
+  }
+})();
+
 // ---------- Setup check ----------
 const config = self.FIREBASE_CONFIG;
 if (!config || String(config.apiKey).startsWith("REPLACE")) {
@@ -66,6 +86,7 @@ const api = {
   adminHealth: call("adminHealth"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
+  claimAdmin: call("claimAdmin"),
 };
 
 // ---------- Constants ----------
@@ -137,12 +158,6 @@ function whenText(date) {
   if (d.key === tomorrow.key) return `amanhã às ${d.time}`;
   const [, m, day] = d.key.split("-");
   return `${DAY_NAMES[d.weekday]} (${day}/${m}) às ${d.time}`;
-}
-
-// datetime-local value in the device's local time
-function toLocalInput(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function friendlyError(err) {
@@ -315,6 +330,10 @@ onAuthStateChanged(auth, async (user) => {
   $("who").textContent = user.email;
   renderTrips(); // shows the loading state until data arrives
 
+  // First person to log in after setup becomes admin (no-op once an admin exists).
+  api.claimAdmin().then(({ data }) => { if (data.claimed) toast("Você é o admin agora. 👑", 4000); })
+    .catch((e) => console.error("claimAdmin", e));
+
   // My profile
   unsubs.push(onSnapshot(doc(db, "users", user.uid), (snap) => {
     me = snap.exists() ? snap.data() : {};
@@ -429,54 +448,92 @@ $("daily-no").addEventListener("click", async () => {
 });
 
 // ---------- When picker / create trip ----------
+// Custom day + time selects (instead of the native date picker, which shows the
+// phone's language and its own arrow).
+const pad2 = (n) => String(n).padStart(2, "0");
+const localDayKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const localTime = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+const WEEK_SHORT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+
+function fillWhenSelects() {
+  const now = new Date();
+  const day = $("when-day");
+  day.innerHTML = `<option value="" disabled selected>Dia</option>`;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const label = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${WEEK_SHORT[d.getDay()]}, ${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
+    day.add(new Option(label, localDayKey(d)));
+  }
+  const time = $("when-time");
+  time.innerHTML = `<option value="" disabled selected>Hora</option>`;
+  for (let m = 0; m < 24 * 60; m += 15) time.add(new Option(`${pad2(m / 60 | 0)}:${pad2(m % 60)}`, `${pad2(m / 60 | 0)}:${pad2(m % 60)}`));
+}
+
+// Puts a specific date into the selects (adds an exact time option if needed, e.g. "Agora").
+function setWhen(date) {
+  $("when-day").value = localDayKey(date);
+  const t = localTime(date);
+  const sel = $("when-time");
+  if (![...sel.options].some((o) => o.value === t)) {
+    const opt = new Option(t, t);
+    const before = [...sel.options].find((o) => o.value && o.value > t);
+    sel.add(opt, before || null);
+  }
+  sel.value = t;
+  updateWhenSubmit();
+}
+
+function chosenWhen() {
+  const d = $("when-day").value;
+  const t = $("when-time").value;
+  return d && t ? new Date(`${d}T${t}:00`) : null;
+}
+
+function updateWhenSubmit() {
+  $("when-submit").disabled = !chosenWhen();
+}
+
 function openWhenPicker() {
   const now = new Date();
   const chips = $("when-chips");
   chips.innerHTML = "";
-  const at = (h, m = 0, addDays = 0) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() + addDays);
-    d.setHours(h, m, 0, 0);
-    return d;
-  };
+  const at = (h, addDays = 0) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + addDays, h, 0);
   const options = [
     ["Agora", new Date(now.getTime() + 5 * 60000)],
     ["Daqui 1h", new Date(now.getTime() + 60 * 60000)],
+    // After 18h, today's 18h is gone, so it rolls over to tomorrow.
+    now.getHours() < 18 ? ["Às 18h", at(18)] : ["Amanhã 18h", at(18, 1)],
+    ["Amanhã cedo", at(9, 1)],
   ];
-  if (now.getHours() < 18) options.push(["Às 18h", at(18)]);
-  options.push(["Amanhã cedo", at(9, 0, 1)]);
-
   for (const [label, date] of options) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "chip";
     b.textContent = label;
     b.onclick = () => {
-      $("when-input").value = toLocalInput(date);
+      setWhen(date);
       chips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c === b));
-      updateWhenSubmit();
     };
     chips.appendChild(b);
   }
-  $("when-input").value = "";
+  fillWhenSelects();
   updateWhenSubmit();
   $("dlg-when").showModal();
 }
 
 $("btn-market").addEventListener("click", openWhenPicker);
 $("when-cancel").addEventListener("click", () => $("dlg-when").close());
-function updateWhenSubmit() {
-  $("when-submit").disabled = !$("when-input").value;
+for (const id of ["when-day", "when-time"]) {
+  $(id).addEventListener("change", () => {
+    $("when-chips").querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+    updateWhenSubmit();
+  });
 }
-$("when-input").addEventListener("input", () => {
-  $("when-chips").querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
-  updateWhenSubmit();
-});
 
 $("when-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const when = new Date($("when-input").value);
-  if (isNaN(when)) return toast("Escolhe um horário.");
+  const when = chosenWhen();
+  if (!when) return toast("Escolhe dia e hora.");
   $("when-cancel").disabled = true;
   const res = await withBusy($("when-submit"), () => api.createTrip({ when: when.toISOString() }), "Avisando geral…");
   $("when-cancel").disabled = false;

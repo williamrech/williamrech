@@ -328,3 +328,15 @@ exports.adminReset = onCall({ ...opts, timeoutSeconds: 120 }, async (req) => {
 
   throw new HttpsError("invalid-argument", "scope deve ser 'me' ou 'all'.");
 });
+
+// Bootstrap: if nobody is admin yet, the caller becomes admin. The app calls this
+// automatically after login, so the first person to open it after setup gets the crown.
+exports.claimAdmin = onCall(opts, async (req) => {
+  const auth = requireAuth(req);
+  return db.runTransaction(async (t) => {
+    const admins = await t.get(db.collection("users").where("admin", "==", true).limit(1));
+    if (!admins.empty) return { admin: admins.docs[0].id === auth.uid, claimed: false };
+    t.set(db.doc(`users/${auth.uid}`), { admin: true }, { merge: true });
+    return { admin: true, claimed: true };
+  });
+});
