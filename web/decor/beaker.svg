@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 120"><!-- colors follow the palette when inlined -->
+<path d="M32 6 h26 M36 6 v38 L8 104 a8 8 0 0 0 7 12 h60 a8 8 0 0 0 7 -12 L54 44 v-38" fill="none" stroke="var(--d-pale, #e6ebf7)" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M22 76 L68 76 L80 104 a5 5 0 0 1 -4.5 7 h-61 a5 5 0 0 1 -4.5 -7 Z" fill="var(--d-mid, #6c8cff)"/>
+<g fill="var(--d-light, #b8c8ff)"><circle cx="38" cy="92" r="4"/><circle cx="54" cy="98" r="3"/><circle cx="48" cy="64" r="3"/><circle cx="42" cy="50" r="2"/></g>
+</svg>

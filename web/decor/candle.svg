@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 120"><!-- palette wax; fixed flame colors -->
+<rect x="12" y="44" width="26" height="72" rx="4" fill="var(--d-pale, #fbead8)"/>
+<path d="M12 52 q 6 6 0 12 M38 60 q -6 8 0 14" stroke="var(--d-light, #c58cff)" stroke-width="3" fill="none" opacity=".6"/>
+<path d="M25 44 v-8" stroke="var(--d-dark, #120c08)" stroke-width="2"/>
+<path d="M25 6 C 34 18 34 28 25 36 C 16 28 16 18 25 6 Z" fill="#ffb347"/><path d="M25 18 C 29 24 29 29 25 33 C 21 29 21 24 25 18 Z" fill="#ffe28a"/>
+</svg>

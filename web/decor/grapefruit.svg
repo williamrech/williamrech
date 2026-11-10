@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><!-- colors follow the palette when inlined -->
+<circle cx="50" cy="50" r="47" fill="var(--d-mid, #e0607e)"/>
+<circle cx="50" cy="50" r="41" fill="var(--d-pale, #f6e4ea)"/>
+<g fill="var(--d-mid, #e0607e)" opacity=".55"><path d="M50 50 L85.9 52.5 A36 36 0 0 1 77.2 73.6 Z"/><path d="M50 50 L73.6 77.2 A36 36 0 0 1 52.5 85.9 Z"/><path d="M50 50 L47.5 85.9 A36 36 0 0 1 26.4 77.2 Z"/><path d="M50 50 L22.8 73.6 A36 36 0 0 1 14.1 52.5 Z"/><path d="M50 50 L14.1 47.5 A36 36 0 0 1 22.8 26.4 Z"/><path d="M50 50 L26.4 22.8 A36 36 0 0 1 47.5 14.1 Z"/><path d="M50 50 L52.5 14.1 A36 36 0 0 1 73.6 22.8 Z"/><path d="M50 50 L77.2 26.4 A36 36 0 0 1 85.9 47.5 Z"/></g>
+<circle cx="50" cy="50" r="4" fill="var(--d-pale, #f6e4ea)"/>
+</svg>

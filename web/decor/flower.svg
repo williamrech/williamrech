@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130"><!-- petals follow the palette; fixed green stem -->
+<path d="M50 60 C 52 84 46 104 50 126" stroke="#5f9e4a" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M50 100 C 66 86 80 90 84 94 C 72 104 60 104 50 100 Z" fill="#5f9e4a"/>
+<g fill="var(--d-light, #f5b8c8)"><ellipse cx="70.0" cy="44.0" rx="15" ry="11" transform="rotate(0 70.0 44.0)"/><ellipse cx="60.0" cy="61.3" rx="15" ry="11" transform="rotate(60 60.0 61.3)"/><ellipse cx="40.0" cy="61.3" rx="15" ry="11" transform="rotate(120 40.0 61.3)"/><ellipse cx="30.0" cy="44.0" rx="15" ry="11" transform="rotate(180 30.0 44.0)"/><ellipse cx="40.0" cy="26.7" rx="15" ry="11" transform="rotate(240 40.0 26.7)"/><ellipse cx="60.0" cy="26.7" rx="15" ry="11" transform="rotate(300 60.0 26.7)"/></g><circle cx="50" cy="44" r="12" fill="var(--d-mid, #e0607e)"/>
+</svg>

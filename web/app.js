@@ -186,7 +186,7 @@ function placeDecor(spec) {
     const size = it.svg ? (big ? rnd(130, 200) : rnd(26, 44)) : (big ? rnd(60, 90) : rnd(26, 46));
     el.style.cssText = `left:${big ? edgeX() : rnd(0, 96)}vw;top:${rnd(2, 95)}vh;` +
       `opacity:${it.svg ? (big ? rnd(0.10, 0.15) : rnd(0.16, 0.26)) : rnd(0.12, 0.22)};` +
-      `transform:translate(-50%,-50%) rotate(${rnd(it.svg ? 0 : -35, it.svg ? 360 : 35)}deg);` +
+      `transform:translate(-50%,-50%) rotate(${rnd(-28, 28)}deg);` +
       (it.svg ? `width:${size}px` : `font-size:${size}px`);
     if (it.emoji) el.textContent = it.emoji;
     else loadSvg(it.svg).then((svg) => { el.innerHTML = svg; });

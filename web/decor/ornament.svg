@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 100"><!-- colors follow the palette when inlined -->
+<path d="M40 4 v12" stroke="var(--d-pale, #f4ece2)" stroke-width="2"/>
+<rect x="30" y="14" width="20" height="12" rx="2" fill="var(--d-light, #f2d27a)"/>
+<circle cx="40" cy="60" r="34" fill="var(--d-mid, #d63b3b)"/>
+<path d="M8 54 q 32 14 64 0" stroke="var(--d-light, #f2d27a)" stroke-width="5" fill="none" opacity=".9"/>
+<path d="M8 66 q 32 14 64 0" stroke="var(--d-light, #f2d27a)" stroke-width="2" fill="none" opacity=".7"/>
+<ellipse cx="26" cy="44" rx="6" ry="9" fill="var(--d-pale, #f4ece2)" opacity=".35" transform="rotate(30 26 44)"/>
+</svg>

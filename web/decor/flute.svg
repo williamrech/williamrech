@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 140"><!-- colors follow the palette when inlined -->
+<path d="M14 6 L46 6 C 48 40 44 62 30 70 C 16 62 12 40 14 6 Z" fill="none" stroke="var(--d-pale, #f7f1e3)" stroke-width="3"/>
+<path d="M16 26 L44 26 C 45 44 42 60 30 66 C 18 60 15 44 16 26 Z" fill="var(--d-mid, #d4af37)"/>
+<path d="M30 70 L30 124 M14 130 Q 30 122 46 130" stroke="var(--d-pale, #f7f1e3)" stroke-width="3" fill="none" stroke-linecap="round"/>
+<g fill="var(--d-light, #f3e3b0)"><circle cx="26" cy="50" r="2.2"/><circle cx="33" cy="40" r="1.8"/><circle cx="28" cy="32" r="1.4"/><circle cx="35" cy="54" r="1.6"/></g>
+</svg>

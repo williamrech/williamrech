@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120"><!-- colors follow the palette when inlined -->
+<path d="M30 30 L26 6 L42 22 C 46 20 54 20 58 22 L74 6 L70 30 C 76 38 76 50 70 58 C 82 68 86 86 82 104 C 80 112 74 116 66 116 L34 116 C 26 116 20 112 18 104 C 14 86 18 68 30 58 C 24 50 24 38 30 30 Z" fill="var(--d-light, #c58cff)"/>
+<path d="M82 104 C 96 98 98 80 90 72" stroke="var(--d-light, #c58cff)" stroke-width="7" fill="none" stroke-linecap="round"/>
+<g fill="var(--d-dark, #120c08)"><ellipse cx="40" cy="40" rx="4" ry="6"/><ellipse cx="60" cy="40" rx="4" ry="6"/></g>
+<path d="M47 50 L53 50 L50 54 Z" fill="var(--d-dark, #120c08)"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 120"><!-- colors follow the palette when inlined -->
+<rect x="24" y="4" width="12" height="54" rx="5" fill="var(--d-pale, #e0cfa8)"/>
+<path d="M30 56 C 4 70, 6 106, 30 116 C 54 106, 56 70, 30 56 Z" fill="none" stroke="var(--d-pale, #e0cfa8)" stroke-width="3"/>
+<path d="M30 58 L30 114 M22 62 C 12 80 14 100 24 112 M38 62 C 48 80 46 100 36 112 M26 60 C 20 80 20 100 27 114 M34 60 C 40 80 40 100 33 114" stroke="var(--d-pale, #e0cfa8)" stroke-width="2" fill="none" opacity=".8"/>
+</svg>

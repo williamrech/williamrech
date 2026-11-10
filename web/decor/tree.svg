@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130"><!-- fixed green tree; ornaments follow the palette -->
+<path d="M50 14 L82 56 L66 56 L90 90 L70 90 L96 118 L4 118 L30 90 L10 90 L34 56 L18 56 Z" fill="#2f7a45"/>
+<rect x="42" y="118" width="16" height="10" fill="#6b4126"/>
+<path d="M50.0,2.0 L52.9,10.0 L61.4,10.3 L54.8,15.5 L57.1,23.7 L50.0,19.0 L42.9,23.7 L45.2,15.5 L38.6,10.3 L47.1,10.0 Z" fill="var(--d-light, #f2d27a)"/>
+<g fill="var(--d-mid, #d63b3b)"><circle cx="40" cy="52" r="4"/><circle cx="60" cy="74" r="4"/><circle cx="34" cy="86" r="4"/><circle cx="66" cy="104" r="4"/><circle cx="44" cy="108" r="4"/></g>
+<g fill="var(--d-light, #f2d27a)"><circle cx="58" cy="46" r="3"/><circle cx="44" cy="72" r="3"/><circle cx="72" cy="88" r="3"/><circle cx="26" cy="108" r="3"/></g>
+</svg>

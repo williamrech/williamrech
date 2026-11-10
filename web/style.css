@@ -37,11 +37,9 @@ body {
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  /* Warm light pooling from the top, like a café lamp, plus a faint coffee-ring stain */
+  /* Warm light pooling from the top, tinted by the palette accent */
   background:
     radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--caramel) 22%, transparent), transparent 60%),
-    radial-gradient(circle at 88% 78%, transparent 54px, color-mix(in srgb, var(--caramel) 7%, transparent) 55px, color-mix(in srgb, var(--caramel) 7%, transparent) 58px, transparent 59px),
-    radial-gradient(circle at 92% 82%, transparent 40px, color-mix(in srgb, var(--caramel) 5%, transparent) 41px, color-mix(in srgb, var(--caramel) 5%, transparent) 43px, transparent 44px),
     linear-gradient(180deg, var(--bg-2), var(--bg) 60%);
   background-attachment: fixed;
 }

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 110"><!-- fruit in palette colors, fixed green leaves -->
+<path d="M50 104 C 18 84, 8 52, 18 34 C 28 18, 72 18, 82 34 C 92 52, 82 84, 50 104 Z" fill="var(--d-mid, #e0607e)"/>
+<path d="M30 40 C 26 52 28 64 34 72" stroke="var(--d-light, #f5b8c8)" stroke-width="5" fill="none" stroke-linecap="round" opacity=".35"/>
+<g fill="var(--d-light, #f5b8c8)"><ellipse cx="34" cy="44" rx="2.2" ry="3.2"/><ellipse cx="50" cy="40" rx="2.2" ry="3.2"/><ellipse cx="66" cy="44" rx="2.2" ry="3.2"/><ellipse cx="28" cy="60" rx="2.2" ry="3.2"/><ellipse cx="44" cy="58" rx="2.2" ry="3.2"/><ellipse cx="60" cy="58" rx="2.2" ry="3.2"/><ellipse cx="72" cy="60" rx="2.2" ry="3.2"/><ellipse cx="38" cy="74" rx="2.2" ry="3.2"/><ellipse cx="54" cy="74" rx="2.2" ry="3.2"/><ellipse cx="46" cy="88" rx="2.2" ry="3.2"/><ellipse cx="62" cy="86" rx="2.2" ry="3.2"/></g>
+<path d="M26 28 L38 22 L50 6 L62 22 L74 28 L60 30 L50 38 L40 30 Z" fill="#5f9e4a"/>
+</svg>

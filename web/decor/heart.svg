@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 90"><!-- colors follow the palette when inlined -->
+<path d="M50 86 C 20 64 4 46 6 28 C 8 12 22 4 34 6 C 42 8 48 14 50 22 C 52 14 58 8 66 6 C 78 4 92 12 94 28 C 96 46 80 64 50 86 Z" fill="var(--d-mid, #e0607e)"/>
+<path d="M22 24 C 18 30 18 38 22 44" stroke="var(--d-light, #f5b8c8)" stroke-width="5" fill="none" stroke-linecap="round" opacity=".55"/>
+</svg>

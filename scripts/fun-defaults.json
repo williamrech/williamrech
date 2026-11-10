@@ -52,7 +52,8 @@
       "text": "#f2e6d6",
       "muted": "#b39d87",
       "accent": "#c98b4f",
-      "highlight": "#e2c39b"
+      "highlight": "#e2c39b",
+      "decor": "latte.svg mug.svg bean.svg bean.svg bean.svg"
     },
     "matcha": {
       "name": "Matcha",
@@ -61,7 +62,8 @@
       "text": "#e8f0e4",
       "muted": "#9fb39a",
       "accent": "#8fbf6a",
-      "highlight": "#cfe3b8"
+      "highlight": "#cfe3b8",
+      "decor": "matcha-bowl.svg whisk.svg leaf.svg leaf.svg leaf.svg"
     },
     "frutas": {
       "name": "Frutas Vermelhas",
@@ -70,7 +72,8 @@
       "text": "#f6e4ea",
       "muted": "#c09aa8",
       "accent": "#e0607e",
-      "highlight": "#f5b8c8"
+      "highlight": "#f5b8c8",
+      "decor": "strawberry.svg grapefruit.svg cherries.svg strawberry.svg cherries.svg"
     },
     "noite": {
       "name": "Noite",
@@ -79,7 +82,8 @@
       "text": "#e6ebf7",
       "muted": "#9aa6c4",
       "accent": "#6c8cff",
-      "highlight": "#b8c8ff"
+      "highlight": "#b8c8ff",
+      "decor": "moon.svg cloud.svg star.svg star.svg star.svg"
     },
     "champagne": {
       "name": "Champagne",
@@ -88,7 +92,8 @@
       "text": "#f7f1e3",
       "muted": "#b8ae98",
       "accent": "#d4af37",
-      "highlight": "#f3e3b0"
+      "highlight": "#f3e3b0",
+      "decor": "bottle.svg flute.svg bubbles.svg bubbles.svg flute.svg"
     },
     "festa": {
       "name": "Festa",
@@ -97,7 +102,8 @@
       "text": "#f3ecff",
       "muted": "#b3a3cf",
       "accent": "#f5c542",
-      "highlight": "#ffd9f2"
+      "highlight": "#ffd9f2",
+      "decor": "balloon.svg gift.svg party-hat.svg balloon.svg balloon.svg"
     },
     "halloween": {
       "name": "Halloween",
@@ -106,7 +112,8 @@
       "text": "#fbead8",
       "muted": "#c4a78a",
       "accent": "#ff7a1a",
-      "highlight": "#c58cff"
+      "highlight": "#c58cff",
+      "decor": "pumpkin.svg ghost.svg bat.svg bat.svg pumpkin.svg"
     },
     "natal": {
       "name": "Natal",
@@ -115,7 +122,8 @@
       "text": "#f4ece2",
       "muted": "#b2a99a",
       "accent": "#d63b3b",
-      "highlight": "#f2d27a"
+      "highlight": "#f2d27a",
+      "decor": "tree.svg gift.svg ornament.svg candy-cane.svg snowflake.svg"
     },
     "carnaval": {
       "name": "Carnaval",
@@ -124,7 +132,8 @@
       "text": "#fff0fb",
       "muted": "#c7a8d4",
       "accent": "#ff3fa4",
-      "highlight": "#3fe0d0"
+      "highlight": "#3fe0d0",
+      "decor": "mask.svg streamer.svg maraca.svg streamer.svg mask.svg"
     }
   },
   "occasions": {
@@ -132,7 +141,7 @@
       "when": "12-27",
       "version": "feliz.aniversario",
       "palette": "festa",
-      "decor": "🎂🎉🎈",
+      "decor": "cake.svg balloon.svg party-hat.svg balloon.svg gift.svg",
       "banner": "Feliz aniversário! 🎉",
       "effect": "confetti",
       "priority": 10
@@ -141,7 +150,7 @@
       "when": "12-25",
       "version": "feliz.aniversario",
       "palette": "festa",
-      "decor": "🎂💐🎈",
+      "decor": "cake.svg balloon.svg flower.svg balloon.svg heart.svg",
       "banner": "Feliz aniversário! 🎂",
       "effect": "confetti",
       "priority": 10
@@ -150,7 +159,7 @@
       "when": "12-26",
       "version": "feliz.aniversario",
       "palette": "festa",
-      "decor": "🎂🎉🎈",
+      "decor": "cake.svg balloon.svg party-hat.svg balloon.svg gift.svg",
       "banner": "Feliz aniversário! 🎂",
       "effect": "confetti",
       "priority": 10
@@ -159,7 +168,7 @@
       "when": "01-01",
       "version": "2.0.0-ano.novo",
       "palette": "champagne",
-      "decor": "🥂✨🎆",
+      "decor": "firework.svg flute.svg bubbles.svg firework.svg bubbles.svg",
       "banner": "Feliz ano novo! 🥂",
       "effect": "confetti",
       "priority": 5
@@ -168,7 +177,7 @@
       "when": "easter-48,easter-47",
       "version": "1.0.0-folia",
       "palette": "carnaval",
-      "decor": "🎭🎉🪅",
+      "decor": "mask.svg streamer.svg maraca.svg streamer.svg mask.svg",
       "banner": "É carnaval! Ninguém faz mercado hoje. 🎭",
       "effect": "confetti",
       "priority": 5
@@ -177,12 +186,13 @@
       "when": "04-01",
       "version": "0.0.1-mentira",
       "banner": "Hoje tudo aqui é verdade. Confia. 🤥",
-      "priority": 5
+      "priority": 5,
+      "decor": "fib.svg fib.svg fib.svg"
     },
     "dia-das-maes": {
       "when": "2sun-05",
       "palette": "frutas",
-      "decor": "💐🌷🌸",
+      "decor": "flower.svg heart.svg flower.svg heart.svg flower.svg",
       "banner": "Feliz Dia das Mães! 💐",
       "priority": 5
     },
@@ -190,7 +200,7 @@
       "when": "10-31",
       "version": "1.666.0",
       "palette": "halloween",
-      "decor": "🎃🦇👻🕸️",
+      "decor": "pumpkin.svg ghost.svg bat.svg bat.svg pumpkin.svg",
       "banner": "Gostosuras ou travessuras? 🎃",
       "priority": 5
     },
@@ -198,14 +208,14 @@
       "when": "fri-13",
       "version": "1.13.sexta",
       "palette": "halloween",
-      "decor": "🐈‍⬛🔮🕯️",
+      "decor": "cat.svg crystal-ball.svg candle.svg candle.svg cat.svg",
       "banner": "Sexta-feira 13. Cuidado no mercado. 🔮",
       "priority": 3
     },
     "natal-clima": {
       "when": "12-20..12-26",
       "palette": "natal",
-      "decor": "🎄🎁⭐❄️",
+      "decor": "tree.svg gift.svg ornament.svg snowflake.svg candy-cane.svg",
       "banner": "Clima de Natal 🎄",
       "effect": "snow",
       "priority": 1
@@ -220,10 +230,11 @@
       "when": "",
       "enabled": true,
       "palette": "noite",
-      "decor": "🧪🤖✨",
+      "decor": "beaker.svg star.svg beaker.svg star.svg",
       "banner": "Ocasião de teste: mude o 'when' pra hoje ou use ?ocasiao=teste",
       "effect": "snow",
       "priority": 99
     }
-  }
+  },
+  "decorVersion": 2
 }

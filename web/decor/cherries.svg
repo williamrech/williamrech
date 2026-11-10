@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><!-- fruit in palette colors, fixed green stems -->
+<path d="M32 62 C 38 38, 52 20, 70 8 M66 56 C 64 36, 66 22, 70 8" stroke="#6c8a3e" stroke-width="4" fill="none" stroke-linecap="round"/>
+<path d="M70 8 q 18 -6 26 8 q -16 8 -26 -8 z" fill="#5f9e4a"/>
+<circle cx="31" cy="74" r="19" fill="var(--d-mid, #e0607e)"/><circle cx="67" cy="70" r="19" fill="var(--d-mid, #e0607e)"/>
+<circle cx="24" cy="67" r="5" fill="var(--d-light, #f5b8c8)" opacity=".7"/><circle cx="60" cy="63" r="5" fill="var(--d-light, #f5b8c8)" opacity=".7"/>
+</svg>

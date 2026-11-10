@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90"><!-- colors follow the palette when inlined -->
+<path d="M10 34 Q 14 84 60 86 Q 106 84 110 34 Z" fill="var(--d-pale, #efe5d8)"/>
+<path d="M22 58 q 38 14 76 0" fill="none" stroke="var(--d-mid, #8fbf6a)" stroke-width="3" opacity=".45" stroke-linecap="round"/>
+<ellipse cx="60" cy="34" rx="50" ry="12" fill="var(--d-pale, #efe5d8)"/>
+<ellipse cx="60" cy="34" rx="44" ry="9" fill="var(--d-mid, #8fbf6a)"/>
+<path d="M38 34 q 11 -6 22 0 t 22 0" stroke="var(--d-light, #cfe3b8)" stroke-width="3" fill="none" stroke-linecap="round"/>
+<ellipse cx="60" cy="86" rx="22" ry="3" fill="var(--d-dark, #2f4a22)" opacity=".5"/>
+</svg>

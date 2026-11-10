@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 110"><!-- colors follow the palette when inlined -->
+<path d="M45 10 L82 100 Q 45 110 8 100 Z" fill="var(--d-mid, #f5c542)"/>
+<path d="M30 46 L60 40 M22 66 L68 58 M15 86 L76 76" stroke="var(--d-light, #ffd9f2)" stroke-width="6" stroke-linecap="round"/>
+<circle cx="45" cy="10" r="9" fill="var(--d-light, #ffd9f2)"/>
+</svg>

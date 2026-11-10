@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><!-- colors follow the palette when inlined -->
+<path d="M62 8 A42 42 0 1 0 94 72 A34 34 0 1 1 62 8 Z" fill="var(--d-light, #b8c8ff)"/>
+<circle cx="36" cy="44" r="6" fill="var(--d-pale, #e6ebf7)" opacity=".35"/><circle cx="46" cy="70" r="4" fill="var(--d-pale, #e6ebf7)" opacity=".35"/><circle cx="28" cy="62" r="3" fill="var(--d-pale, #e6ebf7)" opacity=".35"/>
+</svg>

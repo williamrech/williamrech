@@ -25,6 +25,24 @@ const ref = getFirestore().doc("config/fun");
     if (typeof cur.friday13 === "string") occ["sexta-13"].version = cur.friday13;
     update.occasions = occ;
   }
+  // One-time upgrade (decorVersion 2): themed drawings for every palette and occasion.
+  // Only fills a palette decor that's empty, or replaces an occasion decor still equal to the
+  // old shipped default — anything you edited by hand is left alone.
+  if ((Number(cur.decorVersion) || 0) < 2) {
+    const OLD_OCC_DECOR = {
+      "aniver-1": "🎂🎉🎈", "aniver-2": "🎂💐🎈", "aniver-3": "🎂🎉🎈", "ano-novo": "🥂✨🎆",
+      "carnaval": "🎭🎉🪅", "dia-das-maes": "💐🌷🌸", "halloween": "🎃🦇👻🕸️", "sexta-13": "🐈‍⬛🔮🕯️",
+      "natal-clima": "🎄🎁⭐❄️", "teste": "🧪🤖✨",
+    };
+    for (const [id, p] of Object.entries(defaults.palettes)) {
+      if (cur.palettes && cur.palettes[id] && !cur.palettes[id].decor && p.decor) update[`palettes.${id}.decor`] = p.decor;
+    }
+    for (const [id, o] of Object.entries(defaults.occasions)) {
+      const c = cur.occasions && cur.occasions[id];
+      if (c && o.decor && (c.decor === undefined || c.decor === OLD_OCC_DECOR[id])) update[`occasions.${id}.decor`] = o.decor;
+    }
+    update.decorVersion = 2;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

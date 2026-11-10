@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 110"><!-- colors follow the palette when inlined -->
+<path d="M45 6 C 20 6 10 26 10 50 L10 98 L22 88 L33 100 L45 88 L57 100 L68 88 L80 98 L80 50 C 80 26 70 6 45 6 Z" fill="var(--d-pale, #fbead8)"/>
+<ellipse cx="33" cy="46" rx="6" ry="9" fill="var(--d-dark, #120c08)"/><ellipse cx="57" cy="46" rx="6" ry="9" fill="var(--d-dark, #120c08)"/>
+<ellipse cx="45" cy="68" rx="7" ry="9" fill="var(--d-dark, #120c08)"/>
+</svg>
