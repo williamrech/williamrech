@@ -107,9 +107,16 @@ function applyLook() {
   const userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
   const pal = (todayOcc && getPalette(todayOcc.palette)) || getPalette(userPal) || getPalette("espresso") || DEFAULT_PALETTE;
   applyPalette(pal);
+  const decorSpec = (todayOcc && todayOcc.decor) || pal.decor || "";
+  // Remember the look so the next launch paints it immediately (see the inline script in index.html).
+  try {
+    localStorage.setItem("look", JSON.stringify({
+      bg: pal.bg, surface: pal.surface, text: pal.text, muted: pal.muted, accent: pal.accent, highlight: pal.highlight, decor: decorSpec,
+    }));
+  } catch {}
   renderVersion();
   renderBanner();
-  placeDecor((todayOcc && todayOcc.decor) || pal.decor);
+  placeDecor(decorSpec);
   runEffect(todayOcc && todayOcc.effect);
   if (typeof renderSettings === "function" && typeof auth !== "undefined" && auth.currentUser) renderSettings();
 }
@@ -249,7 +256,7 @@ onSnapshot(doc(db, "config", "fun"), (snap) => {
   FUN = snap.exists() ? snap.data() : {};
   applyLook();
 }, (err) => { console.warn("config/fun", err); applyLook(); });
-placeDecor(null); // coffee decor right away; occasions may swap it once config loads
+placeDecor(window.__lookDecor || null); // last known decor right away; config may swap it once loaded
 const functions = getFunctions(app, "us-central1");
 const apiFn = httpsCallable(functions, "api");
 const call = (action) => (data = {}) => apiFn({ ...data, action });
