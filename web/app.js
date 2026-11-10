@@ -3,7 +3,7 @@ import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
-  getFirestore, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
   orderBy, limit, serverTimestamp, Timestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-functions.js";
@@ -75,9 +75,17 @@ if (!config || String(config.apiKey).startsWith("REPLACE")) {
 
 const app = initializeApp(config);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Local cache: the feed and chamados show instantly from the last visit, then sync live.
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch (e) {
+  console.warn("no persistent cache", e);
+  db = initializeFirestore(app, {});
+}
 const functions = getFunctions(app, "us-central1");
-const call = (name) => httpsCallable(functions, name);
+const apiFn = httpsCallable(functions, "api");
+const call = (action) => (data = {}) => apiFn({ ...data, action });
 const api = {
   fireTemplate: call("fireTemplate"),
   answerRound: call("answerRound"),

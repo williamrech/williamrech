@@ -144,7 +144,11 @@ function requireAuth(req) {
   return req.auth;
 }
 
-const opts = { region: REGION, maxInstances: 5 };
+// All app actions go through ONE callable function ("api") so a single warm instance
+// serves everything — far fewer cold starts than one function per action.
+// 512MiB also gives the instance more CPU, which makes cold starts faster.
+const opts = { region: REGION, maxInstances: 5, memory: "512MiB", timeoutSeconds: 120 };
+const handlers = {};
 
 // ---------------------------------------------------------------------------
 // Chamados: personal templates (templates/{id}) that create rounds (rounds/{id}).
@@ -207,7 +211,7 @@ async function createRound(tplRef, tpl, owner, { users, tokens } = {}) {
   return { id: ref.id, recipients: recipients.length, delayed: recipients.length - awake.length, ...res };
 }
 
-exports.fireTemplate = onCall(opts, async (req) => {
+handlers.fireTemplate = async (req) => {
   const auth = requireAuth(req);
   const id = req.data && String(req.data.templateId || "");
   const ref = db.doc(`templates/${id}`);
@@ -217,9 +221,9 @@ exports.fireTemplate = onCall(opts, async (req) => {
   if (last && Date.now() - last.toMillis() < 15000) throw new HttpsError("resource-exhausted", "Calma. Espera uns segundinhos.");
   await ref.update({ lastManualAt: FieldValue.serverTimestamp() });
   return createRound(ref, snap.data(), await profile(auth));
-});
+};
 
-exports.answerRound = onCall(opts, async (req) => {
+handlers.answerRound = async (req) => {
   const auth = requireAuth(req);
   const roundId = req.data && String(req.data.roundId || "");
   let value = req.data && typeof req.data.value === "string" ? req.data.value.trim() : "";
@@ -253,9 +257,9 @@ exports.answerRound = onCall(opts, async (req) => {
     : [round.ownerUid].filter((u) => u !== auth.uid);
   await sendToUids(targets, msg, `?rodada=${roundId}`);
   return { ok: true, changes };
-});
+};
 
-exports.closeRound = onCall(opts, async (req) => {
+handlers.closeRound = async (req) => {
   const auth = requireAuth(req);
   const ref = db.doc(`rounds/${String((req.data && req.data.roundId) || "")}`);
   const snap = await ref.get();
@@ -263,10 +267,10 @@ exports.closeRound = onCall(opts, async (req) => {
   if (snap.get("ownerUid") !== auth.uid) throw new HttpsError("permission-denied", "Só quem criou pode encerrar.");
   await ref.update({ open: false });
   return { ok: true };
-});
+};
 
 // Mute / unmute a template (from a round card, or by templateId from settings).
-exports.muteTemplate = onCall(opts, async (req) => {
+handlers.muteTemplate = async (req) => {
   const auth = requireAuth(req);
   const mute = !(req.data && req.data.mute === false);
   let templateId = req.data && req.data.templateId;
@@ -293,7 +297,7 @@ exports.muteTemplate = onCall(opts, async (req) => {
     await sendToUids([tpl.ownerUid], message(mute ? "muted" : "unmuted", { name: me.name, gender: me.gender, title: tpl.title }));
   }
   return { muted: mute };
-});
+};
 
 // ---------------------------------------------------------------------------
 // Every 15 minutes: fire scheduled templates, deliver delayed (quiet-hours)
@@ -324,14 +328,15 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
 
   // 2) Open rounds: close, deliver delayed, nag.
   const open = await db.collection("rounds").where("open", "==", true).get();
+  // Read every template these rounds need in one batch.
+  const tplIds = [...new Set(open.docs.map((d) => d.get("templateId")).filter(Boolean))];
+  const tplDocs = tplIds.length ? await db.getAll(...tplIds.map((id) => db.doc(`templates/${id}`))) : [];
+  const mutedByTemplate = Object.fromEntries(tplDocs.filter((d) => d.exists).map((d) => [d.id, d.get("mutedBy") || {}]));
   for (const doc of open.docs) {
     const r = doc.data();
     if (r.closesAt && r.closesAt.toMillis() <= now) { await doc.ref.update({ open: false }); continue; }
 
-    const muted = await (async () => {
-      const t = await db.doc(`templates/${r.templateId}`).get();
-      return (t.exists && t.get("mutedBy")) || {};
-    })();
+    const muted = mutedByTemplate[r.templateId] || {};
     const updates = {};
     for (const u of r.recipients) {
       if (muted[u] || (r.answers && r.answers[u]) || isQuiet(users[u], sp)) continue;
@@ -360,7 +365,7 @@ async function requireAdmin(req) {
   return auth;
 }
 
-exports.adminHealth = onCall(opts, async (req) => {
+handlers.adminHealth = async (req) => {
   const auth = await requireAdmin(req);
   const myToken = req.data && String(req.data.token || "");
   const [users, devices, templates, rounds] = await Promise.all([
@@ -395,15 +400,15 @@ exports.adminHealth = onCall(opts, async (req) => {
     scheduledTemplates: templates.docs.filter((d) => d.get("schedule.on") === true).length,
     openRounds: rounds.size,
   };
-});
+};
 
-exports.adminTest = onCall(opts, async (req) => {
+handlers.adminTest = async (req) => {
   const auth = await requireAdmin(req);
   const tokens = await tokensByUid();
   return send(tokens[auth.uid] || [], { title: "Teste ☕", body: "Se você tá lendo isso, as notificações funcionam." });
-});
+};
 
-exports.adminReset = onCall({ ...opts, timeoutSeconds: 120 }, async (req) => {
+handlers.adminReset = async (req) => {
   const auth = await requireAdmin(req);
   const scope = req.data && req.data.scope;
 
@@ -429,9 +434,9 @@ exports.adminReset = onCall({ ...opts, timeoutSeconds: 120 }, async (req) => {
   }
 
   throw new HttpsError("invalid-argument", "scope deve ser 'me' ou 'all'.");
-});
+};
 
-exports.claimAdmin = onCall(opts, async (req) => {
+handlers.claimAdmin = async (req) => {
   const auth = requireAuth(req);
   return db.runTransaction(async (t) => {
     const admins = await t.get(db.collection("users").where("admin", "==", true).limit(1));
@@ -439,4 +444,11 @@ exports.claimAdmin = onCall(opts, async (req) => {
     t.set(db.doc(`users/${auth.uid}`), { admin: true }, { merge: true });
     return { admin: true, claimed: true };
   });
+};
+
+exports.api = onCall(opts, async (req) => {
+  const action = req.data && req.data.action;
+  const fn = Object.prototype.hasOwnProperty.call(handlers, action) && handlers[action];
+  if (!fn) throw new HttpsError("invalid-argument", "Ação desconhecida.");
+  return fn(req);
 });
