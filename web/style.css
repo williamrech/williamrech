@@ -608,3 +608,9 @@ dialog h2 { margin-bottom: 4px; }
 .x-glow { text-shadow: 0 0 3px var(--uc), 0 0 7px color-mix(in srgb, var(--uc) 70%, transparent); }
 .uname-wrap .uname { padding: 8px 10px; margin: -8px -10px; }
 .me-chip { padding: 7px 16px; }
+
+#footer-version { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.68rem; color: rgba(179, 157, 135, 0.55); }
+#version { font-size: inherit; }
+.who-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }
+.who-row #who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.who-row .link { flex: none; }

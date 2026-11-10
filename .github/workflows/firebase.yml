@@ -6,7 +6,7 @@ name: Deploy Firebase backend
 on:
   push:
     branches: [main]
-    paths: ["functions/**", "firestore.rules", "firestore.indexes.json", "firebase.json", ".github/workflows/firebase.yml"]
+    paths: ["functions/**", "scripts/**", "firestore.rules", "firestore.indexes.json", "firebase.json", ".github/workflows/firebase.yml"]
   workflow_dispatch:
 
 concurrency:
@@ -55,3 +55,9 @@ jobs:
           # Auto-delete old function build images so they don't slowly add storage cost.
           npx --yes firebase-tools@latest functions:artifacts:setpolicy \
             --project "$PROJECT_ID" --location us-central1 --days 7 --force --non-interactive || true
+
+      - name: Seed fun content (only if missing)
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          echo "$SA_KEY" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" NODE_PATH=functions/node_modules node scripts/seed-fun.js

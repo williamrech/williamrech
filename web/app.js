@@ -15,39 +15,35 @@ const $ = (id) => document.getElementById(id);
 const show = (id, on = true) => { $(id).hidden = !on; };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// ---------- Version number (purely decorative, not the real app version) ----------
+// ---------- Fun content (Firestore config/fun, edited by hand in the console) ----------
+// Defaults are used until the doc loads (or if it doesn't exist).
+let FUN = {};
+const funList = (key, fallback) => (Array.isArray(FUN[key]) && FUN[key].length ? FUN[key] : fallback);
+
 // Same "version" for the whole family on a given day: chosen from the date, in Brasília time.
-(function renderVersion() {
+// Purely decorative — not the real app version.
+function renderVersion() {
   const key = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()); // YYYY-MM-DD
   const md = key.slice(5);
   const weekday = new Date(key + "T12:00:00").getDay();
-  const SPECIAL = {
-    "12-27": "feliz.aniversario",
-    "12-25": "feliz.aniversario",
-    "12-26": "feliz.aniversario",
-    "01-01": "2.0.0-ano.novo",
-    "04-01": "0.0.1-mentira",
-    "10-31": "1.666.0",
-    "12-25": "1.0.0-natal",
-  };
-  // Joke words go in the 2nd or 3rd slot (1.oxe.0 or 1.0.oxe), never the 1st.
-  const WORDS = [
-    "666", "eita", "bah", "tchê", "oxe", "uai", "vish", "capaz", "amém", "42",
-    "sorvete", "cafezinho", "socorro", "mercado", "confia", "deu-ruim", "partiu",
-    "sem-açúcar", "beta-da-tia", "ela-gosta",
-  ];
+  const specials = (FUN.versionSpecials && typeof FUN.versionSpecials === "object") ? FUN.versionSpecials : {};
+  const words = funList("versionWords", []);
+  const odds = Number(FUN.versionOdds) || 0;
+
   // Tiny deterministic hash of the date.
   let h = 2166136261;
   for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
 
-  let v = SPECIAL[md];
-  if (!v && md.endsWith("-13") && weekday === 5) v = "1.13.sexta";
-  if (!v && h % 5 === 0) { // roughly 1 day in 5
-    const w = WORDS[(h >>> 3) % WORDS.length];
+  let v = typeof specials[md] === "string" ? specials[md] : "";
+  if (!v && md.endsWith("-13") && weekday === 5 && FUN.friday13) v = String(FUN.friday13);
+  if (!v && odds > 0 && words.length && h % odds === 0) {
+    // Joke words go in the 2nd or 3rd slot (1.oxe.0 or 1.0.oxe), never the 1st.
+    const w = String(words[(h >>> 3) % words.length]);
     v = (h >>> 11) % 2 ? `1.${w}.0` : `1.0.${w}`;
   }
   document.getElementById("version").textContent = v || "1.0.0";
-})();
+  show("footer-version", true);
+}
 
 // ---------- Coffee decorations: random spot & angle on every load (not saved) ----------
 (function placeDecor() {
@@ -86,6 +82,14 @@ try {
   console.warn("no persistent cache", e);
   db = initializeFirestore(app, {});
 }
+
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// Fun content: live, so console edits show up without a reload.
+onSnapshot(doc(db, "config", "fun"), (snap) => {
+  FUN = snap.exists() ? snap.data() : {};
+  renderVersion();
+}, (err) => { console.warn("config/fun", err); renderVersion(); });
 const functions = getFunctions(app, "us-central1");
 const apiFn = httpsCallable(functions, "api");
 const call = (action) => (data = {}) => apiFn({ ...data, action });
@@ -104,7 +108,7 @@ const api = {
 const TZ = "America/Sao_Paulo";
 const DAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const DAY_NAMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
-const NAME_SUGGESTIONS = [
+const DEFAULT_NAMES = [
   "Véia Coroca", "Doidinha", "Tio do Pavê", "Fiscal de Promoção", "Rainha do Hortifruti",
   "Rei do Carrinho", "Gerente do Corredor 5", "Sommelier de Pão de Queijo",
   "Caçadora de Ofertas", "Dono da Sacolinha", "Ministro do Sorvete", "Patroa",
@@ -121,7 +125,7 @@ function toast(msg, ms = 3200) {
 }
 
 // Loading state for any button: a little steaming cup + a coffee-flavoured excuse.
-const BUSY_LINES = ["Passando o café…", "Moendo os grãos…", "Esquentando a água…", "Coando…", "Fofocando com o servidor…"];
+const DEFAULT_BUSY = ["Passando o café…", "Moendo os grãos…", "Esquentando a água…", "Coando…", "Fofocando com o servidor…"];
 function busy(btn, on, label) {
   if (!btn) return;
   if (on) {
@@ -132,7 +136,7 @@ function busy(btn, on, label) {
     btn.style.width = `${btn.offsetWidth}px`;
     btn.disabled = true;
     btn.classList.add("busy");
-    btn.innerHTML = `<span class="cup" aria-hidden="true"></span><span class="busy-text">${esc(label || BUSY_LINES[Math.floor(Math.random() * BUSY_LINES.length)])}</span>`;
+    btn.innerHTML = `<span class="cup" aria-hidden="true"></span><span class="busy-text">${esc(label || pick(funList("busyLines", DEFAULT_BUSY)))}</span>`;
   } else {
     if (btn.dataset.html != null) btn.innerHTML = btn.dataset.html;
     delete btn.dataset.html;
@@ -462,7 +466,7 @@ function openNamePicker() {
   const chips = $("name-chips");
   chips.innerHTML = "";
   // Show a random handful so it's different each time.
-  const options = [...NAME_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 7);
+  const options = [...funList("nameSuggestions", DEFAULT_NAMES)].sort(() => Math.random() - 0.5).slice(0, 7);
   for (const n of options) {
     const b = document.createElement("button");
     b.type = "button";

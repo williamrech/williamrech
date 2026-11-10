@@ -41,6 +41,11 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 80;
     }
 
+    // Fun content (version jokes, nickname ideas, loading phrases): public, edited by hand in the console.
+    match /config/{id} {
+      allow read: if true;
+    }
+
     // Rounds: visible to the people involved; written only through the functions.
     match /rounds/{id} {
       allow read: if signedIn() && request.auth.uid in resource.data.participants;

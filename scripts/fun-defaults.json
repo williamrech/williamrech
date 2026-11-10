@@ -1,0 +1,25 @@
+{
+  "_como_usar": "Edite à vontade no console do Firebase. versionOdds: 1 em N dias tem piada (0 = nunca). versionWords: palavras que aparecem no 2º ou 3º número. versionSpecials: datas fixas no formato MM-DD. friday13: versão de sexta-feira 13 (vazio = desliga). nameSuggestions: apelidos sugeridos. busyLines: frases de carregamento.",
+  "versionOdds": 5,
+  "versionWords": [
+    "666", "eita", "bah", "tchê", "oxe", "uai", "vish", "capaz", "amém", "42",
+    "sorvete", "cafezinho", "socorro", "mercado", "confia", "deu-ruim", "partiu",
+    "sem-açúcar", "beta-da-tia", "ela-gosta"
+  ],
+  "versionSpecials": {
+    "12-27": "feliz.aniversario",
+    "12-25": "feliz.aniversario",
+    "12-26": "feliz.aniversario",
+    "01-01": "2.0.0-ano.novo",
+    "04-01": "0.0.1-mentira",
+    "10-31": "1.666.0",
+    "12-25": "1.0.0-natal"
+  },
+  "friday13": "1.13.sexta",
+  "nameSuggestions": [
+    "Véia Coroca", "Doidinha", "Tio do Pavê", "Fiscal de Promoção", "Rainha do Hortifruti",
+    "Rei do Carrinho", "Gerente do Corredor 5", "Sommelier de Pão de Queijo",
+    "Caçadora de Ofertas", "Dono da Sacolinha", "Ministro do Sorvete", "Patroa"
+  ],
+  "busyLines": ["Passando o café…", "Moendo os grãos…", "Esquentando a água…", "Coando…", "Fofocando com o servidor…"]
+}
