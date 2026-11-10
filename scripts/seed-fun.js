@@ -43,6 +43,13 @@ const ref = getFirestore().doc("config/fun");
     }
     update.decorVersion = 2;
   }
+  // One-time upgrade (configVersion 3): Champagne becomes an occasion-only palette (Ano Novo).
+  if ((Number(cur.configVersion) || 0) < 3) {
+    if (cur.palettes && cur.palettes.champagne && cur.palettes.champagne.onlyOccasions === undefined) {
+      update["palettes.champagne.onlyOccasions"] = true;
+    }
+    update.configVersion = 3;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

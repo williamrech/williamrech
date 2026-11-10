@@ -104,7 +104,9 @@ let todayOcc = null;
 // Chooses the look: an occasion forces its palette on everyone; otherwise the user's choice.
 function applyLook() {
   todayOcc = todaysOccasion();
-  const userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
+  let userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
+  const chosen = getPalette(userPal);
+  if (chosen && chosen.onlyOccasions) userPal = "espresso"; // occasion-only palettes can't be kept as a personal choice
   const pal = (todayOcc && getPalette(todayOcc.palette)) || getPalette(userPal) || getPalette("espresso") || DEFAULT_PALETTE;
   applyPalette(pal);
   const decorSpec = (todayOcc && todayOcc.decor) || pal.decor || "";
