@@ -376,12 +376,29 @@ function spawnEffect(layer, kind, scale = 1) {
     s.style.cssText = style;
     if (text) s.textContent = text;
     layer.appendChild(s);
+    return s;
   };
   if (kind === "confetti") {
-    for (let i = 0; i < Math.round(70 * scale); i++) {
-      add("confetti", `left:${rnd(0, 100)}%;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8)}s;animation-duration:${rnd(2.4, 4.2)}s;--drift:${rnd(-60, 60) * scale}px;--spin:${rnd(-720, 720)}deg;width:${rnd(6, 10) * Math.max(scale, 0.6)}px;height:${rnd(8, 14) * Math.max(scale, 0.6)}px`);
-    }
-    setTimeout(() => { if (layer.dataset.fx === "confetti") layer.innerHTML = ""; }, 6000);
+    // A big burst on open, then every few seconds a different shower: amount, speed and spread
+    // all random (sometimes a sprinkle, sometimes a cluster on one side, now and then a big one).
+    const burst = (count, speed, center, spread) => {
+      for (let i = 0; i < count; i++) {
+        const el = add("confetti", `left:${Math.min(99, Math.max(0, center + rnd(-spread, spread)))}%;background:${colors[Math.floor(Math.random() * colors.length)]};animation-delay:${rnd(0, 0.9)}s;animation-duration:${rnd(2.4, 4.2) * speed}s;--drift:${rnd(-60, 60) * scale}px;--spin:${rnd(-720, 720)}deg;width:${rnd(6, 10) * Math.max(scale, 0.6)}px;height:${rnd(8, 14) * Math.max(scale, 0.6)}px`);
+        el.addEventListener("animationend", () => el.remove());
+      }
+    };
+    burst(Math.round(70 * scale), 1, 50, 50);
+    const again = () => {
+      if (layer.dataset.fx !== "confetti") return;
+      if (!document.hidden && layer.childElementCount < 100 * scale + 10) {
+        const r = Math.random();
+        const count = r < 0.5 ? rnd(8, 20) : r < 0.85 ? rnd(20, 40) : rnd(45, 80);
+        const wide = Math.random() < 0.55;
+        burst(Math.round(count * scale), rnd(0.7, 1.6), wide ? 50 : rnd(12, 88), wide ? 50 : rnd(10, 30));
+      }
+      layer._fxTimer = setTimeout(again, rnd(5, 13) * 1000);
+    };
+    layer._fxTimer = setTimeout(again, rnd(5, 9) * 1000);
   } else if (kind === "snow") {
     for (let i = 0; i < Math.round(26 * scale); i++) {
       add("snow", `left:${rnd(0, 100)}%;font-size:${rnd(8, 18) * Math.max(scale, 0.6)}px;opacity:${rnd(0.25, 0.6)};animation-delay:${rnd(-12, 0)}s;animation-duration:${rnd(8, 16) * Math.max(scale, 0.5)}s;--drift:${rnd(-40, 40) * scale}px`, "❄");
