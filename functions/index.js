@@ -20,21 +20,16 @@ const DAY_NAMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", 
 //   {o|a} → gendered by the subject's gender ("m" → first, "f" → second)
 // ---------------------------------------------------------------------------
 const COPY = {
-  answer: [
-    ["{emoji} {name} respondeu", "“{title}” → {value}"],
-    ["{emoji} Temos resposta!", "{name}: {value}"],
-    ["{emoji} {name} se manifestou", "{value}. Anotado."],
-  ],
-  changed: [
-    ["🌀 {name} mudou de ideia", "“{title}” → agora é {value} ({n}ª vez)"],
-    ["🙄 Indecis{o|a}, hein?", "{name} mudou pra {value}. Já é a {n}ª vez."],
-    ["Plot twist 🔄", "{name} agora diz {value} (mudança nº {n})"],
-  ],
+  // Answers and nags: the TITLE is always the question itself (emoji + title), the body
+  // starts with the useful part and ends with the sass, so if the phone cuts the text
+  // it cuts the joke, not the information.
+  answerTail: ["temos resposta!", "anotado.", "se manifestou.", "finalmente.", "milagre."],
+  changedTail: ["indecis{o|a}, hein?", "plot twist.", "de novo?", "ninguém entende."],
   nag: [
-    ["{emoji} Ainda esperando…", "{owner} quer saber: {title}"],
-    ["{emoji} Ô, {name}!", "{title} Responde aí, não custa nada."],
-    ["{emoji} Lembrete carinhoso 💌", "{title} (a gente vai continuar perguntando)"],
-    ["{emoji} {name}, cadê você? 👀", "{owner} tá esperando: {title}"],
+    "{owner} ainda tá esperando, {name}. 👀",
+    "Responde aí, {name}. Não custa nada.",
+    "Lembrete carinhoso 💌 (a gente vai continuar perguntando)",
+    "{name}, cadê você? {owner} quer saber.",
   ],
   muted: [
     ["🔕 {name} silenciou “{title}”", "{O|A} {name} não quer mais saber disso. Que deselegante."],
@@ -164,7 +159,9 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
         notification: { title, body },
         data: { url: link, logId: ref.id },
         webpush: {
-          notification: { icon: APP_URL + "icons/icon-192.png" },
+          notification: meta.roundId
+            ? { icon: APP_URL + "icons/icon-192.png", tag: `rodada-${meta.roundId}`, renotify: true } // replaces older ones for the same question
+            : { icon: APP_URL + "icons/icon-192.png" },
           fcmOptions: { link },
           headers: { Urgency: "high", TTL: "21600" },
         },
@@ -361,8 +358,13 @@ handlers.answerRound = async (req) => {
     return { round, changes };
   });
 
-  const vars = { name: me.name, gender: me.gender, title: round.title, value, emoji: round.emoji, n: changes };
-  const msg = message(changes ? "changed" : "answer", vars);
+  const vars = { name: me.name, gender: me.gender };
+  const msg = {
+    title: `${round.emoji} ${round.title}`,
+    body: changes
+      ? `${me.name} mudou pra: ${value} (${changes}ª vez) — ${fill(pick(COPY.changedTail), vars)}`
+      : `${me.name}: ${value} — ${fill(pick(COPY.answerTail), vars)}`,
+  };
   const targets = round.visibility === "all"
     ? round.participants.filter((u) => u !== auth.uid)
     : [round.ownerUid].filter((u) => u !== auth.uid);
@@ -501,7 +503,8 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
         msg = { title: `${r.emoji} ${r.title}`, body: r.body || `${r.ownerName} quer saber.` };
         kind = "recado (depois do silêncio)";
       } else if (r.nagEveryMin > 0 && now - last >= r.nagEveryMin * 60000 - 30000) {
-        msg = message("nag", { emoji: r.emoji, title: r.title, owner: r.ownerName, name: (users[u] || {}).name || "", gender: (users[u] || {}).gender });
+        msg = { title: `${r.emoji} ${r.title}`,
+          body: fill(pick(COPY.nag), { owner: r.ownerName, name: (users[u] || {}).name || "", gender: (users[u] || {}).gender }) };
       }
       if (!msg) continue;
       const res = await deliver([u], msg, `?rodada=${doc.id}`,
@@ -731,6 +734,18 @@ handlers.adminDeleteUser = async (req) => {
     db.collection("rounds").where("ownerUid", "==", uid).get(),
   ]);
   await Promise.all([...devices.docs, ...templates.docs, ...rounds.docs].map((d) => d.ref.delete()).concat([db.doc(`users/${uid}`).delete()]));
+  return { ok: true };
+};
+
+// Admin sets someone's "modo simples" / "letra grande".
+handlers.adminSetUserFlag = async (req) => {
+  await requireAdmin(req);
+  const uid = String((req.data && req.data.uid) || "");
+  const key = req.data && req.data.key;
+  if (!["simple", "bigText"].includes(key)) throw new HttpsError("invalid-argument", "Opção inválida.");
+  const ref = db.doc(`users/${uid}`);
+  if (!(await ref.get()).exists) throw new HttpsError("not-found", "Pessoa não encontrada.");
+  await ref.update({ [key]: !!(req.data && req.data.value) });
   return { ok: true };
 };
 

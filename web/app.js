@@ -396,6 +396,7 @@ const api = {
   adminCreateUser: call("adminCreateUser"),
   adminSetPassword: call("adminSetPassword"),
   adminDeleteUser: call("adminDeleteUser"),
+  adminSetUserFlag: call("adminSetUserFlag"),
   setAdmin: call("setAdmin"),
   claimAdmin: call("claimAdmin"),
 };
@@ -447,7 +448,7 @@ async function withBusy(btn, fn, label) {
   busy(btn, true, label);
   try { return await fn(); }
   catch (err) { console.error(err); toast(friendlyError(err)); }
-  finally { if (btn.isConnected) busy(btn, false); }
+  finally { if (btn && btn.isConnected) busy(btn, false); }
 }
 
 function spParts(date = new Date()) {
@@ -705,6 +706,7 @@ onAuthStateChanged(auth, async (user) => {
     renderSettings();
     renderMeChip();
     renderNameNudge();
+    applyComfort();
     proceed();
   }));
 
@@ -879,6 +881,8 @@ async function saveQuiet() {
   } catch (err) { toast(friendlyError(err)); }
 }
 ["quiet-on", "quiet-start", "quiet-end"].forEach((id) => $(id).addEventListener("change", saveQuiet));
+$("set-big").addEventListener("change", (e) => saveComfort("bigText", e.target.checked));
+$("set-simple").addEventListener("change", (e) => saveComfort("simple", e.target.checked));
 
 $("open-settings").addEventListener("click", () => openSettings("general"));
 $("settings-close").addEventListener("click", () => $("dlg-settings").close());
@@ -988,6 +992,25 @@ document.querySelectorAll("[data-stab]").forEach((b) => b.addEventListener("clic
 $("me-chip").addEventListener("click", () => openSettings("name"));
 $("style-cancel").addEventListener("click", () => $("dlg-settings").close());
 
+// "Letra grande" and "Modo simples": classes on <html>, remembered for the next launch.
+function applyComfort() {
+  const big = !!(me && me.bigText), simple = !!(me && me.simple);
+  document.documentElement.classList.toggle("big", big);
+  document.documentElement.classList.toggle("simple", simple);
+  try { localStorage.setItem("comfort", JSON.stringify({ big, simple })); } catch {}
+  // Simple mode: only the feed (admins keep their Admin tab).
+  const tabs = document.querySelector(".tabs[role=tablist]:not(.dlg-tabs)");
+  if (tabs) tabs.hidden = simple && !(me && me.admin);
+  if (simple && !document.querySelector('.tab[data-tab="admin"].selected')) setTab("feed");
+  if ($("set-big")) { $("set-big").checked = big; $("set-simple").checked = simple; }
+}
+async function saveComfort(key, value) {
+  try {
+    await setDoc(doc(db, "users", auth.currentUser.uid), { [key]: value, updatedAt: serverTimestamp() }, { merge: true });
+    toast(key === "bigText" ? (value ? "Letra grande ligada. 🔎" : "Letra normal.") : (value ? "Modo simples ligado. 🌿" : "Modo completo."));
+  } catch (err) { toast(friendlyError(err)); }
+}
+
 // Gentle glow on the name chip (and a dot on the tab) until the person has opened "Seu nome" once.
 function renderNameNudge() {
   const nudge = !!(me && me.name && !me.seenStyle);
@@ -1026,6 +1049,14 @@ const BLANK = { emoji: "🔔", title: "", body: "", answerType: "yesno", options
 const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
 const nameOf = (uid) => (family[uid] && family[uid].name) || "?";
 
+// Only mention the closing time when it's near: "fecha em 20 min".
+function closesSoon(ts) {
+  if (!ts || !ts.toMillis) return "";
+  const min = Math.round((ts.toMillis() - Date.now()) / 60000);
+  if (min <= 0) return "fechando…";
+  return min < 60 ? `fecha em ${min} min` : "";
+}
+
 // "fecha às 21:30" / "fecha amanhã às 09:00" / "fecha sex 14/11 às 09:00"
 function closesText(ts) {
   if (!ts || !ts.toMillis) return "aberto";
@@ -1039,19 +1070,31 @@ function closesText(ts) {
   return `fecha ${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} às ${hm}`;
 }
 
-// WhatsApp-style delivery ticks for the round's creator.
-function ticksHtml(r, u) {
-  const d = r.delivery && r.delivery[u];
-  if (!d) return "";
+// Creator's view: ONE icon per person with only the furthest step reached:
+// enviado ✓ < chegou ✓✓ < viu 👁 < clicou 👆 (an answer replaces the icon). Tap = details.
+function statusFor(r, u) {
+  const d = (r.delivery && r.delivery[u]) || {};
   const seen = r.seen && r.seen[u];
-  let t;
-  if (d.st === "failed") t = `<span class="tk bad" title="não chegou">✗</span>`;
-  else if (d.st === "nodevice") t = `<span class="tk bad" title="sem aparelho com notificação">⚠</span>`;
-  else if (d.st === "quiet") t = `<span class="tk" title="horário de silêncio: vai depois">⏸</span>`;
-  else if (d.open) t = `<span class="tk good" title="abriu a notificação">👆</span>`;
-  else if (d.recv) t = `<span class="tk good" title="chegou no celular">✓✓</span>`;
-  else t = `<span class="tk" title="enviado">✓</span>`;
-  return ` <span class="ticks">${t}${seen ? `<span class="tk good" title="viu no app">👁</span>` : ""}</span>`;
+  const t = (ms) => { const x = new Date(ms); return `${pad2s(x.getHours())}:${pad2s(x.getMinutes())}`; };
+  const steps = [];
+  if (d.at && d.st === "sent") steps.push(`enviado ${t(d.at)}`);
+  if (d.recv) steps.push(`chegou ${t(d.recv)}`);
+  if (seen) steps.push(`viu no app ${t(seen)}`);
+  if (d.open) steps.push(`clicou na notificação ${t(d.open)}`);
+  const detail = steps.join(" · ");
+  if (d.st === "failed") return { icon: "⚠", cls: "bad", detail: "A notificação não chegou nesse celular." + (seen ? ` Mas viu no app ${t(seen)}.` : "") };
+  if (d.st === "nodevice") return { icon: "⚠", cls: "bad", detail: "Não tem celular com notificação ativada." + (seen ? ` Mas viu no app ${t(seen)}.` : "") };
+  if (d.st === "quiet" && !seen) return { icon: "🌙", cls: "", detail: "Em horário de silêncio. Vai receber depois." };
+  if (d.open) return { icon: "👆", cls: "good", detail };
+  if (seen) return { icon: "👁", cls: "good", detail };
+  if (d.recv) return { icon: "✓✓", cls: "good", detail };
+  if (d.st === "sent") return { icon: "✓", cls: "", detail };
+  return { icon: "", cls: "", detail: "" }; // older rounds without tracking
+}
+function statusHtml(r, u) {
+  const st = statusFor(r, u);
+  if (!st.icon) return "";
+  return `<button class="st ${st.cls}" data-detail="${esc(st.detail)}" aria-label="${esc(st.detail)}">${st.icon}</button>`;
 }
 
 // Stamp "visto" on rounds I'm asked in, once they're on screen.
@@ -1234,155 +1277,169 @@ function renderRounds() {
   const dayAgo = Date.now() - 24 * 3600000;
   const hidden = (me && me.hidden) || {};
   const visible = rounds.filter((r) => !hidden[r.id] && (r.open || (r.createdAt && r.createdAt.toMillis() > dayAgo)));
+  // "Pra você": open questions still waiting for MY answer go first, with big buttons.
+  const waitingForMe = (r) => r.open && r.answerType !== "none" && r.recipients.includes(uid) && !(r.answers && r.answers[uid]);
+  const mineToAnswer = visible.filter(waitingForMe);
+  const others = visible.filter((r) => !waitingForMe(r));
   list.innerHTML = "";
   show("rounds-empty", roundsLoaded && visible.length === 0);
 
-  for (const r of visible) {
-    const li = document.createElement("li");
-    const collapsed = !r.open && !expandedRounds.has(r.id) && r.id !== highlightRound;
-    li.className = "round" + (r.open ? "" : " closed") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
-    const mine = r.ownerUid === uid;
-    const isRecipient = r.recipients.includes(uid);
-    const myAnswer = r.answers && r.answers[uid];
-    const canSeeAll = mine || r.visibility === "all";
-
-    // Answers summary
-    let answersHtml = "";
-    if (r.answerType !== "none") {
-      const rows = r.recipients
-        .filter((u) => canSeeAll || u === uid)
-        .map((u) => {
-          const a = r.answers && r.answers[u];
-          const who = (u === uid ? "Você" : nameHtml(u, r.recipientNames && r.recipientNames[u])) + (mine ? ticksHtml(r, u) : "");
-          if (!a) return `<li class="waiting">${who} <span>…esperando</span></li>`;
-          const changed = a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "";
-          return `<li>${who} <b>${esc(a.value)}</b>${changed}</li>`;
-        });
-      if (r.answerType !== "text" && canSeeAll) {
-        const counts = {};
-        Object.values(r.answers || {}).forEach((a) => (counts[a.value] = (counts[a.value] || 0) + 1));
-        const waiting = r.recipients.length - Object.keys(r.answers || {}).length;
-        const summary = Object.entries(counts).map(([v, n]) => `${esc(v)} ${n}`).concat(waiting ? [`esperando ${waiting}`] : []).join(" · ");
-        if (summary) answersHtml += `<div class="summary">${summary}</div>`;
-      }
-      answersHtml += `<ul class="answers">${rows.join("")}</ul>`;
-      if (!canSeeAll) answersHtml += `<div class="muted small">Só ${esc(r.ownerName)} vê as respostas.</div>`;
-    }
-
-    // One-line result for collapsed (ended) rounds.
-    const answered = Object.values(r.answers || {});
-    let closedSummary = "";
-    if (!r.open) {
-      if (r.answerType === "none") closedSummary = "aviso";
-      else if (!canSeeAll) closedSummary = r.answers && r.answers[uid] ? `você: ${r.answers[uid].value}` : "sem resposta sua";
-      else if (r.answerType === "text") closedSummary = `${answered.length} resposta${answered.length === 1 ? "" : "s"}`;
-      else {
-        const counts = {};
-        answered.forEach((a) => (counts[a.value] = (counts[a.value] || 0) + 1));
-        closedSummary = Object.entries(counts).map(([v, n]) => `${v} ${n}`).join(" · ") || "ninguém respondeu";
-      }
-    }
-    li.innerHTML = `
-      <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
-        <div><div class="round-title">${esc(r.title)}</div>
-        <div class="muted small">${mine ? "Você" : nameHtml(r.ownerUid, r.ownerName)} · ${relTime(r.createdAt)} · ${r.open ? closesText(r.closesAt) : "encerrado"}</div>
-        ${r.open ? "" : `<div class="closed-summary small">${collapsed ? esc(closedSummary) + " " : ""}<span class="chev">${collapsed ? "▾" : "▴ recolher"}</span></div>`}</div>
-        <div class="round-corner"></div></div>
-      ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
-      ${answersHtml}
-      <div class="actions"></div>
-      <div class="round-foot"></div>`;
-    const actions = li.querySelector(".actions");
-    const foot = li.querySelector(".round-foot");
-    if (mine && r.open && r.delivery && Object.keys(r.delivery).length && r.answerType !== "none") {
-      foot.insertAdjacentHTML("afterbegin", `<span class="tick-legend">✓ enviado · ✓✓ chegou · 👆 abriu · 👁 viu</span>`);
-    }
-    if (mine && r.answerType === "none" && r.delivery && Object.keys(r.delivery).length) {
-      // Notices have no answer list, so show who got it right in the card.
-      li.querySelector(".actions").insertAdjacentHTML("beforebegin",
-        `<ul class="answers">${r.recipients.map((u) => `<li>${nameHtml(u, r.recipientNames && r.recipientNames[u])}${ticksHtml(r, u)}</li>`).join("")}</ul>`);
-    }
-    if (!r.open) {
-      // Tap the header of an ended round to expand / collapse it.
-      li.querySelector(".round-head").addEventListener("click", (e) => {
-        if (e.target.closest("button")) return;
-        expandedRounds.has(r.id) ? expandedRounds.delete(r.id) : expandedRounds.add(r.id);
-        if (highlightRound === r.id) highlightRound = null;
-        renderRounds();
-      });
-    }
-
-    if (isRecipient && r.open && r.answerType !== "none") {
-      if (r.answerType === "text") {
-        const b = document.createElement("button");
-        b.className = myAnswer ? "secondary" : "primary";
-        b.textContent = myAnswer ? "Mudar resposta" : "Responder";
-        b.onclick = () => openTextAnswer(r);
-        actions.appendChild(b);
-      } else {
-        for (const opt of r.options) {
-          const b = document.createElement("button");
-          const selected = myAnswer && myAnswer.value === opt;
-          b.className = selected ? "primary" : "secondary";
-          b.textContent = opt;
-          b.onclick = () => answer(r, opt, b);
-          actions.appendChild(b);
-        }
-      }
-    }
-    // Only the creator can close a round (the server enforces it too).
-    if (mine && r.open && r.answerType !== "none") {
-      const b = document.createElement("button");
-      b.className = "link small";
-      b.textContent = "encerrar";
-      b.onclick = async () => {
-        if (!(await confirmBox("Encerrar?", "Ninguém mais responde e para de insistir.", "Encerrar"))) return;
-        const res = await withBusy(b, () => api.closeRound({ roundId: r.id }), "…");
-        if (res) toast("Encerrado. 🔒");
-      };
-      li.querySelector(".round-corner").appendChild(b);
-    }
-    // Closed rounds: the creator deletes it for everyone; anyone else hides it from their own feed.
-    if (!r.open || r.answerType === "none") {
-      const b = document.createElement("button");
-      b.className = "link small";
-      if (mine) {
-        b.textContent = "apagar";
-        b.onclick = async () => {
-          if (!(await confirmBox("Apagar?", "Some do feed de todo mundo.", "Apagar"))) return;
-          const res = await withBusy(b, () => api.deleteRound({ roundId: r.id }), "…");
-          if (res) toast("Apagado. 🧹");
-        };
-      } else {
-        b.textContent = "ocultar";
-        b.onclick = async () => {
-          try {
-            await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [r.id]: true }, updatedAt: serverTimestamp() }, { merge: true });
-            toast("Ocultado do seu feed. 🙈");
-          } catch (err) { toast(friendlyError(err)); }
-        };
-      }
-      li.querySelector(".round-corner").appendChild(b);
-    }
-    if (isRecipient && r.templateId && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
-      const b = document.createElement("button");
-      b.className = "link small";
-      b.textContent = `silenciar ${T.esse} ${T.one}`;
-      b.onclick = async () => {
-        if (!(await confirmBox("Silenciar?", `Você para de receber “${r.title}”. ${r.ownerName} vai ficar sabendo. 😬`, "Silenciar"))) return;
-        const res = await withBusy(b, () => api.muteTemplate({ roundId: r.id, mute: true }), "…");
-        if (res) toast("Silenciado. Dá pra reativar nas configurações. 🔕");
-      };
-      foot.appendChild(b);
-    }
-    list.appendChild(li);
+  if (mineToAnswer.length) {
+    list.insertAdjacentHTML("beforeend", `<li class="feed-head">Pra você</li>`);
+    mineToAnswer.forEach((r) => list.appendChild(buildRound(r, true)));
+    if (others.length) list.insertAdjacentHTML("beforeend", `<li class="feed-head">Outros</li>`);
   }
+  others.forEach((r) => list.appendChild(buildRound(r, false)));
+
   markSeen(visible);
   if (highlightRound) {
     const el = list.querySelector(".highlight");
     if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); highlightRound = null; }
   }
 }
+
+function buildRound(r, ask) {
+  const uid = auth.currentUser.uid;
+  const li = document.createElement("li");
+  const collapsed = !r.open && !expandedRounds.has(r.id) && r.id !== highlightRound;
+  li.className = "round" + (ask ? " ask" : "") + (r.open ? "" : " closed") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
+  const mine = r.ownerUid === uid;
+  const isRecipient = r.recipients.includes(uid);
+  const myAnswer = r.answers && r.answers[uid];
+  const canSeeAll = mine || r.visibility === "all";
+  const nameOfR = (u) => (u === uid ? "Você" : nameHtml(u, r.recipientNames && r.recipientNames[u]));
+
+  // People + answers. The creator also gets one status icon per person who hasn't answered.
+  let peopleHtml = "";
+  if (r.answerType !== "none" || mine) {
+    const rows = r.recipients.filter((u) => canSeeAll || u === uid).map((u) => {
+      const a = r.answers && r.answers[u];
+      if (a) {
+        const changed = a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "";
+        return `<li>${nameOfR(u)} <b>${esc(a.value)}</b>${changed}</li>`;
+      }
+      const st = mine ? statusHtml(r, u) : "";
+      if (r.answerType === "none") return `<li>${nameOfR(u)} ${st}</li>`;
+      return `<li class="waiting">${nameOfR(u)} ${st || `<span class="dots">…</span>`}</li>`;
+    });
+    // In the "Pra você" card, the list of others is noise: just the question and the buttons.
+    if (rows.length && !(ask && !mine)) peopleHtml = `<ul class="answers">${rows.join("")}</ul>`;
+    if (!canSeeAll && r.answerType !== "none" && !ask) peopleHtml += `<div class="muted small">Só ${esc(r.ownerName)} vê as respostas.</div>`;
+  }
+
+  // Ended rounds collapse to one line: who answered what.
+  let closedSummary = "";
+  if (!r.open) {
+    const answered = Object.entries(r.answers || {});
+    if (r.answerType === "none") closedSummary = "aviso";
+    else if (!canSeeAll) closedSummary = myAnswer ? `você: ${myAnswer.value}` : "sem resposta sua";
+    else closedSummary = answered.map(([u, a]) => `${u === uid ? "você" : (family[u] && family[u].name) || a.name}: ${a.value}`).join(" · ") || "ninguém respondeu";
+  }
+
+  const soon = r.open ? closesSoon(r.closesAt) : "";
+  const meta = [mine ? "Você" : `de ${nameHtml(r.ownerUid, r.ownerName)}`, relTime(r.createdAt), soon, r.open ? "" : "encerrado"].filter(Boolean).join(" · ");
+  li.innerHTML = `
+    <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
+      <div><div class="round-title">${esc(r.title)}</div>
+      <div class="muted small">${meta}</div>
+      ${r.open ? "" : `<div class="closed-summary small">${collapsed ? esc(closedSummary) + " " : ""}<span class="chev">${collapsed ? "▾" : "▴ recolher"}</span></div>`}</div>
+      <div class="round-corner"></div></div>
+    ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
+    ${peopleHtml}
+    <div class="actions"></div>`;
+  const actions = li.querySelector(".actions");
+
+  // Status icons: tap for the details.
+  li.querySelectorAll(".st").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); toast(b.dataset.detail || "Sem detalhes.", 4500); }));
+
+  if (!r.open) {
+    // Tap the header of an ended round to expand / collapse it.
+    li.querySelector(".round-head").addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      expandedRounds.has(r.id) ? expandedRounds.delete(r.id) : expandedRounds.add(r.id);
+      if (highlightRound === r.id) highlightRound = null;
+      renderRounds();
+    });
+  }
+
+  if (isRecipient && r.open && r.answerType !== "none") {
+    if (r.answerType === "text") {
+      const b = document.createElement("button");
+      b.className = myAnswer ? "secondary" : "primary";
+      b.textContent = myAnswer ? "Mudar resposta" : "Responder";
+      b.onclick = () => openTextAnswer(r);
+      actions.appendChild(b);
+    } else {
+      for (const opt of r.options) {
+        const b = document.createElement("button");
+        const selected = myAnswer && myAnswer.value === opt;
+        b.className = selected ? "primary" : "secondary";
+        b.textContent = opt;
+        b.onclick = () => answer(r, opt, b);
+        actions.appendChild(b);
+      }
+    }
+  }
+
+  // Secondary actions live in a "⋯" menu so the card stays simple.
+  const menu = [];
+  if (mine && r.open && r.answerType !== "none") {
+    menu.push({ label: "🔒 Encerrar", run: async () => {
+      if (!(await confirmBox("Encerrar?", "Ninguém mais responde e para de insistir.", "Encerrar"))) return;
+      const res = await withBusy(null, () => api.closeRound({ roundId: r.id }));
+      if (res) toast("Encerrado. 🔒");
+    } });
+  }
+  if (!r.open || r.answerType === "none") {
+    if (mine) {
+      menu.push({ label: "🗑️ Apagar pra todo mundo", danger: true, run: async () => {
+        if (!(await confirmBox("Apagar?", "Some do feed de todo mundo.", "Apagar"))) return;
+        const res = await withBusy(null, () => api.deleteRound({ roundId: r.id }));
+        if (res) toast("Apagado. 🧹");
+      } });
+    } else {
+      menu.push({ label: "🙈 Ocultar do meu feed", run: async () => {
+        try {
+          await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [r.id]: true }, updatedAt: serverTimestamp() }, { merge: true });
+          toast("Ocultado do seu feed. 🙈");
+        } catch (err) { toast(friendlyError(err)); }
+      } });
+    }
+  }
+  if (isRecipient && r.templateId && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
+    menu.push({ label: `🔕 Silenciar ${T.esse} ${T.one}`, run: async () => {
+      if (!(await confirmBox("Silenciar?", `Você para de receber “${r.title}”. ${r.ownerName} vai ficar sabendo. 😬`, "Silenciar"))) return;
+      const res = await withBusy(null, () => api.muteTemplate({ roundId: r.id, mute: true }));
+      if (res) toast("Silenciado. Dá pra reativar nas configurações. 🔕");
+    } });
+  }
+  if (menu.length) {
+    const b = document.createElement("button");
+    b.className = "more";
+    b.setAttribute("aria-label", "Mais opções");
+    b.textContent = "⋯";
+    b.onclick = (e) => { e.stopPropagation(); openActionSheet(r.title, menu); };
+    li.querySelector(".round-corner").appendChild(b);
+  }
+  return li;
+}
+
+// Small menu of actions for a card.
+function openActionSheet(title, items) {
+  const dlg = $("dlg-actions");
+  $("actions-title").textContent = title;
+  const wrap = $("actions-list");
+  wrap.innerHTML = "";
+  for (const it of items) {
+    const b = document.createElement("button");
+    b.className = it.danger ? "danger" : "secondary";
+    b.textContent = it.label;
+    b.onclick = () => { dlg.close(); it.run(); };
+    wrap.appendChild(b);
+  }
+  dlg.showModal();
+}
+$("actions-cancel").addEventListener("click", () => $("dlg-actions").close());
 setInterval(renderRounds, 60000);
 
 async function answer(r, value, btn) {
@@ -1737,6 +1794,16 @@ function renderAdminPeople() {
           const res = await withBusy(b, () => api.setAdmin({ uid: r.uid, admin: !p.admin }), "…");
           if (res) toast(p.admin ? "Admin removido." : "Novo admin. 👑");
         }, lastAdmin);
+      }
+      if (p.name) {
+        link(p.simple ? "✓ modo simples" : "modo simples", async (b) => {
+          const res = await withBusy(b, () => api.adminSetUserFlag({ uid: r.uid, key: "simple", value: !p.simple }), "…");
+          if (res) toast(`${p.name}: modo simples ${p.simple ? "desligado" : "ligado"}.`);
+        });
+        link(p.bigText ? "✓ letra grande" : "letra grande", async (b) => {
+          const res = await withBusy(b, () => api.adminSetUserFlag({ uid: r.uid, key: "bigText", value: !p.bigText }), "…");
+          if (res) toast(`${p.name}: letra grande ${p.bigText ? "desligada" : "ligada"}.`);
+        });
       }
       if (r.email) {
         link("nova senha", async (b) => {

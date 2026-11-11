@@ -17,6 +17,9 @@
         if (H.test(L.bg || "")) document.querySelector('meta[name="theme-color"]').content = L.bg;
         window.__lookDecor = typeof L.decor === "string" ? L.decor : "";
       }
+      var C = JSON.parse(localStorage.getItem("comfort") || "null");
+      if (C && C.big) document.documentElement.classList.add("big");
+      if (C && C.simple) document.documentElement.classList.add("simple");
     } catch (e) {}
   </script>
   <!-- iPhone: needed so "Add to Home Screen" makes a real app (required for push on iOS) -->
@@ -367,6 +370,13 @@
     <button id="cred-close" class="link small close-link">fechar</button>
   </dialog>
 
+  <!-- Card "⋯" menu -->
+  <dialog id="dlg-actions">
+    <h2 id="actions-title"></h2>
+    <div id="actions-list" class="actions-list"></div>
+    <button id="actions-cancel" class="link small close-link">fechar</button>
+  </dialog>
+
   <!-- Modal: generic confirm -->
   <dialog id="dlg-confirm">
     <h2 id="confirm-title"></h2>
@@ -401,6 +411,10 @@
       <h3>Aparência</h3>
       <p class="muted small" id="palette-forced" hidden></p>
       <div id="palettes" class="palettes"></div>
+
+      <h3>Facilidades</h3>
+      <label class="toggle"><input type="checkbox" id="set-big"> <span>Letra grande</span></label>
+      <label class="toggle"><input type="checkbox" id="set-simple"> <span>Modo simples (só o feed, sem enfeites)</span></label>
 
       <h3>Não me perturbe</h3>
       <label class="toggle"><input type="checkbox" id="quiet-on"> <span>Segurar notificações num horário</span></label>

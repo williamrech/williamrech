@@ -864,3 +864,27 @@ input[readonly] { opacity: 0.6; }
 
 .device-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .device-row .device-del { flex: none; }
+
+/* ---------- Feed: "Pra você" first, one status icon per person, ⋯ menu ---------- */
+.feed-head { list-style: none; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 700; margin: 6px 2px -2px; }
+.round.ask { border-color: color-mix(in srgb, var(--caramel) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--caramel) 25%, transparent); }
+.round.ask .round-title { font-size: 1.12rem; }
+.round.ask .actions { margin-top: 14px; gap: 8px; }
+.round.ask .actions button { font-size: 1.02rem; padding: 13px 12px; min-height: 50px; }
+.answers .dots { color: var(--muted); }
+.st { background: none; border: 0; padding: 0 2px; font-size: 0.8rem; color: var(--muted); cursor: pointer; }
+.st.good { color: #8fd694; }
+.st.bad { color: #f0a594; }
+.more { background: none; border: 0; color: var(--muted); font-size: 1.3rem; line-height: 1; padding: 0 4px 6px; letter-spacing: 1px; }
+.actions-list { display: grid; gap: 8px; margin-top: 12px; }
+.actions-list button { text-align: left; padding: 12px 14px; }
+.summary, .tick-legend { display: none; } /* no tallies / legends */
+
+/* ---------- Letra grande ---------- */
+html.big { font-size: 17.5px; }
+html.big .round .actions button { min-height: 48px; }
+html.big .me-chip { font-size: 1.05rem; }
+
+/* ---------- Modo simples: just the feed ---------- */
+html.simple #pins, html.simple #decor, html.simple .tab[data-tab="chamados"] { display: none !important; }
+html.simple .round-body { font-size: 1rem; }
