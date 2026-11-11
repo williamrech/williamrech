@@ -404,9 +404,19 @@ function spawnEffect(layer, kind, scale = 1) {
       add("snow", `left:${rnd(0, 100)}%;font-size:${rnd(8, 18) * Math.max(scale, 0.6)}px;opacity:${rnd(0.25, 0.6)};animation-delay:${rnd(-12, 0)}s;animation-duration:${rnd(8, 16) * Math.max(scale, 0.5)}s;--drift:${rnd(-40, 40) * scale}px`, "❄");
     }
   } else if (kind === "bubbles") {
-    for (let i = 0; i < Math.round(28 * scale); i++) {
-      const size = rnd(4, 15) * Math.max(scale, 0.6);
-      add("bubble", `left:${rnd(0, 100)}%;width:${size}px;height:${size}px;opacity:${rnd(0.35, 0.75)};animation-delay:${rnd(-14, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(6, 13) * Math.max(scale, 0.5)}s;--wob:${rnd(3, 10) * scale}px`);
+    // Fizz: a few thin streams of tiny clear bubbles rising from fixed spots (speeding up and
+    // growing as they climb), plus some bigger loose ones wobbling up.
+    const streams = Math.max(2, Math.round(6 * scale));
+    for (let k = 0; k < streams; k++) {
+      const x = rnd(4, 96), dur = rnd(3.2, 5.5) * Math.max(scale, 0.6), per = Math.round(rnd(5, 8));
+      for (let i = 0; i < per; i++) {
+        const size = rnd(2.5, 5) * Math.max(scale, 0.7);
+        add("fizz", `left:${x}%;width:${size}px;height:${size}px;animation-duration:${dur}s;animation-delay:${(-dur * i) / per}s;--wob:${rnd(-3, 3)}px;opacity:${rnd(0.35, 0.6)}`);
+      }
+    }
+    for (let i = 0; i < Math.round(9 * scale); i++) {
+      const size = rnd(6, 13) * Math.max(scale, 0.6);
+      add("bubble", `left:${rnd(0, 100)}%;width:${size}px;height:${size}px;opacity:${rnd(0.25, 0.5)};animation-delay:${rnd(-14, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(7, 13) * Math.max(scale, 0.5)}s;--wob:${rnd(3, 9) * scale}px`);
     }
   }
   layer.dataset.fx = kind;
@@ -1474,11 +1484,11 @@ function buildRound(r, ask) {
     else doneSummary = answered.map(([u, a]) => `${u === uid ? "você" : (family[u] && family[u].name) || a.name}: ${a.value}`).join(" · ") || "ninguém respondeu";
   }
 
-  // Footer: who/when on the left, the deadline (absolute + time left) on the right.
-  const who = [mine ? "Você" : `de ${nameHtml(r.ownerUid, r.ownerName)}`, relTime(r.createdAt)].join(" · ");
+  // Footer: who sent it on the left, the time left on the right (exact time on long-press/hover).
+  const who = mine ? "Você" : `de ${nameHtml(r.ownerUid, r.ownerName)}`;
   const dl = r.open ? deadlineParts(r.closesAt) : null;
   const when = !r.open ? `<span class="deadline">encerrado</span>`
-    : dl ? `<span class="deadline${dl.urgent ? " urgent" : ""}">⏳ ${esc(dl.abs)} · ${esc(dl.rel)}</span>` : "";
+    : dl ? `<span class="deadline${dl.urgent ? " urgent" : ""}" title="${esc(dl.abs)}">⏳ ${esc(dl.rel)}</span>` : "";
 
   li.innerHTML = `
     <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
