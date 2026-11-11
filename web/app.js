@@ -1683,7 +1683,7 @@ const PAL_FIELDS = [
   ["muted", "Texto fraco"], ["accent", "Botões"], ["highlight", "Realces"],
 ];
 let builtinDrawings = [];
-fetch("decor/index.json").then((r) => r.json()).then((list) => { builtinDrawings = Array.isArray(list) ? list : []; renderAdmin(); }).catch(() => {});
+fetch("decor/index.json", { cache: "no-cache" }).then((r) => r.json()).then((list) => { builtinDrawings = Array.isArray(list) ? list : []; renderAdmin(); }).catch(() => {});
 
 const allPalettes = () => ((FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : {});
 const allOccasions = () => ((FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {});
