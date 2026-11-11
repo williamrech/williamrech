@@ -861,3 +861,6 @@ input[readonly] { opacity: 0.6; }
 .log-line.good .log-text { color: color-mix(in srgb, #8fd694 70%, var(--fg)); }
 .log-line.bad .log-text { color: #f0a594; }
 .log-line.meh .log-text { color: #f0b46a; }
+
+.device-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.device-row .device-del { flex: none; }

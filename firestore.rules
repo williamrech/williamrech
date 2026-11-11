@@ -14,7 +14,7 @@ service cloud.firestore {
     match /devices/{token} {
       allow read: if isAdmin(); // Admin → Pessoas shows everyone's phones
       allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
     // Profiles: the family can see names; you edit only your own name, gender and

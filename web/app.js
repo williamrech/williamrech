@@ -3,7 +3,8 @@ import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, deleteField, FieldPath, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, deleteField, FieldPath,
+  disableNetwork, enableNetwork, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
   orderBy, limit, serverTimestamp, Timestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-functions.js";
@@ -1692,7 +1693,8 @@ function devicesHtml(uid) {
   const devs = adminDevices[uid] || [];
   if (!devs.length) return `<div class="devices small warn-text">⚠ nenhum aparelho com notificação</div>`;
   return `<div class="devices small">${devs.map((d) =>
-    `<div>📱 ${esc(deviceLabel(d.userAgent))} · ${d.lastRecv ? "recebeu " + agoText(d.lastRecv) : "nunca confirmou recebimento"}</div>`).join("")}</div>`;
+    `<div class="device-row"><span>📱 ${esc(deviceLabel(d.userAgent))} · ${d.lastRecv ? "recebeu " + agoText(d.lastRecv) : "nunca confirmou recebimento"}${d.updatedAt && d.updatedAt.toMillis ? ` · entrou ${agoText(d.updatedAt.toMillis())}` : ""}</span>` +
+    `<button class="link small device-del" data-dev="${esc(d.id)}" data-label="${esc(deviceLabel(d.userAgent))}">remover</button></div>`).join("")}</div>`;
 }
 
 function renderAdminPeople() {
@@ -1754,6 +1756,17 @@ function renderAdminPeople() {
       list.appendChild(li);
     });
 }
+
+// Remove a phone from the notification list (e.g. an old browser someone logged in once).
+$("adm-people").addEventListener("click", async (e) => {
+  const b = e.target.closest(".device-del");
+  if (!b) return;
+  if (!(await confirmBox(`Remover ${b.dataset.label}?`,
+    "Esse aparelho para de receber notificações. Se a pessoa abrir o app nele de novo (ainda logada), ele volta sozinho — pra sumir de vez, é só sair do app nesse aparelho.",
+    "Remover"))) return;
+  try { await deleteDoc(doc(db, "devices", b.dataset.dev)); toast("Aparelho removido. 📵"); }
+  catch (err) { toast(friendlyError(err)); }
+});
 
 $("adm-add-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -2427,11 +2440,33 @@ $("adm-nuke").addEventListener("click", () => adminReset($("adm-nuke"), "all",
   "Apagar TUDO de todo mundo? (Só o seu status de admin fica.)"));
 
 // Coming back to the app (e.g. from a notification) — re-check permission and refresh times.
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible" || !auth.currentUser) return;
+// Coming back after being in the background: phones pause hidden pages and the live
+// connection can silently die, leaving stale data on screen.
+//  - away > 1 min  → restart the database connection (everything re-syncs)
+//  - away > 30 min → full reload (also picks up new app versions), unless a popup is open
+let hiddenAt = 0;
+let resyncing = false;
+async function resync() {
+  if (resyncing) return;
+  resyncing = true;
+  try { await disableNetwork(db); await enableNetwork(db); } catch (e) { console.warn("resync", e); }
+  resyncing = false;
+}
+function onBack() {
+  const away = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = 0;
+  if (away > 30 * 60000 && !document.querySelector("dialog[open]")) { location.reload(); return; }
+  if (away > 60000) resync();
+  if (!auth.currentUser) return;
   checkGate();
-  renderRounds(); // refresh "há X min"
+  renderRounds(); // refresh "há X min" / "fecha às"
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+  onBack();
 });
+// Restored from the browser's back/forward cache (some phones do this instead of reloading).
+window.addEventListener("pageshow", (e) => { if (e.persisted) { hiddenAt = hiddenAt || Date.now() - 31 * 60000; onBack(); } });
 
 // ---------- Lock the page behind open popups (iOS lets you drag it otherwise) ----------
 (function lockScrollUnderDialogs() {
