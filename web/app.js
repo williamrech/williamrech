@@ -309,7 +309,14 @@ function placeDecor(spec, force = false) {
 // or "smoke" (a coffee cup low in the middle of the screen, behind the feed, that now and then
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
-const EFFECTS = { confetti: "Confete", snow: "Neve", bubbles: "Bolhas", smoke: "Fumaça" };
+// One list of names, used in the palette studio, the occasion editor and Configurações.
+const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete" };
+function fillEffectSelect(sel) {
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">Nenhum</option>`;
+  for (const [k, label] of Object.entries(EFFECTS)) sel.add(new Option(label, k));
+  sel.value = keep in EFFECTS ? keep : "";
+}
 // A plain cup on a saucer in the theme's drawing colors (coffee on Espresso, matcha on Matcha…).
 const CUP_SVG = `<svg viewBox="0 0 140 100" aria-hidden="true">
 <ellipse cx="70" cy="86" rx="62" ry="11" fill="var(--d-pale)" opacity=".55"/>
@@ -339,6 +346,12 @@ function spawnEffect(layer, kind, scale = 1) {
     if (still) return;
     const puff = () => {
       if (!cup.isConnected) return;
+      // While the app is in the background animations are paused: don't pile up puffs that
+      // would all float up at once when you come back.
+      if (document.hidden || cup.querySelectorAll(".puff").length >= 3) {
+        layer._fxTimer = setTimeout(puff, 2500 + Math.random() * 4500);
+        return;
+      }
       const n = Math.random() < 0.3 ? 2 : 1;
       for (let k = 0; k < n; k++) {
         const w = document.createElement("i");
@@ -2370,6 +2383,8 @@ $("pk-contrast").addEventListener("click", () => {
 $("pal-name").addEventListener("input", (e) => { st.pal.name = e.target.value; renderStudio(); });
 $("pal-emoji").addEventListener("input", (e) => { st.emoji = e.target.value; renderStudio(); });
 $("pal-only").addEventListener("change", (e) => commit(() => { st.only = e.target.checked; }));
+fillEffectSelect($("pal-effect"));
+fillEffectSelect($("occ-effect"));
 $("pal-effect").addEventListener("change", (e) => commit(() => { st.effect = e.target.value; }));
 $("pal-undo").addEventListener("click", () => { if (!st.hist.length) return; st.fut.push(snap()); restore(st.hist.pop()); renderStudio(); });
 $("pal-redo").addEventListener("click", () => { if (!st.fut.length) return; st.hist.push(snap()); restore(st.fut.pop()); renderStudio(); });
