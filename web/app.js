@@ -133,7 +133,9 @@ function applyLook() {
   renderBanner();
   placeDecor(decorSpec);
   renderPreviewBar(previewing);
-  runEffect(todayOcc && todayOcc.effect);
+  // An occasion's effect is for everyone; otherwise the theme's own effect, unless you switched it off.
+  const fxOff = typeof me !== "undefined" && me && me.fxOff === true;
+  runEffect((todayOcc && todayOcc.effect) || (!fxOff && pal.effect) || null);
   if (typeof renderSettings === "function" && typeof auth !== "undefined" && auth.currentUser) renderSettings();
   if (typeof renderAdmin === "function" && typeof auth !== "undefined" && auth.currentUser) renderAdmin();
 }
@@ -303,34 +305,45 @@ function placeDecor(spec, force = false) {
   });
 }
 
-// Effects: "confetti" (a burst on open) or "snow" (gentle, continuous).
-let effectKey = null;
-function runEffect(kind) {
-  if (kind === effectKey) return;
-  effectKey = kind;
-  const layer = document.getElementById("fx");
+// Effects: "confetti" (a burst on open), "snow" (gentle, falling) or "bubbles" (fizz rising from below).
+// Occasions can force one for everyone; a theme can have its own, which each person can switch off.
+const EFFECTS = { confetti: "Confete", snow: "Neve", bubbles: "Bolhas" };
+function spawnEffect(layer, kind, scale = 1) {
   layer.innerHTML = "";
-  if (!kind || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const css = getComputedStyle(document.documentElement);
-  const colors = ["--caramel", "--crema", "--fg", "--muted"].map((v) => css.getPropertyValue(v).trim()).concat(["#ff8fb1", "#7fc8f8", "#f5d76e"]);
+  if (!(kind in EFFECTS) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const css = getComputedStyle(layer);
+  const colors = ["--caramel", "--crema", "--fg", "--muted"].map((v) => css.getPropertyValue(v).trim()).filter(Boolean).concat(["#ff8fb1", "#7fc8f8", "#f5d76e"]);
   const rnd = (a, b) => a + Math.random() * (b - a);
+  const add = (cls, style, text) => {
+    const s = document.createElement("i");
+    s.className = cls;
+    s.style.cssText = style;
+    if (text) s.textContent = text;
+    layer.appendChild(s);
+  };
   if (kind === "confetti") {
-    for (let i = 0; i < 70; i++) {
-      const s = document.createElement("i");
-      s.className = "confetti";
-      s.style.cssText = `left:${rnd(0, 100)}vw;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8)}s;animation-duration:${rnd(2.4, 4.2)}s;--drift:${rnd(-60, 60)}px;--spin:${rnd(-720, 720)}deg;width:${rnd(6, 10)}px;height:${rnd(8, 14)}px`;
-      layer.appendChild(s);
+    for (let i = 0; i < Math.round(70 * scale); i++) {
+      add("confetti", `left:${rnd(0, 100)}%;background:${colors[i % colors.length]};animation-delay:${rnd(0, 0.8)}s;animation-duration:${rnd(2.4, 4.2)}s;--drift:${rnd(-60, 60) * scale}px;--spin:${rnd(-720, 720)}deg;width:${rnd(6, 10) * Math.max(scale, 0.6)}px;height:${rnd(8, 14) * Math.max(scale, 0.6)}px`);
     }
-    setTimeout(() => { if (effectKey === "confetti") layer.innerHTML = ""; }, 6000);
+    setTimeout(() => { if (layer.dataset.fx === "confetti") layer.innerHTML = ""; }, 6000);
   } else if (kind === "snow") {
-    for (let i = 0; i < 26; i++) {
-      const s = document.createElement("i");
-      s.className = "snow";
-      s.textContent = "❄";
-      s.style.cssText = `left:${rnd(0, 100)}vw;font-size:${rnd(8, 18)}px;opacity:${rnd(0.25, 0.6)};animation-delay:${rnd(-12, 0)}s;animation-duration:${rnd(8, 16)}s;--drift:${rnd(-40, 40)}px`;
-      layer.appendChild(s);
+    for (let i = 0; i < Math.round(26 * scale); i++) {
+      add("snow", `left:${rnd(0, 100)}%;font-size:${rnd(8, 18) * Math.max(scale, 0.6)}px;opacity:${rnd(0.25, 0.6)};animation-delay:${rnd(-12, 0)}s;animation-duration:${rnd(8, 16) * Math.max(scale, 0.5)}s;--drift:${rnd(-40, 40) * scale}px`, "❄");
+    }
+  } else if (kind === "bubbles") {
+    for (let i = 0; i < Math.round(28 * scale); i++) {
+      const size = rnd(4, 15) * Math.max(scale, 0.6);
+      add("bubble", `left:${rnd(0, 100)}%;width:${size}px;height:${size}px;opacity:${rnd(0.35, 0.75)};animation-delay:${rnd(-14, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(6, 13) * Math.max(scale, 0.5)}s;--wob:${rnd(3, 10) * scale}px`);
     }
   }
+  layer.dataset.fx = kind;
+}
+let effectKey = null;
+function runEffect(kind) {
+  kind = kind || null;
+  if (kind === effectKey) return;
+  effectKey = kind;
+  spawnEffect(document.getElementById("fx"), kind);
 }
 
 // ---------- Phone only ----------
@@ -829,7 +842,7 @@ function renderPalettes() {
       b.className = "palette" + (id === current ? " selected" : "");
       const dots = [p.bg, p.surface, p.accent, p.highlight].filter((c) => HEX.test(String(c)))
         .map((c) => `<i style="background:${c}"></i>`).join("");
-      b.innerHTML = `<span class="dots">${dots}</span><span>${esc(p.name || id)}</span>`;
+      b.innerHTML = `<span class="dots">${dots}</span><span>${esc(p.name || id)}${EFFECTS[p.effect] ? ` <span class="fx-tag" title="Tem efeito: ${EFFECTS[p.effect]}">✨</span>` : ""}</span>`;
       b.onclick = async () => {
         try {
           await setDoc(doc(db, "users", auth.currentUser.uid), { palette: id, updatedAt: serverTimestamp() }, { merge: true });
@@ -838,6 +851,14 @@ function renderPalettes() {
       };
       wrap.appendChild(b);
     });
+  // The theme's effect switch only exists when your theme has an effect.
+  const mine = getPalette(current);
+  const fx = mine && !mine.onlyOccasions && EFFECTS[mine.effect];
+  show("fx-row", !!fx);
+  if (fx) {
+    $("set-fx-label").textContent = `Efeito do tema: ${fx}`;
+    $("set-fx").checked = !(me && me.fxOff === true);
+  }
 }
 
 function renderSettings() {
@@ -882,6 +903,12 @@ async function saveQuiet() {
 }
 ["quiet-on", "quiet-start", "quiet-end"].forEach((id) => $(id).addEventListener("change", saveQuiet));
 $("set-big").addEventListener("change", (e) => saveComfort("bigText", e.target.checked));
+$("set-fx").addEventListener("change", async (e) => {
+  try {
+    await setDoc(doc(db, "users", auth.currentUser.uid), { fxOff: !e.target.checked, updatedAt: serverTimestamp() }, { merge: true });
+    toast(e.target.checked ? "Efeito ligado. ✨" : "Efeito desligado.");
+  } catch (err) { e.target.checked = !e.target.checked; toast(friendlyError(err)); }
+});
 $("set-simple").addEventListener("change", (e) => saveComfort("simple", e.target.checked));
 
 $("open-settings").addEventListener("click", () => openSettings("general"));
@@ -2032,8 +2059,8 @@ const slugify = (x) => String(x).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowe
 
 // --- studio state ---
 let st = null; // { id, isNew, pal:{name,bg,…}, role, locks:Set, decor:[], emoji, only, hist:[], fut:[] }
-const snap = () => JSON.stringify({ pal: st.pal, decor: st.decor, emoji: st.emoji, only: st.only });
-function restore(json) { const o = JSON.parse(json); st.pal = o.pal; st.decor = o.decor; st.emoji = o.emoji; st.only = o.only; }
+const snap = () => JSON.stringify({ pal: st.pal, decor: st.decor, emoji: st.emoji, only: st.only, effect: st.effect });
+function restore(json) { const o = JSON.parse(json); st.pal = o.pal; st.decor = o.decor; st.emoji = o.emoji; st.only = o.only; st.effect = o.effect || ""; }
 function commit(change) { st.hist.push(snap()); if (st.hist.length > 80) st.hist.shift(); st.fut = []; change(); renderStudio(); }
 
 function studioId() {
@@ -2060,9 +2087,10 @@ function openPaletteEditor(id) {
     role: "accent", locks: new Set(),
     decor: parsed.filter((x) => x.svg).map((x) => x.svg).filter((v, i, a) => a.indexOf(v) === i),
     emoji: parsed.filter((x) => x.emoji).map((x) => x.emoji).join(""),
-    only: !!(raw && raw.onlyOccasions), hist: [], fut: [],
+    only: !!(raw && raw.onlyOccasions), effect: (raw && raw.effect in EFFECTS) ? raw.effect : "", hist: [], fut: [],
   };
   if (!raw) st.decor = ["latte.svg", "mug.svg", "bean.svg"];
+  $("pal-preview").querySelector(".mini-fx")?.removeAttribute("data-k");
   const from = $("pal-from");
   from.innerHTML = `<option value="">Escolher…</option>`;
   Object.entries(allPalettes()).forEach(([pid, p]) => { if (pid !== id) from.add(new Option((p && p.name) || pid, pid)); });
@@ -2095,6 +2123,7 @@ function renderStudio() {
   $("pal-redo").disabled = !st.fut.length;
   $("pal-save").classList.toggle("dirty", dirty);
   $("pal-only").checked = st.only;
+  $("pal-effect").value = st.effect;
   if (document.activeElement !== $("pal-emoji")) $("pal-emoji").value = st.emoji;
 
   const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
@@ -2115,6 +2144,7 @@ function renderStudio() {
           <div class="mini-btns"><span class="mini-btn pri" data-role="accent">Sim</span><span class="mini-btn sec" data-role="text">Não</span></div>
         </div>
         <span class="mini-fab" data-role="accent">＋</span>
+        <div class="mini-fx"></div>
       </div>`;
     box.addEventListener("click", (e) => {
       const el = e.target.closest("[data-role]");
@@ -2140,6 +2170,10 @@ function renderStudio() {
       dec.appendChild(s);
     });
   }
+
+  // The theme's effect, live in the mini-app
+  const fxl = box.querySelector(".mini-fx");
+  if (fxl.dataset.k !== st.effect) { fxl.dataset.k = st.effect; spawnEffect(fxl, st.effect, 0.45); }
 
   // Role tiles = the palette
   const roles = $("pal-roles");
@@ -2286,6 +2320,7 @@ $("pk-contrast").addEventListener("click", () => {
 $("pal-name").addEventListener("input", (e) => { st.pal.name = e.target.value; renderStudio(); });
 $("pal-emoji").addEventListener("input", (e) => { st.emoji = e.target.value; renderStudio(); });
 $("pal-only").addEventListener("change", (e) => commit(() => { st.only = e.target.checked; }));
+$("pal-effect").addEventListener("change", (e) => commit(() => { st.effect = e.target.value; }));
 $("pal-undo").addEventListener("click", () => { if (!st.hist.length) return; st.fut.push(snap()); restore(st.hist.pop()); renderStudio(); });
 $("pal-redo").addEventListener("click", () => { if (!st.fut.length) return; st.hist.push(snap()); restore(st.fut.pop()); renderStudio(); });
 $("pal-more").addEventListener("click", (e) => { e.stopPropagation(); palMenu($("pal-menu").hidden); });
@@ -2301,6 +2336,7 @@ $("pal-from").addEventListener("change", (e) => {
     const d = parseDecor(src.decor || "");
     st.decor = d.filter((x) => x.svg).map((x) => x.svg).filter((v, i, a) => a.indexOf(v) === i);
     st.emoji = d.filter((x) => x.emoji).map((x) => x.emoji).join("");
+    st.effect = src.effect in EFFECTS ? src.effect : "";
   });
   palMenu(false);
   toast("Copiado. Agora é só ajustar. 🎨");
@@ -2337,6 +2373,7 @@ function studioPalette() {
   const decor = [...st.decor, st.emoji.trim()].filter(Boolean).join(" ");
   if (decor) p.decor = decor;
   if (st.only) p.onlyOccasions = true;
+  if (st.effect) p.effect = st.effect;
   return p;
 }
 $("pal-save").addEventListener("click", async () => {

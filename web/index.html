@@ -329,6 +329,7 @@
     <div id="pal-menu" class="ps-menu" hidden>
       <p class="muted small" id="pal-idline"></p>
       <label class="field">Copiar cores de<select id="pal-from"></select></label>
+      <label class="field">Efeito do tema<select id="pal-effect"><option value="">Nenhum</option><option value="bubbles">Bolhas subindo</option><option value="snow">Neve caindo</option><option value="confetti">Confete (ao abrir)</option></select></label>
       <label class="field">Emojis extras no fundo<input id="pal-emoji" maxlength="60" placeholder="🎈✨" autocomplete="off"></label>
       <label class="toggle"><input type="checkbox" id="pal-only"> <span>Só em ocasiões (some das configurações)</span></label>
       <button type="button" id="pal-delete" class="danger wide" hidden>Apagar paleta</button>
@@ -349,7 +350,7 @@
       <label class="field">Versão (rodapé)<input id="occ-version" maxlength="40" placeholder="ex: 1.13.sexta"></label>
       <div class="pick-row">
         <label class="field">Paleta<select id="occ-palette"></select></label>
-        <label class="field">Efeito<select id="occ-effect"><option value="">Nenhum</option><option value="confetti">Confete</option><option value="snow">Neve</option></select></label>
+        <label class="field">Efeito<select id="occ-effect"><option value="">Nenhum</option><option value="confetti">Confete</option><option value="snow">Neve</option><option value="bubbles">Bolhas</option></select></label>
       </div>
       <label class="field">Desenhos (decor)<input id="occ-decor" maxlength="300" placeholder="pumpkin.svg ghost.svg 🦇"></label>
       <div class="chips mini-picker" id="occ-decor-picker"></div>
@@ -432,6 +433,7 @@
       <h3>Aparência</h3>
       <p class="muted small" id="palette-forced" hidden></p>
       <div id="palettes" class="palettes"></div>
+      <label class="toggle" id="fx-row" hidden><input type="checkbox" id="set-fx" checked> <span id="set-fx-label">Efeito do tema</span></label>
 
       <h3>Facilidades</h3>
       <label class="toggle"><input type="checkbox" id="set-big"> <span>Letra grande</span></label>

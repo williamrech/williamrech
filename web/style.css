@@ -633,12 +633,26 @@ dialog h2 { margin-bottom: 4px; }
 #fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
 .confetti { position: absolute; top: -20px; border-radius: 2px; animation: confetti-fall linear forwards; }
 @keyframes confetti-fall {
-  to { transform: translate(var(--drift), 105vh) rotate(var(--spin)); opacity: 0.6; }
+  to { transform: translate(var(--drift), var(--fall, 105vh)) rotate(var(--spin)); opacity: 0.6; }
 }
 .snow { position: absolute; top: -20px; color: #fff; font-style: normal; animation: snow-fall linear infinite; }
 @keyframes snow-fall {
-  to { transform: translate(var(--drift), 105vh); }
+  to { transform: translate(var(--drift), var(--fall, 105vh)); }
 }
+.bubble {
+  position: absolute; bottom: -20px; border-radius: 50%; font-style: normal;
+  background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.95) 0 16%, rgba(255,255,255,.22) 38%, rgba(255,255,255,.06) 70%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.6); animation: bubble-rise linear infinite;
+}
+@keyframes bubble-rise {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(var(--wob), calc(var(--rise, -110vh) * .25)); }
+  50% { transform: translate(calc(var(--wob) * -1), calc(var(--rise, -110vh) * .5)); }
+  75% { transform: translate(var(--wob), calc(var(--rise, -110vh) * .75)); }
+  92% { opacity: .9; }
+  100% { transform: translate(0, var(--rise, -110vh)); opacity: 0; }
+}
+.fx-tag { font-size: 0.8em; }
 
 /* ---------- Palette picker ---------- */
 .palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
@@ -1020,3 +1034,4 @@ html.big .ps-role { font-size: 0.62rem; }
 .studio :focus:not(:focus-visible) { outline: none; box-shadow: none; }
 .studio .icon-btn:focus-visible, .studio .ps-role:focus-visible, .studio .dg:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .ps:focus { outline: none; }
+.mini-fx { position: absolute !important; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; --fall: 260px; --rise: -260px; }

@@ -1,5 +1,5 @@
 {
-  "_como_usar": "Edite à vontade no console do Firebase. versionOdds: 1 em N dias tem piada (0 = nunca). versionWords: palavras no 2º ou 3º número da versão. palettes: temas de cor (6 cores hex cada: bg, surface, text, muted, accent, highlight + name; opcional: decor; onlyOccasions: true esconde das configurações e só aparece em ocasiões). occasions: datas especiais. Cada uma tem 'when' e pode ter version, palette, decor (emojis e/ou desenhos .svg da pasta web/decor, separados por espaço, ex: 'pumpkin.svg 🦇 👻'), banner, effect (confetti ou snow), priority (maior vence), enabled (false desliga). Formatos de 'when': 12-25 (todo ano) | 2026-11-10 (um dia) | fri-13 (sexta 13) | 2sun-05 (2º domingo de maio) | lastfri-11 (última sexta de novembro) | easter-47 (relativo à Páscoa) | 12-20..12-31 (período). Vários separados por vírgula. Para testar sem esperar a data: abra o app com ?ocasiao=ID no fim do endereço. terms: o nome do dia pros 'recados' (sorteado por dia, mesmo pra todos). weight = chance relativa; one/many = singular/plural; g = m ou f; verb = botão; ask = pergunta de confirmação ({who}); done = aviso depois de mandar ({n}). Pra testar: ?termo=ID no endereço.",
+  "_como_usar": "Edite à vontade no console do Firebase. versionOdds: 1 em N dias tem piada (0 = nunca). versionWords: palavras no 2º ou 3º número da versão. palettes: temas de cor (6 cores hex cada: bg, surface, text, muted, accent, highlight + name; opcional: decor; effect (confetti, snow ou bubbles, cada pessoa pode desligar); onlyOccasions: true esconde das configurações e só aparece em ocasiões). occasions: datas especiais. Cada uma tem 'when' e pode ter version, palette, decor (emojis e/ou desenhos .svg da pasta web/decor, separados por espaço, ex: 'pumpkin.svg 🦇 👻'), banner, effect (confetti, snow ou bubbles), priority (maior vence), enabled (false desliga). Formatos de 'when': 12-25 (todo ano) | 2026-11-10 (um dia) | fri-13 (sexta 13) | 2sun-05 (2º domingo de maio) | lastfri-11 (última sexta de novembro) | easter-47 (relativo à Páscoa) | 12-20..12-31 (período). Vários separados por vírgula. Para testar sem esperar a data: abra o app com ?ocasiao=ID no fim do endereço. terms: o nome do dia pros 'recados' (sorteado por dia, mesmo pra todos). weight = chance relativa; one/many = singular/plural; g = m ou f; verb = botão; ask = pergunta de confirmação ({who}); done = aviso depois de mandar ({n}). Pra testar: ?termo=ID no endereço.",
   "versionOdds": 5,
   "versionWords": [
     "666",
@@ -94,7 +94,8 @@
       "accent": "#d4af37",
       "highlight": "#f3e3b0",
       "decor": "bottle.svg flute.svg bubbles.svg bubbles.svg flute.svg",
-      "onlyOccasions": true
+      "onlyOccasions": true,
+      "effect": "bubbles"
     },
     "festa": {
       "name": "Festa",
@@ -104,7 +105,8 @@
       "muted": "#b3a3cf",
       "accent": "#f5c542",
       "highlight": "#ffd9f2",
-      "decor": "balloon.svg gift.svg party-hat.svg balloon.svg balloon.svg"
+      "decor": "balloon.svg gift.svg party-hat.svg balloon.svg balloon.svg",
+      "effect": "confetti"
     },
     "halloween": {
       "name": "Halloween",
@@ -124,7 +126,8 @@
       "muted": "#b2a99a",
       "accent": "#d63b3b",
       "highlight": "#f2d27a",
-      "decor": "tree.svg gift.svg ornament.svg candy-cane.svg snowflake.svg"
+      "decor": "tree.svg gift.svg ornament.svg candy-cane.svg snowflake.svg",
+      "effect": "snow"
     },
     "carnaval": {
       "name": "Carnaval",
@@ -134,7 +137,19 @@
       "muted": "#c7a8d4",
       "accent": "#ff3fa4",
       "highlight": "#3fe0d0",
-      "decor": "mask.svg streamer.svg maraca.svg streamer.svg mask.svg"
+      "decor": "mask.svg streamer.svg maraca.svg streamer.svg mask.svg",
+      "effect": "confetti"
+    },
+    "cocacola": {
+      "name": "Coca-Cola",
+      "bg": "#160405",
+      "surface": "#370b0e",
+      "text": "#fff4f1",
+      "muted": "#d6a19b",
+      "accent": "#f40009",
+      "highlight": "#ffffff",
+      "decor": "soda-glass.svg bubbles.svg soda-glass.svg bubbles.svg bubbles.svg 🧊",
+      "effect": "bubbles"
     }
   },
   "occasions": {
@@ -238,7 +253,7 @@
     }
   },
   "decorVersion": 2,
-  "configVersion": 4,
+  "configVersion": 5,
   "terms": {
     "recado": {
       "weight": 70,

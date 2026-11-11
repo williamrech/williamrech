@@ -55,6 +55,16 @@ const ref = getFirestore().doc("config/fun");
     if (!cur.terms) update.terms = defaults.terms;
     update.configVersion = 4;
   }
+  // configVersion 5: theme effects (on by default, each person can switch them off) and the
+  // Coca-Cola theme. Only fills an effect a palette doesn't have yet; never touches edited ones.
+  if ((Number(cur.configVersion) || 0) < 5) {
+    for (const [id, p] of Object.entries(defaults.palettes)) {
+      const c = cur.palettes && cur.palettes[id];
+      if (c && p.effect && c.effect === undefined) update[`palettes.${id}.effect`] = p.effect;
+      if (!c && id === "cocacola") update[`palettes.${id}`] = p;
+    }
+    update.configVersion = 5;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;
