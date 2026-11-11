@@ -293,25 +293,54 @@
 
   <!-- Modal: customize your name -->
 
-  <!-- Admin: palette editor -->
-  <dialog id="dlg-pal">
-    <form id="pal-form">
-      <h2 id="pal-title">Paleta</h2>
-      <label class="field">ID (sem espaços)<input id="pal-id" maxlength="30" pattern="[a-z0-9-]{2,30}" required></label>
-      <label class="field">Nome<input id="pal-name" maxlength="30" required></label>
-      <div id="pal-colors" class="pal-colors"></div>
-      <label class="field">Desenhos (decor)<input id="pal-decor" maxlength="300" placeholder="latte.svg mug.svg bean.svg"></label>
-      <div class="chips mini-picker" id="pal-decor-picker"></div>
-      <label class="toggle"><input type="checkbox" id="pal-only"> <span>Só em ocasiões (esconde das configurações)</span></label>
-      <p class="muted small pick-label">Prévia</p>
-      <div id="pal-preview" class="theme-scope pal-preview"></div>
-      <div class="row-buttons">
-        <button type="button" id="pal-delete" class="danger" hidden>Apagar</button>
-        <button type="button" id="pal-try" class="secondary">Testar</button>
-        <button type="submit" id="pal-save" class="primary">Salvar</button>
+  <!-- Admin: palette studio (full screen) -->
+  <dialog id="dlg-pal" class="studio">
+    <div class="studio-top">
+      <div class="studio-name">
+        <input id="pal-name" maxlength="30" placeholder="Nome da paleta" autocomplete="off">
+        <span class="muted small" id="pal-idline"></span>
       </div>
-      <button type="button" id="pal-cancel" class="link small close-link">fechar sem salvar</button>
-    </form>
+      <button type="button" id="pal-undo" class="icon-btn" aria-label="Desfazer">↶</button>
+      <button type="button" id="pal-redo" class="icon-btn" aria-label="Refazer">↷</button>
+      <button type="button" id="pal-cancel" class="icon-btn" aria-label="Fechar">✕</button>
+    </div>
+
+    <div id="pal-preview" class="studio-preview theme-scope"></div>
+    <p class="studio-tip muted small">Toque numa parte do app aí em cima pra mudar a cor dela.</p>
+
+    <div class="studio-body">
+      <div id="pal-roles" class="roles"></div>
+
+      <div class="picker">
+        <div class="picker-head">
+          <span id="pk-swatch" class="big-swatch"></span>
+          <div class="pk-titles"><b id="pk-role"></b><span id="pk-hint" class="muted small"></span></div>
+          <input id="pk-hex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Código da cor">
+          <button type="button" id="pk-lock" class="icon-btn" aria-label="Travar cor">🔓</button>
+        </div>
+        <label class="slider"><span>Cor</span><input type="range" id="pk-h" min="0" max="359"></label>
+        <label class="slider"><span>Intensidade</span><input type="range" id="pk-s" min="0" max="100"></label>
+        <label class="slider"><span>Claridade</span><input type="range" id="pk-l" min="0" max="100"></label>
+        <div id="pk-suggest" class="swatches"></div>
+        <div id="pk-contrast" class="contrast small"></div>
+      </div>
+
+      <div class="studio-tools">
+        <button type="button" id="pal-random" class="secondary">🎲 Surpresa</button>
+        <select id="pal-from" aria-label="Copiar de outra paleta"></select>
+      </div>
+
+      <p class="muted small pick-label">Desenhos do fundo</p>
+      <div id="pal-decor-gallery" class="decor-gallery theme-scope"></div>
+      <input id="pal-emoji" maxlength="60" placeholder="Emojis extras (opcional) 🎈✨" autocomplete="off">
+      <label class="toggle"><input type="checkbox" id="pal-only"> <span>Só em ocasiões (esconde das configurações)</span></label>
+    </div>
+
+    <div class="studio-foot">
+      <button type="button" id="pal-delete" class="danger" hidden>Apagar</button>
+      <button type="button" id="pal-try" class="secondary">Testar</button>
+      <button type="button" id="pal-save" class="primary">Salvar</button>
+    </div>
   </dialog>
 
   <!-- Admin: occasion editor -->

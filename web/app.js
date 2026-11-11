@@ -1960,33 +1960,6 @@ function renderAdminPalettes() {
   });
 }
 
-let palEditing = null; // id when editing
-function readPalForm() {
-  const obj = { name: $("pal-name").value.trim() };
-  for (const [k] of PAL_FIELDS) obj[k] = $(`pal-${k}-hex`).value.trim();
-  const decor = $("pal-decor").value.trim();
-  if (decor) obj.decor = decor;
-  if ($("pal-only").checked) obj.onlyOccasions = true;
-  return obj;
-}
-
-function renderPalPreview() {
-  const p = readPalForm();
-  const box = $("pal-preview");
-  const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
-  for (const [k, v] of Object.entries(vars)) { if (HEX.test(v)) box.style.setProperty(k, v); }
-  const svgs = parseDecor(p.decor || DEFAULT_DECOR).filter((i) => i.svg).slice(0, 3);
-  box.innerHTML = `
-    <div class="pv-decor">${svgs.map(() => `<span class="pv-svg"></span>`).join("")}</div>
-    <div class="pv-card">
-      <div class="round-title">Vai ter almoço hoje?</div>
-      <div class="muted small">Você · agora</div>
-      <div class="chips"><span class="chip selected">Selecionado</span><span class="chip">Normal</span></div>
-      <div class="row-buttons"><span class="primary pv-btn">Sim</span><span class="secondary pv-btn">Não</span></div>
-    </div>`;
-  box.querySelectorAll(".pv-svg").forEach((el, i) => loadSvg(svgs[i].svg).then((t) => { el.innerHTML = t; }));
-}
-
 function renderDecorPicker(pickerId, inputId) {
   const wrap = $(pickerId);
   wrap.innerHTML = "";
@@ -2005,64 +1978,328 @@ function renderDecorPicker(pickerId, inputId) {
   }
 }
 
-function openPaletteEditor(id) {
-  palEditing = id;
-  const raw = id ? allPalettes()[id] || {} : {};
-  const p = { ...DEFAULT_PALETTE, ...raw };
-  $("pal-title").textContent = id ? `Paleta: ${p.name || id}` : "Nova paleta";
-  $("pal-id").value = id || "";
-  $("pal-id").readOnly = !!id;
-  $("pal-name").value = id ? (p.name || "") : "";
-  $("pal-decor").value = raw.decor || "";
-  $("pal-only").checked = !!raw.onlyOccasions;
-  const colors = $("pal-colors");
-  colors.innerHTML = "";
-  for (const [k, label] of PAL_FIELDS) {
-    const row = document.createElement("label");
-    row.className = "pal-color";
-    row.innerHTML = `<span>${label}</span><input type="color" id="pal-${k}" value="${HEX.test(p[k]) && p[k].length === 7 ? p[k] : "#000000"}"><input id="pal-${k}-hex" maxlength="7" value="${esc(p[k] || "")}">`;
-    colors.appendChild(row);
-    const picker = row.querySelector(`#pal-${k}`), hex = row.querySelector(`#pal-${k}-hex`);
-    picker.oninput = () => { hex.value = picker.value; renderPalPreview(); };
-    hex.oninput = () => { if (/^#[0-9a-f]{6}$/i.test(hex.value)) picker.value = hex.value; renderPalPreview(); };
-  }
-  show("pal-delete", !!id && id !== "espresso");
-  renderDecorPicker("pal-decor-picker", "pal-decor");
-  renderPalPreview();
-  $("dlg-pal").showModal();
+// ===================================================================
+// Palette studio: tap the mini-app to pick a color role, edit with HSL sliders.
+// ===================================================================
+const ROLES = [
+  { key: "bg", label: "Fundo", hint: "o fundo do app" },
+  { key: "surface", label: "Cartões", hint: "cartões, abas e popups" },
+  { key: "text", label: "Texto", hint: "texto normal" },
+  { key: "muted", label: "Texto fraco", hint: "detalhes e legendas" },
+  { key: "accent", label: "Botões", hint: "botões principais e o ＋" },
+  { key: "highlight", label: "Realces", hint: "títulos, seleção e destaques" },
+];
+const roleOf = (k) => ROLES.find((r) => r.key === k);
+
+// --- color math ---
+function hexToRgb(hex) {
+  let h = String(hex).replace("#", "");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
-$("pal-decor").addEventListener("input", renderPalPreview);
-$("adm-pal-new").addEventListener("click", () => openPaletteEditor(null));
-$("pal-cancel").addEventListener("click", () => $("dlg-pal").close());
+const rgbToHex = (r, g, b) => "#" + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+function hexToHsl(hex) {
+  let [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return [Math.round(h) % 360, Math.round(s * 100), Math.round(l * 100)];
+}
+function hslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(100, s)) / 100; l = Math.max(0, Math.min(100, l)) / 100;
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return rgbToHex(f(0) * 255, f(8) * 255, f(4) * 255);
+}
+function luminance(hex) {
+  const [r, g, b] = hexToRgb(hex).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+const slugify = (x) => String(x).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30);
+
+// --- studio state ---
+let st = null; // { id, isNew, pal:{name,bg,…}, role, locks:Set, decor:[], emoji, only, hist:[], fut:[] }
+const snap = () => JSON.stringify({ pal: st.pal, decor: st.decor, emoji: st.emoji, only: st.only });
+function restore(json) { const o = JSON.parse(json); st.pal = o.pal; st.decor = o.decor; st.emoji = o.emoji; st.only = o.only; }
+function commit(change) { st.hist.push(snap()); if (st.hist.length > 80) st.hist.shift(); st.fut = []; change(); renderStudio(); }
+
+function studioId() {
+  if (!st.isNew) return st.id;
+  let base = slugify(st.pal.name) || "paleta";
+  if (base.length < 2) base += "-1";
+  let id = base, n = 2;
+  while (allPalettes()[id]) id = `${base}-${n++}`;
+  return id;
+}
+
+function openPaletteEditor(id) {
+  const raw = id ? allPalettes()[id] || {} : null;
+  const base = { ...DEFAULT_PALETTE, ...(raw || {}) };
+  const parsed = parseDecor(raw ? raw.decor || "" : "");
+  st = {
+    id, isNew: !id,
+    pal: { name: raw ? base.name || id : "", bg: base.bg, surface: base.surface, text: base.text, muted: base.muted, accent: base.accent, highlight: base.highlight },
+    role: "accent", locks: new Set(),
+    decor: parsed.filter((x) => x.svg).map((x) => x.svg).filter((v, i, a) => a.indexOf(v) === i),
+    emoji: parsed.filter((x) => x.emoji).map((x) => x.emoji).join(""),
+    only: !!(raw && raw.onlyOccasions), hist: [], fut: [],
+  };
+  if (!raw) st.decor = ["latte.svg", "mug.svg", "bean.svg"];
+  // "Copiar de…" options
+  const from = $("pal-from");
+  from.innerHTML = `<option value="">Copiar de…</option>`;
+  Object.entries(allPalettes()).forEach(([pid, p]) => { if (pid !== id) from.add(new Option((p && p.name) || pid, pid)); });
+  $("pal-name").value = st.pal.name;
+  show("pal-delete", !!id && id !== "espresso");
+  renderStudio();
+  $("dlg-pal").showModal();
+  $("dlg-pal").querySelector(".studio-body").scrollTop = 0;
+  if (!id) setTimeout(() => $("pal-name").focus(), 60);
+}
+
+function renderStudio() {
+  const p = st.pal;
+  $("pal-idline").textContent = st.isNew ? (p.name ? `id: ${studioId()}` : "Dá um nome ✍️") : `id: ${st.id}`;
+  $("pal-undo").disabled = !st.hist.length;
+  $("pal-redo").disabled = !st.fut.length;
+  $("pal-only").checked = st.only;
+  if (document.activeElement !== $("pal-emoji")) $("pal-emoji").value = st.emoji;
+
+  // Live mini-app
+  const box = $("pal-preview");
+  const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
+  for (const [k, v] of Object.entries(vars)) if (HEX.test(v)) box.style.setProperty(k, v);
+  if (!box.firstChild) {
+    box.innerHTML = `
+      <div class="pv-app" data-role="bg">
+        <div class="pv-decor"></div>
+        <div class="pv-top"><span class="pv-brand" data-role="muted">Ela gosta de sorvete?</span><span class="pv-gear" data-role="muted">⚙</span></div>
+        <div class="pv-chiprow"><span class="pv-chip" data-role="surface"><span data-role="highlight">✨ Você</span></span></div>
+        <div class="pv-tabs" data-role="surface"><span class="pv-tab sel" data-role="highlight">Feed</span><span class="pv-tab" data-role="muted">Recados</span></div>
+        <div class="pv-card" data-role="surface">
+          <div class="pv-title" data-role="highlight">🍝 Vai ter almoço hoje?</div>
+          <div class="pv-meta" data-role="muted">de Patroa · há 5 min</div>
+          <div class="pv-text" data-role="text">Responde logo que a gente precisa se organizar.</div>
+          <div class="pv-btns"><span class="pv-btn pri" data-role="accent">Sim</span><span class="pv-btn sec" data-role="text">Não</span></div>
+        </div>
+        <span class="pv-fab" data-role="accent">＋</span>
+      </div>`;
+    box.addEventListener("click", (e) => {
+      const el = e.target.closest("[data-role]");
+      if (!el) return;
+      st.role = el.dataset.role;
+      renderStudio();
+      document.querySelector(".picker").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }
+  box.querySelectorAll("[data-role]").forEach((el) => el.classList.toggle("pv-on", el.dataset.role === st.role));
+  // decor in the mini-app (first 3 drawings)
+  const dec = box.querySelector(".pv-decor");
+  const want = st.decor.slice(0, 3).join("|") + "|" + st.emoji;
+  if (dec.dataset.k !== want) {
+    dec.dataset.k = want;
+    dec.innerHTML = "";
+    st.decor.slice(0, 3).forEach((name, i) => {
+      const s = document.createElement("span");
+      s.className = `pv-svg n${i}`;
+      loadSvg(name).then((t) => { s.innerHTML = t; });
+      dec.appendChild(s);
+    });
+    graphemes(st.emoji).slice(0, 2).forEach((g, i) => {
+      const s = document.createElement("span");
+      s.className = `pv-emo e${i}`;
+      s.textContent = g;
+      dec.appendChild(s);
+    });
+  }
+
+  // Role swatches
+  const roles = $("pal-roles");
+  roles.innerHTML = "";
+  for (const r of ROLES) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "role" + (st.role === r.key ? " on" : "");
+    b.innerHTML = `<i style="background:${p[r.key]}"></i><span>${r.label}</span>${st.locks.has(r.key) ? `<em>🔒</em>` : ""}`;
+    b.onclick = () => { st.role = r.key; renderStudio(); };
+    roles.appendChild(b);
+  }
+
+  // Picker: starts on the selected color's real values
+  const cur = p[st.role];
+  const [h, s, l] = hexToHsl(cur);
+  $("pk-swatch").style.background = cur;
+  $("pk-role").textContent = roleOf(st.role).label;
+  $("pk-hint").textContent = roleOf(st.role).hint;
+  if (document.activeElement !== $("pk-hex")) $("pk-hex").value = cur;
+  $("pk-lock").textContent = st.locks.has(st.role) ? "🔒" : "🔓";
+  if (!draggingSlider) { $("pk-h").value = h; $("pk-s").value = s; $("pk-l").value = l; }
+  const H = +$("pk-h").value, S = +$("pk-s").value, L = +$("pk-l").value;
+  $("pk-h").style.background = `linear-gradient(90deg, ${[0, 60, 120, 180, 240, 300, 360].map((x) => hslToHex(x, Math.max(S, 35), Math.min(Math.max(L, 35), 65))).join(",")})`;
+  $("pk-s").style.background = `linear-gradient(90deg, ${hslToHex(H, 0, L)}, ${hslToHex(H, 100, L)})`;
+  $("pk-l").style.background = `linear-gradient(90deg, #000, ${hslToHex(H, S, 50)}, #fff)`;
+
+  // One-tap suggestions
+  const sug = $("pk-suggest");
+  sug.innerHTML = "";
+  const ideas = [
+    hslToHex(h, s, l - 18), hslToHex(h, s, l - 8), hslToHex(h, s, l + 8), hslToHex(h, s, l + 18),
+    hslToHex(h - 30, s, l), hslToHex(h + 30, s, l), hslToHex(h + 180, s, l),
+    ...ROLES.map((r) => p[r.key]),
+  ].filter((c, i, a) => c.toLowerCase() !== cur.toLowerCase() && a.indexOf(c) === i).slice(0, 12);
+  for (const c of ideas) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sw";
+    b.style.background = c;
+    b.setAttribute("aria-label", c);
+    b.onclick = () => commit(() => { st.pal[st.role] = c; });
+    sug.appendChild(b);
+  }
+
+  // Readability check for this color
+  const pairs = {
+    bg: [p.text, p.bg, "texto no fundo"], surface: [p.text, p.surface, "texto nos cartões"], text: [p.text, p.surface, "texto nos cartões"],
+    muted: [p.muted, p.surface, "texto fraco nos cartões"], accent: [p.bg, p.accent, "letra dentro dos botões"], highlight: [p.highlight, p.surface, "títulos nos cartões"],
+  }[st.role];
+  const ratio = contrast(pairs[0], pairs[1]);
+  const need = st.role === "muted" || st.role === "highlight" ? 3 : 4.5;
+  const verdict = ratio >= 7 ? ["ótima", "good"] : ratio >= need ? ["boa", "good"] : ratio >= 3 ? ["fraca", "meh"] : ["ruim", "bad"];
+  $("pk-contrast").innerHTML = `<span class="cv ${verdict[1]}">Leitura ${verdict[0]}</span> <span class="muted">· ${pairs[2]} · ${ratio.toFixed(1)}:1</span>`;
+
+  // Drawings gallery (thumbnails in this palette's colors, numbered in order)
+  const gal = $("pal-decor-gallery");
+  for (const [k, v] of Object.entries(vars)) if (HEX.test(v)) gal.style.setProperty(k, v);
+  const names = allDrawingNames();
+  if (gal.dataset.k !== names.join("|")) {
+    gal.dataset.k = names.join("|");
+    gal.innerHTML = "";
+    for (const name of names) {
+      const t = document.createElement("button");
+      t.type = "button";
+      t.className = "dg";
+      t.dataset.name = name;
+      t.innerHTML = `<span class="dg-img"></span><span class="dg-n"></span><span class="dg-label">${esc(name.replace(/\.svg$/, ""))}</span>`;
+      loadSvg(name).then((svg) => { t.querySelector(".dg-img").innerHTML = svg; });
+      t.onclick = () => commit(() => {
+        const i = st.decor.indexOf(name);
+        if (i >= 0) st.decor.splice(i, 1); else st.decor.push(name);
+      });
+      gal.appendChild(t);
+    }
+  }
+  gal.querySelectorAll(".dg").forEach((t) => {
+    const i = st.decor.indexOf(t.dataset.name);
+    t.classList.toggle("on", i >= 0);
+    t.querySelector(".dg-n").textContent = i >= 0 ? i + 1 : "";
+  });
+}
+
+// Sliders: one undo step per drag
+let draggingSlider = false;
+for (const id of ["pk-h", "pk-s", "pk-l"]) {
+  $(id).addEventListener("input", () => {
+    if (!draggingSlider) { st.hist.push(snap()); st.fut = []; draggingSlider = true; }
+    st.pal[st.role] = hslToHex(+$("pk-h").value, +$("pk-s").value, +$("pk-l").value);
+    renderStudio();
+  });
+  $(id).addEventListener("change", () => { draggingSlider = false; renderStudio(); });
+}
+$("pk-hex").addEventListener("input", (e) => {
+  let v = e.target.value.trim();
+  if (v && v[0] !== "#") v = "#" + v;
+  if (/^#[0-9a-f]{6}$/i.test(v)) commit(() => { st.pal[st.role] = v.toLowerCase(); });
+});
+$("pk-hex").addEventListener("blur", () => renderStudio());
+$("pk-lock").addEventListener("click", () => {
+  st.locks.has(st.role) ? st.locks.delete(st.role) : st.locks.add(st.role);
+  renderStudio();
+});
+$("pal-name").addEventListener("input", (e) => { st.pal.name = e.target.value; renderStudio(); });
+$("pal-emoji").addEventListener("input", (e) => { st.emoji = e.target.value; renderStudio(); });
+$("pal-only").addEventListener("change", (e) => commit(() => { st.only = e.target.checked; }));
+$("pal-undo").addEventListener("click", () => { if (!st.hist.length) return; st.fut.push(snap()); restore(st.hist.pop()); renderStudio(); });
+$("pal-redo").addEventListener("click", () => { if (!st.fut.length) return; st.hist.push(snap()); restore(st.fut.pop()); renderStudio(); });
+$("pal-from").addEventListener("change", (e) => {
+  const src = allPalettes()[e.target.value];
+  e.target.value = "";
+  if (!src) return;
+  commit(() => {
+    for (const r of ROLES) if (!st.locks.has(r.key) && HEX.test(src[r.key] || "")) st.pal[r.key] = src[r.key];
+    const d = parseDecor(src.decor || "");
+    st.decor = d.filter((x) => x.svg).map((x) => x.svg).filter((v, i, a) => a.indexOf(v) === i);
+    st.emoji = d.filter((x) => x.emoji).map((x) => x.emoji).join("");
+  });
+  toast("Copiado. Agora é só ajustar. 🎨");
+});
+
+// 🎲 A harmonious random palette (locked colors stay).
+$("pal-random").addEventListener("click", () => commit(() => {
+  const h = Math.floor(Math.random() * 360);
+  const shift = [0, 30, -30, 180, 150][Math.floor(Math.random() * 5)];
+  const sat = 18 + Math.random() * 22;
+  const gen = {
+    bg: hslToHex(h, sat, 6 + Math.random() * 3),
+    surface: hslToHex(h, sat, 14 + Math.random() * 4),
+    text: hslToHex(h, 25, 91 + Math.random() * 4),
+    muted: hslToHex(h, 14, 62 + Math.random() * 8),
+    accent: hslToHex(h + shift, 55 + Math.random() * 30, 55 + Math.random() * 10),
+    highlight: hslToHex(h + shift + 20, 60 + Math.random() * 30, 78 + Math.random() * 8),
+  };
+  for (const r of ROLES) if (!st.locks.has(r.key)) st.pal[r.key] = gen[r.key];
+}));
+
+$("pal-cancel").addEventListener("click", async () => {
+  if (st.hist.length && !(await confirmBox("Sair sem salvar?", "As mudanças dessa paleta vão se perder.", "Sair"))) return;
+  $("dlg-pal").close();
+});
+$("dlg-pal").addEventListener("cancel", (e) => { e.preventDefault(); $("pal-cancel").click(); });
+
+function studioPalette() {
+  const p = { ...st.pal, name: st.pal.name.trim() };
+  const decor = [...st.decor, st.emoji.trim()].filter(Boolean).join(" ");
+  if (decor) p.decor = decor;
+  if (st.only) p.onlyOccasions = true;
+  return p;
+}
 $("pal-try").addEventListener("click", () => {
-  const p = readPalForm();
-  if (PAL_FIELDS.some(([k]) => !HEX.test(p[k]))) return toast("Tem cor inválida. Use #rrggbb.");
   previewOcc = null;
-  previewPal = { ...p, id: palEditing || $("pal-id").value.trim() };
+  previewPal = { ...studioPalette(), id: studioId() };
   $("dlg-pal").close();
   applyLook();
   toast("Prévia só no seu aparelho. Toque em “sair” pra voltar.", 4000);
 });
-$("pal-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const id = palEditing || $("pal-id").value.trim().toLowerCase();
-  const p = readPalForm();
-  if (!SLUG.test(id)) return toast("ID: só letras minúsculas, números e hífen.");
-  if (!palEditing && allPalettes()[id]) return toast("Já existe uma paleta com esse ID.");
-  if (!p.name) return toast("Dá um nome pra paleta.");
-  const bad = PAL_FIELDS.find(([k]) => !HEX.test(p[k]));
-  if (bad) return toast(`Cor inválida em “${bad[1]}”. Use #rrggbb.`);
+$("pal-save").addEventListener("click", async () => {
+  const p = studioPalette();
+  if (!p.name) { toast("Dá um nome pra paleta. ✍️"); $("pal-name").focus(); return; }
+  const bad = ROLES.find((r) => !HEX.test(p[r.key]));
+  if (bad) return toast(`Cor inválida em “${bad.label}”.`);
+  const id = studioId();
   const ok = await withBusy($("pal-save"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), p); return true; }, "Salvando…");
-  if (ok) { $("dlg-pal").close(); toast("Paleta salva. 🎨"); }
+  if (ok) { $("dlg-pal").close(); toast(`Paleta “${p.name}” salva. 🎨`); }
 });
 $("pal-delete").addEventListener("click", async () => {
-  const id = palEditing;
+  const id = st.id;
   const used = usedByOccasions(id);
   const msg = used.length ? `Ela é usada em: ${used.join(", ")}. Essas ocasiões vão ficar sem paleta.` : "Quem tinha escolhido ela volta pro Espresso.";
   if (!(await confirmBox("Apagar paleta?", msg, "Apagar"))) return;
   const ok = await withBusy($("pal-delete"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), deleteField()); return true; }, "…");
   if (ok) { $("dlg-pal").close(); toast("Paleta apagada."); }
 });
+
+$("adm-pal-new").addEventListener("click", () => openPaletteEditor(null));
 
 // ---------- Occasions ----------
 function renderAdminOccasions() {
