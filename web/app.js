@@ -524,7 +524,8 @@ async function initMessaging() {
     toast(`${n.title || ""} ${n.body || ""}`, 5000);
     if (Notification.permission === "granted") {
       swReg.showNotification(n.title || "Ela gosta de sorvete?", {
-        body: n.body, icon: "icons/icon-192.png", data: { url: payload.data && payload.data.url },
+        body: n.body, icon: "icons/icon-192.png",
+        data: { url: payload.data && payload.data.url, logId: payload.data && payload.data.logId },
       });
     }
   });
@@ -542,7 +543,7 @@ async function registerDevice() {
       email: auth.currentUser.email,
       userAgent: navigator.userAgent.slice(0, 200),
       updatedAt: serverTimestamp(),
-    });
+    }, { merge: true }); // merge: keep lastRecv written by the receipts
   } catch (err) {
     console.error("registerDevice failed", err);
     toast(`Não consegui ativar as notificações neste aparelho. (${err && (err.code || err.message)})`, 6000);
@@ -657,6 +658,7 @@ const messagingReady = initMessaging().catch((e) => { console.error(e); return f
 onAuthStateChanged(auth, async (user) => {
   unsubs.forEach((u) => u());
   unsubs = [];
+  subscribeAdminData(false);
   me = null;
   meLoaded = false;
   gatePassed = false;
@@ -1035,6 +1037,33 @@ function closesText(ts) {
   return `fecha ${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} às ${hm}`;
 }
 
+// WhatsApp-style delivery ticks for the round's creator.
+function ticksHtml(r, u) {
+  const d = r.delivery && r.delivery[u];
+  if (!d) return "";
+  const seen = r.seen && r.seen[u];
+  let t;
+  if (d.st === "failed") t = `<span class="tk bad" title="não chegou">✗</span>`;
+  else if (d.st === "nodevice") t = `<span class="tk bad" title="sem aparelho com notificação">⚠</span>`;
+  else if (d.st === "quiet") t = `<span class="tk" title="horário de silêncio: vai depois">⏸</span>`;
+  else if (d.open) t = `<span class="tk good" title="abriu a notificação">👆</span>`;
+  else if (d.recv) t = `<span class="tk good" title="chegou no celular">✓✓</span>`;
+  else t = `<span class="tk" title="enviado">✓</span>`;
+  return ` <span class="ticks">${t}${seen ? `<span class="tk good" title="viu no app">👁</span>` : ""}</span>`;
+}
+
+// Stamp "visto" on rounds I'm asked in, once they're on screen.
+const seenSent = new Set();
+function markSeen(list) {
+  if (document.visibilityState !== "visible" || $("tab-feed").hidden || !auth.currentUser) return;
+  const uid = auth.currentUser.uid;
+  for (const r of list) {
+    if (!r.open || !r.recipients.includes(uid) || (r.seen && r.seen[uid]) || seenSent.has(r.id)) continue;
+    seenSent.add(r.id);
+    updateDoc(doc(db, "rounds", r.id), new FieldPath("seen", uid), Date.now()).catch((e) => console.warn("seen", e));
+  }
+}
+
 function relTime(ts) {
   if (!ts || !ts.toMillis) return "agora";
   const min = Math.round((Date.now() - ts.toMillis()) / 60000);
@@ -1140,7 +1169,28 @@ $("chamados-new").addEventListener("click", () => openEditor(null));
 $("fab").addEventListener("click", () => openEditor(null, { quick: true }));
 
 // Tabs (remembered per browser, just a convenience)
+// Admin-only live data: notification log and everyone's phones.
+let logEntries = [];
+let logFilter = "all";
+let adminDevices = {}; // uid -> [{ id, ua, lastRecv, updatedAt }]
+let adminUnsubs = [];
+function subscribeAdminData(on) {
+  adminUnsubs.forEach((u) => u());
+  adminUnsubs = [];
+  if (!on) return;
+  adminUnsubs.push(onSnapshot(query(collection(db, "notifLog"), orderBy("at", "desc"), limit(250)), (snap) => {
+    logEntries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderAdminLog();
+  }, (err) => console.warn("notifLog", err)));
+  adminUnsubs.push(onSnapshot(collection(db, "devices"), (snap) => {
+    adminDevices = {};
+    snap.docs.forEach((d) => (adminDevices[d.get("uid")] ||= []).push({ id: d.id, ...d.data() }));
+    renderAdminPeople();
+  }, (err) => console.warn("devices", err)));
+}
+
 function setAdminVisible(on) {
+  if (on !== !!adminUnsubs.length) subscribeAdminData(on);
   show("tab-btn-admin", on);
   document.querySelector(".tabs").classList.toggle("three", on);
   if (!on && document.querySelector('.tab[data-tab="admin"].selected')) setTab("feed");
@@ -1201,7 +1251,7 @@ function renderRounds() {
         .filter((u) => canSeeAll || u === uid)
         .map((u) => {
           const a = r.answers && r.answers[u];
-          const who = u === uid ? "Você" : nameHtml(u, r.recipientNames && r.recipientNames[u]);
+          const who = (u === uid ? "Você" : nameHtml(u, r.recipientNames && r.recipientNames[u])) + (mine ? ticksHtml(r, u) : "");
           if (!a) return `<li class="waiting">${who} <span>…esperando</span></li>`;
           const changed = a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "";
           return `<li>${who} <b>${esc(a.value)}</b>${changed}</li>`;
@@ -1242,6 +1292,14 @@ function renderRounds() {
       <div class="round-foot"></div>`;
     const actions = li.querySelector(".actions");
     const foot = li.querySelector(".round-foot");
+    if (mine && r.open && r.delivery && Object.keys(r.delivery).length && r.answerType !== "none") {
+      foot.insertAdjacentHTML("afterbegin", `<span class="tick-legend">✓ enviado · ✓✓ chegou · 👆 abriu · 👁 viu</span>`);
+    }
+    if (mine && r.answerType === "none" && r.delivery && Object.keys(r.delivery).length) {
+      // Notices have no answer list, so show who got it right in the card.
+      li.querySelector(".actions").insertAdjacentHTML("beforebegin",
+        `<ul class="answers">${r.recipients.map((u) => `<li>${nameHtml(u, r.recipientNames && r.recipientNames[u])}${ticksHtml(r, u)}</li>`).join("")}</ul>`);
+    }
     if (!r.open) {
       // Tap the header of an ended round to expand / collapse it.
       li.querySelector(".round-head").addEventListener("click", (e) => {
@@ -1317,6 +1375,7 @@ function renderRounds() {
     }
     list.appendChild(li);
   }
+  markSeen(visible);
   if (highlightRound) {
     const el = list.querySelector(".highlight");
     if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); highlightRound = null; }
@@ -1584,6 +1643,7 @@ const fmtDate = ({ i, t }) => (i === 0 ? "hoje" : i === 1 ? "amanhã" : `${DAY_S
 function renderAdmin() {
   if (!isAdminNow() || !$("tab-admin") || $("tab-admin").hidden) return;
   renderAdminPeople();
+  renderAdminLog();
   renderAdminPalettes();
   renderAdminOccasions();
   renderAdminDrawings();
@@ -1617,6 +1677,23 @@ function showCredentials(title, email, password) {
 }
 $("cred-close").addEventListener("click", () => $("dlg-cred").close());
 
+// "iPhone · app", "Android · Chrome"… (same as the server's labels)
+function deviceLabel(ua) {
+  ua = String(ua || "");
+  const os = /iPhone|iPod/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : "Outro";
+  const br = /SamsungBrowser/.test(ua) ? "Samsung" : /FxiOS|Firefox/.test(ua) ? "Firefox" : /EdgA|EdgiOS|Edg\//.test(ua) ? "Edge"
+    : /OPR|Opera/.test(ua) ? "Opera" : /CriOS|Chrome/.test(ua) ? "Chrome"
+    : (os === "iPhone" || os === "iPad") ? (/Safari\//.test(ua) ? "Safari" : "app") : /Safari/.test(ua) ? "Safari" : "navegador";
+  return `${os} · ${br}`;
+}
+const agoText = (ms) => (ms ? relTime({ toMillis: () => ms }) : "");
+function devicesHtml(uid) {
+  const devs = adminDevices[uid] || [];
+  if (!devs.length) return `<div class="devices small warn-text">⚠ nenhum aparelho com notificação</div>`;
+  return `<div class="devices small">${devs.map((d) =>
+    `<div>📱 ${esc(deviceLabel(d.userAgent))} · ${d.lastRecv ? "recebeu " + agoText(d.lastRecv) : "nunca confirmou recebimento"}</div>`).join("")}</div>`;
+}
+
 function renderAdminPeople() {
   const list = $("adm-people");
   const uid = auth.currentUser && auth.currentUser.uid;
@@ -1638,6 +1715,7 @@ function renderAdminPeople() {
         <div class="person-main">
           <div>${name}${p.admin ? ` <span class="badge">admin</span>` : ""}${r.uid === uid ? ` <span class="muted small">· você</span>` : ""}</div>
           <div class="muted small">${esc(r.email || "sem login")}</div>
+          ${devicesHtml(r.uid)}
         </div>
         <div class="person-actions"></div>`;
       const actions = li.querySelector(".person-actions");
@@ -1688,6 +1766,64 @@ $("adm-add-form").addEventListener("submit", async (e) => {
   showCredentials("Acesso criado", res.data.email, res.data.password);
   loadAuthUsers();
 });
+
+// ---------- Notification log ----------
+function logStatus(e) {
+  const t = (ms) => { const d = new Date(ms); return `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`; };
+  switch (e.status) {
+    case "failed": return { icon: "✗", cls: "bad", text: e.error || "falhou" };
+    case "quiet": return { icon: "⏸", cls: "meh", text: e.note || "horário de silêncio" };
+    case "muted": return { icon: "🔕", cls: "meh", text: "silenciou esse recado" };
+    case "nodevice": return { icon: "⚠", cls: "bad", text: "sem aparelho com notificação" };
+    default:
+      if (e.openedAt) return { icon: "👆", cls: "good", text: `abriu ${t(e.openedAt)}` };
+      if (e.receivedAt) return { icon: "✓✓", cls: "good", text: `chegou ${t(e.receivedAt)}` };
+      return { icon: "✓", cls: "", text: "enviado, sem confirmação ainda" };
+  }
+}
+
+function renderAdminLog() {
+  const list = $("adm-log");
+  if (!list || !isAdminNow()) return;
+  // Filter chips: everyone + each person who appears in the log.
+  const people = {};
+  logEntries.forEach((e) => { if (e.toUid) people[e.toUid] = (family[e.toUid] && family[e.toUid].name) || e.toName || "?"; });
+  const chips = $("log-filter");
+  chips.innerHTML = "";
+  [["all", "Todos"], ...Object.entries(people).sort((a, b) => a[1].localeCompare(b[1]))].forEach(([id, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (logFilter === id ? " selected" : "");
+    b.textContent = label;
+    b.onclick = () => { logFilter = id; renderAdminLog(); };
+    chips.appendChild(b);
+  });
+
+  // Group the per-phone entries back into "one notification".
+  const groups = new Map();
+  for (const e of logEntries) {
+    if (logFilter !== "all" && e.toUid !== logFilter) continue;
+    const key = `${e.at}|${e.kind}|${e.title}`;
+    if (!groups.has(key)) groups.set(key, { at: e.at, kind: e.kind, title: e.title, fromUid: e.fromUid, rows: [] });
+    groups.get(key).rows.push(e);
+  }
+  list.innerHTML = groups.size ? "" : `<li class="muted small">Nada por aqui ainda.</li>`;
+  for (const g of groups.values()) {
+    const d = new Date(g.at);
+    const when = `${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} ${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
+    const from = g.fromUid ? ((family[g.fromUid] && family[g.fromUid].name) || "?") : "sistema";
+    const li = document.createElement("li");
+    li.className = "log-item";
+    li.innerHTML = `
+      <div class="log-head"><span class="log-kind">${esc(g.kind || "")}</span><span class="muted small">${esc(when)} · de ${esc(from)}</span></div>
+      <div class="log-title">${esc(g.title || "")}</div>
+      <ul class="log-rows">${g.rows.map((e) => {
+        const st = logStatus(e);
+        return `<li class="${st.cls}"><span class="log-icon">${st.icon}</span><span><b>${esc((family[e.toUid] && family[e.toUid].name) || e.toName || "?")}</b>${e.device ? ` <span class="muted">· ${esc(e.device)}</span>` : ""}<br><span class="muted">${esc(st.text)}</span></span></li>`;
+      }).join("")}</ul>`;
+    list.appendChild(li);
+  }
+}
 
 // ---------- Palettes ----------
 function paletteDots(p) {

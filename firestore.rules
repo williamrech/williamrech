@@ -12,6 +12,7 @@ service cloud.firestore {
 
     // Each device saves its own push token. Only the Cloud Functions read the list.
     match /devices/{token} {
+      allow read: if isAdmin(); // Admin → Pessoas shows everyone's phones
       allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid;
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
@@ -64,6 +65,15 @@ service cloud.firestore {
     // Rounds: visible to the people involved; written only through the functions.
     match /rounds/{id} {
       allow read: if signedIn() && request.auth.uid in resource.data.participants;
+      // A recipient may only stamp their own "visto" (seen) time.
+      allow update: if signedIn() && request.auth.uid in resource.data.recipients
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seen'])
+        && request.resource.data.seen.diff(resource.data.get('seen', {})).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // Notification log (sent / received / opened): admins only, written by the server.
+    match /notifLog/{id} {
+      allow read: if isAdmin();
     }
   }
 }

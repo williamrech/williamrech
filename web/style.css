@@ -828,3 +828,24 @@ input[readonly] { opacity: 0.6; }
   50% { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--crema) 45%, transparent); }
 }
 @media (prefers-reduced-motion: reduce) { .me-chip.nudge { animation: none; box-shadow: 0 0 10px 1px color-mix(in srgb, var(--crema) 40%, transparent); } }
+
+/* ---------- Delivery ticks, log, devices ---------- */
+.ticks { margin-left: 4px; white-space: nowrap; }
+.tk { font-size: 0.78rem; color: var(--muted); margin-left: 2px; }
+.tk.good { color: #8fd694; }
+.tk.bad { color: #f0a594; }
+.tick-legend { margin-right: auto; font-size: 0.68rem; color: var(--muted); align-self: center; }
+.round-foot { align-items: center; }
+.devices { margin-top: 3px; color: var(--muted); line-height: 1.45; }
+.warn-text { color: #f0b46a; }
+.log-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; max-height: 70vh; overflow-y: auto; }
+.log-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: rgba(0, 0, 0, 0.18); }
+.log-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.log-kind { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--crema); font-weight: 700; }
+.log-title { font-size: 0.9rem; margin: 3px 0 6px; overflow-wrap: anywhere; }
+.log-rows { list-style: none; padding: 0; margin: 0; display: grid; gap: 5px; font-size: 0.8rem; }
+.log-rows li { display: grid; grid-template-columns: 26px 1fr; gap: 4px; align-items: start; }
+.log-icon { text-align: center; }
+.log-rows li.good .log-icon { color: #8fd694; }
+.log-rows li.bad .log-icon { color: #f0a594; }
+.log-rows li.meh .log-icon { color: #f0b46a; }

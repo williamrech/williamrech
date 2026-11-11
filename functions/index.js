@@ -1,4 +1,4 @@
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
@@ -89,50 +89,114 @@ async function loadUsers() {
   return Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
 }
 
-async function tokensByUid() {
+// ---------------------------------------------------------------------------
+// Delivery + log. Every notification goes out as one message per phone, each with
+// its own log entry (notifLog/{id}), so admins can see: sent / failed / quiet /
+// muted / no device — and, via receipts from the phone, received / opened.
+// ---------------------------------------------------------------------------
+const LOG_DAYS = 30;
+
+async function loadDevices() {
   const snap = await db.collection("devices").get();
   const map = {};
-  for (const d of snap.docs) (map[d.get("uid")] ||= []).push(d.id);
+  for (const d of snap.docs) (map[d.get("uid")] ||= []).push({ id: d.id, ua: d.get("userAgent") || "" });
   return map;
 }
 
-async function send(tokens, { title, body }, path = "") {
-  if (!tokens.length) return { sent: 0, failed: 0 };
-  const link = APP_URL + path;
-  let sent = 0;
-  let failed = 0;
-  const dead = [];
-  for (let i = 0; i < tokens.length; i += 500) {
-    const batch = tokens.slice(i, i + 500);
-    const res = await getMessaging().sendEachForMulticast({
-      tokens: batch,
-      notification: { title, body },
-      data: { url: link },
-      webpush: {
-        notification: { icon: APP_URL + "icons/icon-192.png" },
-        fcmOptions: { link },
-        headers: { Urgency: "high", TTL: "21600" },
-      },
-    });
-    res.responses.forEach((r, j) => {
-      if (r.success) { sent++; return; }
-      failed++;
-      const code = r.error && r.error.code;
-      if (code === "messaging/registration-token-not-registered" ||
-          code === "messaging/invalid-registration-token") dead.push(batch[j]);
-    });
-  }
-  await Promise.all(dead.map((t) => db.collection("devices").doc(t).delete()));
-  return { sent, failed };
+// "iPhone · app", "Android · Chrome", "Android · Samsung"…
+function deviceLabel(ua) {
+  ua = String(ua || "");
+  const os = /iPhone|iPod/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : "Outro";
+  const br = /SamsungBrowser/.test(ua) ? "Samsung" : /FxiOS|Firefox/.test(ua) ? "Firefox" : /EdgA|EdgiOS|Edg\//.test(ua) ? "Edge"
+    : /OPR|Opera/.test(ua) ? "Opera" : /CriOS|Chrome/.test(ua) ? "Chrome"
+    : (os === "iPhone" || os === "iPad") ? (/Safari\//.test(ua) ? "Safari" : "app") : /Safari/.test(ua) ? "Safari" : "navegador";
+  return `${os} · ${br}`;
 }
 
-// Sends to a list of users, skipping anyone in their quiet hours.
-async function sendToUids(uids, msg, path, { users, tokens } = {}) {
-  users ||= await loadUsers();
-  tokens ||= await tokensByUid();
-  const now = spParts();
-  const list = [...new Set(uids)].filter((u) => !isQuiet(users[u], now)).flatMap((u) => tokens[u] || []);
-  return send(list, msg, path);
+function fcmErrorText(code) {
+  return {
+    "messaging/registration-token-not-registered": "aparelho não existe mais (app apagado ou notificação desligada)",
+    "messaging/invalid-registration-token": "aparelho inválido",
+    "messaging/invalid-argument": "mensagem inválida",
+    "messaging/message-rate-exceeded": "mensagens demais pra esse aparelho",
+    "messaging/third-party-auth-error": "erro no serviço de push da Apple/Google",
+    "messaging/server-unavailable": "push do Google fora do ar",
+    "messaging/internal-error": "erro interno do push",
+  }[code] || String(code || "erro desconhecido");
+}
+
+// targets: uids. meta: { kind, roundId, fromUid, quiet: "hold" | "skip", mutedUids }
+// Returns { sent, failed, perUser: { uid: "sent" | "failed" | "nodevice" | "quiet" } }.
+async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
+  const users = ctx.users || await loadUsers();
+  const devices = ctx.devices || await loadDevices();
+  const sp = spParts();
+  const link = APP_URL + path;
+  const now = Date.now();
+  const bw = db.bulkWriter();
+  const base = { at: now, kind: meta.kind || "outro", roundId: meta.roundId || null, fromUid: meta.fromUid || null, title, body };
+  const logDoc = () => db.collection("notifLog").doc();
+  const perUser = {};
+  const msgs = [];
+
+  for (const uid of meta.mutedUids || []) {
+    bw.create(logDoc(), { ...base, toUid: uid, toName: (users[uid] || {}).name || "?", status: "muted" });
+  }
+  for (const uid of [...new Set(targets)]) {
+    const name = (users[uid] || {}).name || "?";
+    if (isQuiet(users[uid], sp)) {
+      perUser[uid] = "quiet";
+      bw.create(logDoc(), { ...base, toUid: uid, toName: name, status: "quiet",
+        note: meta.quiet === "hold" ? "vai quando acabar o horário de silêncio" : "pulado (horário de silêncio)" });
+      continue;
+    }
+    const devs = devices[uid] || [];
+    if (!devs.length) {
+      perUser[uid] = "nodevice";
+      bw.create(logDoc(), { ...base, toUid: uid, toName: name, status: "nodevice" });
+      continue;
+    }
+    for (const d of devs) {
+      const ref = logDoc();
+      msgs.push({ ref, uid, name, d, message: {
+        token: d.id,
+        notification: { title, body },
+        data: { url: link, logId: ref.id },
+        webpush: {
+          notification: { icon: APP_URL + "icons/icon-192.png" },
+          fcmOptions: { link },
+          headers: { Urgency: "high", TTL: "21600" },
+        },
+      } });
+    }
+  }
+
+  let sent = 0;
+  let failed = 0;
+  for (let i = 0; i < msgs.length; i += 500) {
+    const chunk = msgs.slice(i, i + 500);
+    const res = await getMessaging().sendEach(chunk.map((m) => m.message));
+    res.responses.forEach((r, j) => {
+      const m = chunk[j];
+      const code = r.error && r.error.code;
+      if (r.success) { sent++; perUser[m.uid] = "sent"; } else {
+        failed++;
+        if (perUser[m.uid] !== "sent") perUser[m.uid] = "failed";
+        if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") {
+          bw.delete(db.doc(`devices/${m.d.id}`));
+        }
+      }
+      bw.create(m.ref, { ...base, toUid: m.uid, toName: m.name, deviceId: m.d.id, device: deviceLabel(m.d.ua),
+        status: r.success ? "sent" : "failed", error: r.success ? null : fcmErrorText(code) });
+    });
+  }
+  await bw.close();
+  return { sent, failed, perUser };
+}
+
+// Sends to a list of users; anyone in quiet hours is skipped (logged).
+async function sendToUids(uids, msg, path, meta = {}, ctx = {}) {
+  return deliver(uids, msg, path, { ...meta, quiet: "skip" }, ctx);
 }
 
 async function profile(auth) {
@@ -165,9 +229,9 @@ const handlers = {};
 // ---------------------------------------------------------------------------
 const ANSWER_TYPES = ["none", "yesno", "options", "text"];
 
-async function createRound(tplRef, tpl, owner, { users, tokens } = {}) {
+async function createRound(tplRef, tpl, owner, { users, devices, kind } = {}) {
   users ||= await loadUsers();
-  tokens ||= await tokensByUid();
+  devices ||= await loadDevices();
   const muted = tpl.mutedBy || {};
   const pool = tpl.recipients === "all"
     ? Object.keys(users).filter((u) => u !== tpl.ownerUid)
@@ -196,21 +260,29 @@ async function createRound(tplRef, tpl, owner, { users, tokens } = {}) {
     participants: [...new Set([...recipients, tpl.ownerUid])],
     answers: {},
     notified: {},
+    delivery: {}, // uid -> { st: "sent"|"failed"|"nodevice"|"quiet", at, recv, open }
+    seen: {},     // uid -> millis, written by the recipient's app
     open: true,
     closesAt: Timestamp.fromMillis(now + durationHours * 3600000),
     createdAt: FieldValue.serverTimestamp(),
   };
 
   // Notify now everyone not in quiet hours; the rest get it when their quiet hours end (tick).
-  const sp = spParts();
-  const awake = recipients.filter((u) => !isQuiet(users[u], sp));
   const ref = db.collection("rounds").doc();
-  for (const u of awake) round.notified[u] = now;
   await ref.set(round);
 
   const msg = { title: `${round.emoji} ${round.title}`, body: round.body || `${owner.name} quer saber.` };
-  const res = await send(awake.flatMap((u) => tokens[u] || []), msg, `?rodada=${ref.id}`);
-  return { id: ref.id, recipients: recipients.length, delayed: recipients.length - awake.length, ...res };
+  const res = await deliver(recipients, msg, `?rodada=${ref.id}`,
+    { kind: kind || "recado", roundId: ref.id, fromUid: tpl.ownerUid, quiet: "hold", mutedUids: pool.filter((u) => muted[u]) },
+    { users, devices });
+  const upd = {};
+  for (const [u, st] of Object.entries(res.perUser)) {
+    if (st !== "quiet") upd[`notified.${u}`] = now;
+    upd[`delivery.${u}`] = { st, at: now };
+  }
+  if (Object.keys(upd).length) await ref.update(upd);
+  const delayed = Object.values(res.perUser).filter((x) => x === "quiet").length;
+  return { id: ref.id, recipients: recipients.length, delayed, sent: res.sent, failed: res.failed };
 }
 
 handlers.fireTemplate = async (req) => {
@@ -285,7 +357,7 @@ handlers.answerRound = async (req) => {
   const targets = round.visibility === "all"
     ? round.participants.filter((u) => u !== auth.uid)
     : [round.ownerUid].filter((u) => u !== auth.uid);
-  await sendToUids(targets, msg, `?rodada=${roundId}`);
+  await sendToUids(targets, msg, `?rodada=${roundId}`, { kind: changes ? "mudou de ideia" : "resposta", roundId, fromUid: auth.uid });
   return { ok: true, changes };
 };
 
@@ -339,7 +411,8 @@ handlers.muteTemplate = async (req) => {
     }, { merge: true }),
   ]);
   if (tpl.ownerUid !== auth.uid) {
-    await sendToUids([tpl.ownerUid], message(mute ? "muted" : "unmuted", { name: me.name, gender: me.gender, title: tpl.title }));
+    await sendToUids([tpl.ownerUid], message(mute ? "muted" : "unmuted", { name: me.name, gender: me.gender, title: tpl.title }), "",
+      { kind: mute ? "silenciou" : "reativou", fromUid: auth.uid });
   }
   return { muted: mute };
 };
@@ -352,7 +425,7 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
   const sp = spParts();
   const nowMin = toMin(sp.hm);
   const now = Date.now();
-  const [users, tokens] = await Promise.all([loadUsers(), tokensByUid()]);
+  const [users, devices] = await Promise.all([loadUsers(), loadDevices()]);
 
   // 1) Scheduled templates due today (fire within 60 min after their time, once per day).
   const scheduled = await db.collection("templates").where("schedule.on", "==", true).get();
@@ -365,7 +438,7 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
     await doc.ref.update({ lastFiredKey: sp.key });
     const owner = users[tpl.ownerUid] || {};
     try {
-      await createRound(doc.ref, tpl, { name: owner.name || "Alguém", gender: owner.gender || "m" }, { users, tokens });
+      await createRound(doc.ref, tpl, { name: owner.name || "Alguém", gender: owner.gender || "m" }, { users, devices, kind: "agendado" });
     } catch (e) {
       console.warn("scheduled fire skipped", doc.id, e.message);
     }
@@ -387,16 +460,66 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
       if (muted[u] || (r.answers && r.answers[u]) || isQuiet(users[u], sp)) continue;
       const last = r.notified && r.notified[u];
       let msg = null;
+      let kind = "insistência";
       if (!last) {
         msg = { title: `${r.emoji} ${r.title}`, body: r.body || `${r.ownerName} quer saber.` };
+        kind = "recado (depois do silêncio)";
       } else if (r.nagEveryMin > 0 && now - last >= r.nagEveryMin * 60000 - 30000) {
         msg = message("nag", { emoji: r.emoji, title: r.title, owner: r.ownerName, name: (users[u] || {}).name || "", gender: (users[u] || {}).gender });
       }
       if (!msg) continue;
-      await send(tokens[u] || [], msg, `?rodada=${doc.id}`);
+      const res = await deliver([u], msg, `?rodada=${doc.id}`, { kind, roundId: doc.id, fromUid: r.ownerUid, quiet: "hold" }, { users, devices });
       updates[`notified.${u}`] = now;
+      if (!last) updates[`delivery.${u}`] = { st: res.perUser[u] || "failed", at: now };
     }
     if (Object.keys(updates).length) await doc.ref.update(updates);
+  }
+
+  // 3) Forget log entries older than LOG_DAYS.
+  const old = await db.collection("notifLog").where("at", "<", now - LOG_DAYS * 86400000).limit(400).get();
+  if (!old.empty) {
+    const bw = db.bulkWriter();
+    old.docs.forEach((d) => bw.delete(d.ref));
+    await bw.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Receipts: the phone's service worker calls this when a notification arrives
+// (e=recv) or is tapped (e=open). The id is the unguessable log id it came with.
+// ---------------------------------------------------------------------------
+exports.receipt = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB", cors: true }, async (req, res) => {
+  const id = String(req.query.id || "");
+  const e = req.query.e === "open" ? "open" : "recv";
+  if (!/^[A-Za-z0-9]{20}$/.test(id)) { res.status(400).end(); return; }
+  const ref = db.doc(`notifLog/${id}`);
+  try {
+    const now = Date.now();
+    const out = await db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) return null;
+      const upd = {};
+      if (!snap.get("receivedAt")) upd.receivedAt = now; // a tap also proves it arrived
+      if (e === "open" && !snap.get("openedAt")) upd.openedAt = now;
+      if (Object.keys(upd).length) t.update(ref, upd);
+      return { log: snap.data(), upd };
+    });
+    if (out && Object.keys(out.upd).length) {
+      const { log, upd } = out;
+      const writes = [];
+      if (log.deviceId) writes.push(db.doc(`devices/${log.deviceId}`).update({ lastRecv: now }).catch(() => {}));
+      if (log.roundId && log.toUid) {
+        const r = {};
+        if (upd.receivedAt) r[`delivery.${log.toUid}.recv`] = now;
+        if (upd.openedAt) r[`delivery.${log.toUid}.open`] = now;
+        writes.push(db.doc(`rounds/${log.roundId}`).update(r).catch(() => {}));
+      }
+      await Promise.all(writes);
+    }
+    res.status(204).end();
+  } catch (err) {
+    console.error("receipt", err);
+    res.status(500).end();
   }
 });
 
@@ -449,8 +572,7 @@ handlers.adminHealth = async (req) => {
 
 handlers.adminTest = async (req) => {
   const auth = await requireAdmin(req);
-  const tokens = await tokensByUid();
-  return send(tokens[auth.uid] || [], { title: "Teste ☕", body: "Se você tá lendo isso, as notificações funcionam." });
+  return deliver([auth.uid], { title: "Teste ☕", body: "Se você tá lendo isso, as notificações funcionam." }, "", { kind: "teste", fromUid: auth.uid });
 };
 
 handlers.adminReset = async (req) => {
