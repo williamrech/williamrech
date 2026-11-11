@@ -293,53 +293,45 @@
 
   <!-- Modal: customize your name -->
 
-  <!-- Admin: palette studio (full screen) -->
+  <!-- Admin: palette studio (full screen, everything on one screen, no scrolling) -->
   <dialog id="dlg-pal" class="studio">
-    <div class="studio-top">
-      <div class="studio-name">
-        <input id="pal-name" maxlength="30" placeholder="Nome da paleta" autocomplete="off">
-        <span class="muted small" id="pal-idline"></span>
+    <div class="ps" tabindex="-1" autofocus>
+      <div class="ps-top">
+        <button type="button" id="pal-cancel" class="icon-btn" aria-label="Fechar">✕</button>
+        <input id="pal-name" maxlength="30" placeholder="Nome da paleta" autocomplete="off" aria-label="Nome da paleta">
+        <button type="button" id="pal-undo" class="icon-btn" aria-label="Desfazer">↶</button>
+        <button type="button" id="pal-redo" class="icon-btn" aria-label="Refazer">↷</button>
+        <button type="button" id="pal-more" class="icon-btn" aria-label="Mais opções" aria-expanded="false">⋯</button>
+        <button type="button" id="pal-save" class="ps-save">Salvar</button>
       </div>
-      <button type="button" id="pal-undo" class="icon-btn" aria-label="Desfazer">↶</button>
-      <button type="button" id="pal-redo" class="icon-btn" aria-label="Refazer">↷</button>
-      <button type="button" id="pal-cancel" class="icon-btn" aria-label="Fechar">✕</button>
-    </div>
 
-    <div id="pal-preview" class="studio-preview theme-scope"></div>
-    <p class="studio-tip muted small">Toque numa parte do app aí em cima pra mudar a cor dela.</p>
+      <div id="pal-preview" class="ps-preview theme-scope" title="Toque numa parte pra mudar a cor dela"></div>
 
-    <div class="studio-body">
-      <div id="pal-roles" class="roles"></div>
+      <div id="pal-roles" class="ps-roles" aria-label="Cores da paleta"></div>
 
-      <div class="picker">
-        <div class="picker-head">
-          <span id="pk-swatch" class="big-swatch"></span>
-          <div class="pk-titles"><b id="pk-role"></b><span id="pk-hint" class="muted small"></span></div>
+      <section class="ps-editor" aria-label="Editar cor">
+        <div class="ps-head">
+          <span id="pk-swatch" class="ps-chip"></span>
           <input id="pk-hex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Código da cor">
+          <button type="button" id="pk-contrast" class="ps-read"></button>
           <button type="button" id="pk-lock" class="icon-btn" aria-label="Travar cor">🔓</button>
+          <button type="button" id="pal-random" class="icon-btn" aria-label="Surpresa: sorteia as cores destravadas">🎲</button>
         </div>
-        <label class="slider"><span>Cor</span><input type="range" id="pk-h" min="0" max="359"></label>
-        <label class="slider"><span>Intensidade</span><input type="range" id="pk-s" min="0" max="100"></label>
-        <label class="slider"><span>Claridade</span><input type="range" id="pk-l" min="0" max="100"></label>
-        <div id="pk-suggest" class="swatches"></div>
-        <div id="pk-contrast" class="contrast small"></div>
-      </div>
+        <div class="ps-slider"><input type="range" id="pk-h" min="0" max="359" aria-label="Cor"><span>Cor</span></div>
+        <div class="ps-slider"><input type="range" id="pk-s" min="0" max="100" aria-label="Intensidade"><span>Intensidade</span></div>
+        <div class="ps-slider"><input type="range" id="pk-l" min="0" max="100" aria-label="Claridade"><span>Claridade</span></div>
+        <div id="pk-suggest" class="ps-suggest" aria-label="Sugestões"></div>
+      </section>
 
-      <div class="studio-tools">
-        <button type="button" id="pal-random" class="secondary">🎲 Surpresa</button>
-        <select id="pal-from" aria-label="Copiar de outra paleta"></select>
-      </div>
-
-      <p class="muted small pick-label">Desenhos do fundo</p>
-      <div id="pal-decor-gallery" class="decor-gallery theme-scope"></div>
-      <input id="pal-emoji" maxlength="60" placeholder="Emojis extras (opcional) 🎈✨" autocomplete="off">
-      <label class="toggle"><input type="checkbox" id="pal-only"> <span>Só em ocasiões (esconde das configurações)</span></label>
+      <div id="pal-decor-gallery" class="ps-decor theme-scope" aria-label="Desenhos do fundo"></div>
     </div>
 
-    <div class="studio-foot">
-      <button type="button" id="pal-delete" class="danger" hidden>Apagar</button>
-      <button type="button" id="pal-try" class="secondary">Testar</button>
-      <button type="button" id="pal-save" class="primary">Salvar</button>
+    <div id="pal-menu" class="ps-menu" hidden>
+      <p class="muted small" id="pal-idline"></p>
+      <label class="field">Copiar cores de<select id="pal-from"></select></label>
+      <label class="field">Emojis extras no fundo<input id="pal-emoji" maxlength="60" placeholder="🎈✨" autocomplete="off"></label>
+      <label class="toggle"><input type="checkbox" id="pal-only"> <span>Só em ocasiões (some das configurações)</span></label>
+      <button type="button" id="pal-delete" class="danger wide" hidden>Apagar paleta</button>
     </div>
   </dialog>
 

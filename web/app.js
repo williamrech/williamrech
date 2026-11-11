@@ -1979,13 +1979,14 @@ function renderDecorPicker(pickerId, inputId) {
 }
 
 // ===================================================================
-// Palette studio: tap the mini-app to pick a color role, edit with HSL sliders.
+// Palette studio: one screen. Tap a tile (or a part of the mini-app) to edit
+// that color; the sliders always start on its real values. Changes are live.
 // ===================================================================
 const ROLES = [
   { key: "bg", label: "Fundo", hint: "o fundo do app" },
   { key: "surface", label: "Cartões", hint: "cartões, abas e popups" },
   { key: "text", label: "Texto", hint: "texto normal" },
-  { key: "muted", label: "Texto fraco", hint: "detalhes e legendas" },
+  { key: "muted", label: "Legendas", hint: "detalhes e legendas" },
   { key: "accent", label: "Botões", hint: "botões principais e o ＋" },
   { key: "highlight", label: "Realces", hint: "títulos, seleção e destaques" },
 ];
@@ -2044,6 +2045,11 @@ function studioId() {
   return id;
 }
 
+function palMenu(open) {
+  show("pal-menu", open);
+  $("pal-more").setAttribute("aria-expanded", String(open));
+}
+
 function openPaletteEditor(id) {
   const raw = id ? allPalettes()[id] || {} : null;
   const base = { ...DEFAULT_PALETTE, ...(raw || {}) };
@@ -2057,141 +2063,175 @@ function openPaletteEditor(id) {
     only: !!(raw && raw.onlyOccasions), hist: [], fut: [],
   };
   if (!raw) st.decor = ["latte.svg", "mug.svg", "bean.svg"];
-  // "Copiar de…" options
   const from = $("pal-from");
-  from.innerHTML = `<option value="">Copiar de…</option>`;
+  from.innerHTML = `<option value="">Escolher…</option>`;
   Object.entries(allPalettes()).forEach(([pid, p]) => { if (pid !== id) from.add(new Option((p && p.name) || pid, pid)); });
   $("pal-name").value = st.pal.name;
   show("pal-delete", !!id && id !== "espresso");
+  palMenu(false);
   renderStudio();
   $("dlg-pal").showModal();
-  $("dlg-pal").querySelector(".studio-body").scrollTop = 0;
+  $("pal-decor-gallery").scrollLeft = 0;
   if (!id) setTimeout(() => $("pal-name").focus(), 60);
+}
+
+// Which pair of colors must stay readable when this role changes
+function readPair(role, p) {
+  return {
+    bg: { other: p.text, need: 4.5, what: "texto no fundo" },
+    surface: { other: p.text, need: 4.5, what: "texto nos cartões" },
+    text: { other: p.surface, need: 4.5, what: "texto nos cartões" },
+    muted: { other: p.surface, need: 3, what: "legendas nos cartões" },
+    accent: { other: p.bg, need: 4.5, what: "letra dentro dos botões" },
+    highlight: { other: p.surface, need: 3, what: "títulos nos cartões" },
+  }[role];
 }
 
 function renderStudio() {
   const p = st.pal;
-  $("pal-idline").textContent = st.isNew ? (p.name ? `id: ${studioId()}` : "Dá um nome ✍️") : `id: ${st.id}`;
+  const dirty = st.isNew || st.hist.length > 0;
+  $("pal-idline").textContent = st.isNew ? (p.name ? `Nova · id: ${studioId()}` : "Nova paleta · dá um nome ✍️") : `id: ${st.id}`;
   $("pal-undo").disabled = !st.hist.length;
   $("pal-redo").disabled = !st.fut.length;
+  $("pal-save").classList.toggle("dirty", dirty);
   $("pal-only").checked = st.only;
   if (document.activeElement !== $("pal-emoji")) $("pal-emoji").value = st.emoji;
 
-  // Live mini-app
-  const box = $("pal-preview");
   const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
+
+  // Live mini-app (tap a part to edit its color)
+  const box = $("pal-preview");
   for (const [k, v] of Object.entries(vars)) if (HEX.test(v)) box.style.setProperty(k, v);
   if (!box.firstChild) {
     box.innerHTML = `
-      <div class="pv-app" data-role="bg">
-        <div class="pv-decor"></div>
-        <div class="pv-top"><span class="pv-brand" data-role="muted">Ela gosta de sorvete?</span><span class="pv-gear" data-role="muted">⚙</span></div>
-        <div class="pv-chiprow"><span class="pv-chip" data-role="surface"><span data-role="highlight">✨ Você</span></span></div>
-        <div class="pv-tabs" data-role="surface"><span class="pv-tab sel" data-role="highlight">Feed</span><span class="pv-tab" data-role="muted">Recados</span></div>
-        <div class="pv-card" data-role="surface">
-          <div class="pv-title" data-role="highlight">🍝 Vai ter almoço hoje?</div>
-          <div class="pv-meta" data-role="muted">de Patroa · há 5 min</div>
-          <div class="pv-text" data-role="text">Responde logo que a gente precisa se organizar.</div>
-          <div class="pv-btns"><span class="pv-btn pri" data-role="accent">Sim</span><span class="pv-btn sec" data-role="text">Não</span></div>
+      <div class="mini" data-role="bg">
+        <div class="mini-decor"></div>
+        <div class="mini-top"><span data-role="muted">Ela gosta de sorvete?</span><span data-role="muted">⚙</span></div>
+        <div class="mini-tabs" data-role="surface"><span class="sel" data-role="highlight">Feed</span><span data-role="muted">Recados</span></div>
+        <div class="mini-card" data-role="surface">
+          <div class="mini-title" data-role="highlight">🍝 Vai ter almoço hoje?</div>
+          <div class="mini-meta" data-role="muted">de Patroa · há 5 min</div>
+          <div class="mini-text" data-role="text">Responde logo, por favor!</div>
+          <div class="mini-btns"><span class="mini-btn pri" data-role="accent">Sim</span><span class="mini-btn sec" data-role="text">Não</span></div>
         </div>
-        <span class="pv-fab" data-role="accent">＋</span>
+        <span class="mini-fab" data-role="accent">＋</span>
       </div>`;
     box.addEventListener("click", (e) => {
       const el = e.target.closest("[data-role]");
-      if (!el) return;
-      st.role = el.dataset.role;
-      renderStudio();
-      document.querySelector(".picker").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (el) { st.role = el.dataset.role; renderStudio(); }
     });
   }
-  box.querySelectorAll("[data-role]").forEach((el) => el.classList.toggle("pv-on", el.dataset.role === st.role));
-  // decor in the mini-app (first 3 drawings)
-  const dec = box.querySelector(".pv-decor");
+  box.querySelectorAll("[data-role]").forEach((el) => el.classList.toggle("on", el.dataset.role === st.role));
+  const dec = box.querySelector(".mini-decor");
   const want = st.decor.slice(0, 3).join("|") + "|" + st.emoji;
   if (dec.dataset.k !== want) {
     dec.dataset.k = want;
     dec.innerHTML = "";
     st.decor.slice(0, 3).forEach((name, i) => {
       const s = document.createElement("span");
-      s.className = `pv-svg n${i}`;
+      s.className = `mini-svg n${i}`;
       loadSvg(name).then((t) => { s.innerHTML = t; });
       dec.appendChild(s);
     });
     graphemes(st.emoji).slice(0, 2).forEach((g, i) => {
       const s = document.createElement("span");
-      s.className = `pv-emo e${i}`;
+      s.className = `mini-emo e${i}`;
       s.textContent = g;
       dec.appendChild(s);
     });
   }
 
-  // Role swatches
+  // Role tiles = the palette
   const roles = $("pal-roles");
-  roles.innerHTML = "";
-  for (const r of ROLES) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "role" + (st.role === r.key ? " on" : "");
-    b.innerHTML = `<i style="background:${p[r.key]}"></i><span>${r.label}</span>${st.locks.has(r.key) ? `<em>🔒</em>` : ""}`;
-    b.onclick = () => { st.role = r.key; renderStudio(); };
-    roles.appendChild(b);
+  if (!roles.firstChild) {
+    for (const r of ROLES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ps-role";
+      b.dataset.role = r.key;
+      b.title = r.hint;
+      b.innerHTML = `<i></i><span>${r.label}</span>`;
+      b.onclick = () => { st.role = r.key; renderStudio(); };
+      roles.appendChild(b);
+    }
   }
+  roles.querySelectorAll(".ps-role").forEach((b) => {
+    const k = b.dataset.role;
+    b.classList.toggle("on", k === st.role);
+    b.setAttribute("aria-pressed", String(k === st.role));
+    const i = b.querySelector("i");
+    i.style.background = p[k];
+    i.innerHTML = st.locks.has(k) ? "<em>🔒</em>" : "";
+  });
 
-  // Picker: starts on the selected color's real values
+  // Editor: starts on the selected color's real values
   const cur = p[st.role];
   const [h, s, l] = hexToHsl(cur);
   $("pk-swatch").style.background = cur;
-  $("pk-role").textContent = roleOf(st.role).label;
-  $("pk-hint").textContent = roleOf(st.role).hint;
   if (document.activeElement !== $("pk-hex")) $("pk-hex").value = cur;
-  $("pk-lock").textContent = st.locks.has(st.role) ? "🔒" : "🔓";
+  const locked = st.locks.has(st.role);
+  $("pk-lock").textContent = locked ? "🔒" : "🔓";
+  $("pk-lock").setAttribute("aria-pressed", String(locked));
+  $("pk-lock").setAttribute("aria-label", locked ? "Destravar cor (o 🎲 volta a mudar ela)" : "Travar cor (o 🎲 não muda ela)");
   if (!draggingSlider) { $("pk-h").value = h; $("pk-s").value = s; $("pk-l").value = l; }
   const H = +$("pk-h").value, S = +$("pk-s").value, L = +$("pk-l").value;
-  $("pk-h").style.background = `linear-gradient(90deg, ${[0, 60, 120, 180, 240, 300, 360].map((x) => hslToHex(x, Math.max(S, 35), Math.min(Math.max(L, 35), 65))).join(",")})`;
-  $("pk-s").style.background = `linear-gradient(90deg, ${hslToHex(H, 0, L)}, ${hslToHex(H, 100, L)})`;
-  $("pk-l").style.background = `linear-gradient(90deg, #000, ${hslToHex(H, S, 50)}, #fff)`;
+  const tracks = {
+    "pk-h": `linear-gradient(90deg, ${[0, 60, 120, 180, 240, 300, 360].map((x) => hslToHex(x, Math.max(S, 35), Math.min(Math.max(L, 35), 65))).join(",")})`,
+    "pk-s": `linear-gradient(90deg, ${hslToHex(H, 0, L)}, ${hslToHex(H, 100, L)})`,
+    "pk-l": `linear-gradient(90deg, #000, ${hslToHex(H, S, 50)}, #fff)`,
+  };
+  for (const [id, bg] of Object.entries(tracks)) {
+    const inp = $(id);
+    inp.style.background = bg;
+    inp.style.setProperty("--thumb", cur);
+    // keep the label on the side away from the thumb
+    inp.parentElement.classList.toggle("flip", +inp.value / +inp.max > 0.55);
+  }
 
-  // One-tap suggestions
+  // Readability: tap to fix it automatically
+  const pr = readPair(st.role, p);
+  const ratio = contrast(cur, pr.other);
+  const v = ratio >= 7 ? ["ótima", "good"] : ratio >= pr.need ? ["boa", "good"] : ratio >= 3 ? ["fraca", "meh"] : ["ruim", "bad"];
+  const rd = $("pk-contrast");
+  rd.className = `ps-read ${v[1]}`;
+  rd.textContent = `Leitura ${v[0]} ${ratio.toFixed(1)}${ratio < pr.need ? " · corrigir ✨" : ""}`;
+  rd.title = `${pr.what}: ${ratio.toFixed(1)}:1${ratio < pr.need ? " · toque pra corrigir" : ""}`;
+
+  // Suggestions: nearby tones | the palette's other colors
   const sug = $("pk-suggest");
   sug.innerHTML = "";
-  const ideas = [
-    hslToHex(h, s, l - 18), hslToHex(h, s, l - 8), hslToHex(h, s, l + 8), hslToHex(h, s, l + 18),
-    hslToHex(h - 30, s, l), hslToHex(h + 30, s, l), hslToHex(h + 180, s, l),
-    ...ROLES.map((r) => p[r.key]),
-  ].filter((c, i, a) => c.toLowerCase() !== cur.toLowerCase() && a.indexOf(c) === i).slice(0, 12);
-  for (const c of ideas) {
+  const seen = new Set([cur.toLowerCase()]);
+  const add = (c) => {
+    if (seen.has(c.toLowerCase())) return;
+    seen.add(c.toLowerCase());
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "sw";
     b.style.background = c;
     b.setAttribute("aria-label", c);
     b.onclick = () => commit(() => { st.pal[st.role] = c; });
     sug.appendChild(b);
-  }
+  };
+  [hslToHex(h, s, l - 20), hslToHex(h, s, l - 9), hslToHex(h, s, l + 9), hslToHex(h, s, l + 20), hslToHex(h - 25, s, l), hslToHex(h + 25, s, l)].forEach(add);
+  const gap = document.createElement("span");
+  gap.className = "gap";
+  sug.appendChild(gap);
+  ROLES.forEach((r) => add(p[r.key]));
 
-  // Readability check for this color
-  const pairs = {
-    bg: [p.text, p.bg, "texto no fundo"], surface: [p.text, p.surface, "texto nos cartões"], text: [p.text, p.surface, "texto nos cartões"],
-    muted: [p.muted, p.surface, "texto fraco nos cartões"], accent: [p.bg, p.accent, "letra dentro dos botões"], highlight: [p.highlight, p.surface, "títulos nos cartões"],
-  }[st.role];
-  const ratio = contrast(pairs[0], pairs[1]);
-  const need = st.role === "muted" || st.role === "highlight" ? 3 : 4.5;
-  const verdict = ratio >= 7 ? ["ótima", "good"] : ratio >= need ? ["boa", "good"] : ratio >= 3 ? ["fraca", "meh"] : ["ruim", "bad"];
-  $("pk-contrast").innerHTML = `<span class="cv ${verdict[1]}">Leitura ${verdict[0]}</span> <span class="muted">· ${pairs[2]} · ${ratio.toFixed(1)}:1</span>`;
-
-  // Drawings gallery (thumbnails in this palette's colors, numbered in order)
+  // Drawings row (in this palette's colors, numbered in order)
   const gal = $("pal-decor-gallery");
-  for (const [k, v] of Object.entries(vars)) if (HEX.test(v)) gal.style.setProperty(k, v);
+  for (const [k, v2] of Object.entries(vars)) if (HEX.test(v2)) gal.style.setProperty(k, v2);
   const names = allDrawingNames();
   if (gal.dataset.k !== names.join("|")) {
     gal.dataset.k = names.join("|");
-    gal.innerHTML = "";
+    gal.innerHTML = `<span class="ps-decor-label">desenhos</span>`;
     for (const name of names) {
       const t = document.createElement("button");
       t.type = "button";
       t.className = "dg";
       t.dataset.name = name;
-      t.innerHTML = `<span class="dg-img"></span><span class="dg-n"></span><span class="dg-label">${esc(name.replace(/\.svg$/, ""))}</span>`;
+      t.title = name.replace(/\.svg$/, "");
+      t.setAttribute("aria-label", t.title);
+      t.innerHTML = `<span class="dg-img"></span><span class="dg-n"></span>`;
       loadSvg(name).then((svg) => { t.querySelector(".dg-img").innerHTML = svg; });
       t.onclick = () => commit(() => {
         const i = st.decor.indexOf(name);
@@ -2203,6 +2243,7 @@ function renderStudio() {
   gal.querySelectorAll(".dg").forEach((t) => {
     const i = st.decor.indexOf(t.dataset.name);
     t.classList.toggle("on", i >= 0);
+    t.setAttribute("aria-pressed", String(i >= 0));
     t.querySelector(".dg-n").textContent = i >= 0 ? i + 1 : "";
   });
 }
@@ -2222,16 +2263,35 @@ $("pk-hex").addEventListener("input", (e) => {
   if (v && v[0] !== "#") v = "#" + v;
   if (/^#[0-9a-f]{6}$/i.test(v)) commit(() => { st.pal[st.role] = v.toLowerCase(); });
 });
+$("pk-hex").addEventListener("focus", (e) => e.target.select());
 $("pk-hex").addEventListener("blur", () => renderStudio());
 $("pk-lock").addEventListener("click", () => {
   st.locks.has(st.role) ? st.locks.delete(st.role) : st.locks.add(st.role);
   renderStudio();
+});
+// Readability fix: move this color's lightness away from its partner until it reads well
+$("pk-contrast").addEventListener("click", () => {
+  const pr = readPair(st.role, st.pal);
+  if (contrast(st.pal[st.role], pr.other) >= pr.need) return toast(`Já tá boa: ${pr.what}. 👍`);
+  const [h, s, l] = hexToHsl(st.pal[st.role]);
+  const step = luminance(pr.other) < 0.18 ? 1 : -1;
+  let fixed = step > 0 ? "#ffffff" : "#000000";
+  for (let L = l; L >= 0 && L <= 100; L += step) {
+    const c = hslToHex(h, s, L);
+    if (contrast(c, pr.other) >= pr.need) { fixed = c; break; }
+  }
+  commit(() => { st.pal[st.role] = fixed; });
+  toast("Pronto, agora dá pra ler. 👓");
 });
 $("pal-name").addEventListener("input", (e) => { st.pal.name = e.target.value; renderStudio(); });
 $("pal-emoji").addEventListener("input", (e) => { st.emoji = e.target.value; renderStudio(); });
 $("pal-only").addEventListener("change", (e) => commit(() => { st.only = e.target.checked; }));
 $("pal-undo").addEventListener("click", () => { if (!st.hist.length) return; st.fut.push(snap()); restore(st.hist.pop()); renderStudio(); });
 $("pal-redo").addEventListener("click", () => { if (!st.fut.length) return; st.hist.push(snap()); restore(st.fut.pop()); renderStudio(); });
+$("pal-more").addEventListener("click", (e) => { e.stopPropagation(); palMenu($("pal-menu").hidden); });
+$("dlg-pal").addEventListener("click", (e) => {
+  if (!$("pal-menu").hidden && !e.target.closest("#pal-menu") && !e.target.closest("#pal-more")) palMenu(false);
+});
 $("pal-from").addEventListener("change", (e) => {
   const src = allPalettes()[e.target.value];
   e.target.value = "";
@@ -2242,6 +2302,7 @@ $("pal-from").addEventListener("change", (e) => {
     st.decor = d.filter((x) => x.svg).map((x) => x.svg).filter((v, i, a) => a.indexOf(v) === i);
     st.emoji = d.filter((x) => x.emoji).map((x) => x.emoji).join("");
   });
+  palMenu(false);
   toast("Copiado. Agora é só ajustar. 🎨");
 });
 
@@ -2265,7 +2326,11 @@ $("pal-cancel").addEventListener("click", async () => {
   if (st.hist.length && !(await confirmBox("Sair sem salvar?", "As mudanças dessa paleta vão se perder.", "Sair"))) return;
   $("dlg-pal").close();
 });
-$("dlg-pal").addEventListener("cancel", (e) => { e.preventDefault(); $("pal-cancel").click(); });
+$("dlg-pal").addEventListener("cancel", (e) => {
+  e.preventDefault();
+  if (!$("pal-menu").hidden) return palMenu(false);
+  $("pal-cancel").click();
+});
 
 function studioPalette() {
   const p = { ...st.pal, name: st.pal.name.trim() };
@@ -2274,23 +2339,17 @@ function studioPalette() {
   if (st.only) p.onlyOccasions = true;
   return p;
 }
-$("pal-try").addEventListener("click", () => {
-  previewOcc = null;
-  previewPal = { ...studioPalette(), id: studioId() };
-  $("dlg-pal").close();
-  applyLook();
-  toast("Prévia só no seu aparelho. Toque em “sair” pra voltar.", 4000);
-});
 $("pal-save").addEventListener("click", async () => {
   const p = studioPalette();
   if (!p.name) { toast("Dá um nome pra paleta. ✍️"); $("pal-name").focus(); return; }
   const bad = ROLES.find((r) => !HEX.test(p[r.key]));
   if (bad) return toast(`Cor inválida em “${bad.label}”.`);
   const id = studioId();
-  const ok = await withBusy($("pal-save"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), p); return true; }, "Salvando…");
+  const ok = await withBusy($("pal-save"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), p); return true; }, "…");
   if (ok) { $("dlg-pal").close(); toast(`Paleta “${p.name}” salva. 🎨`); }
 });
 $("pal-delete").addEventListener("click", async () => {
+  palMenu(false);
   const id = st.id;
   const used = usedByOccasions(id);
   const msg = used.length ? `Ela é usada em: ${used.join(", ")}. Essas ocasiões vão ficar sem paleta.` : "Quem tinha escolhido ela volta pro Espresso.";
