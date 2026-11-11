@@ -387,6 +387,7 @@ const api = {
   deleteRound: call("deleteRound"),
   muteTemplate: call("muteTemplate"),
   sendOnce: call("sendOnce"),
+  seenRound: call("seenRound"),
   adminHealth: call("adminHealth"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
@@ -1060,7 +1061,7 @@ function markSeen(list) {
   for (const r of list) {
     if (!r.open || !r.recipients.includes(uid) || (r.seen && r.seen[uid]) || seenSent.has(r.id)) continue;
     seenSent.add(r.id);
-    updateDoc(doc(db, "rounds", r.id), new FieldPath("seen", uid), Date.now()).catch((e) => console.warn("seen", e));
+    api.seenRound({ roundId: r.id }).catch((e) => console.warn("seen", e)); // server stamps it and logs "visualizou"
   }
 }
 
@@ -1767,27 +1768,63 @@ $("adm-add-form").addEventListener("submit", async (e) => {
   loadAuthUsers();
 });
 
-// ---------- Notification log ----------
-function logStatus(e) {
-  const t = (ms) => { const d = new Date(ms); return `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`; };
-  switch (e.status) {
-    case "failed": return { icon: "✗", cls: "bad", text: e.error || "falhou" };
-    case "quiet": return { icon: "⏸", cls: "meh", text: e.note || "horário de silêncio" };
-    case "muted": return { icon: "🔕", cls: "meh", text: "silenciou esse recado" };
-    case "nodevice": return { icon: "⚠", cls: "bad", text: "sem aparelho com notificação" };
-    default:
-      if (e.openedAt) return { icon: "👆", cls: "good", text: `abriu ${t(e.openedAt)}` };
-      if (e.receivedAt) return { icon: "✓✓", cls: "good", text: `chegou ${t(e.receivedAt)}` };
-      return { icon: "✓", cls: "", text: "enviado, sem confirmação ainda" };
+// ---------- Logs: one line per thing that happened ----------
+// Delivery entries (one per phone) become up to 3 events: sent, arrived, opened.
+// Event entries (type "event") are things done to a round: created, answered, seen, closed…
+const NOISY_KINDS = ["resposta", "mudou de ideia", "silenciou", "reativou"]; // telling others about an answer
+function personName(uid, fallback) { return (uid && family[uid] && family[uid].name) || fallback || "?"; }
+
+function flattenLog(entries) {
+  const out = [];
+  for (const e of entries) {
+    const title = e.roundTitle || e.title || "";
+    const emoji = e.emoji || "";
+    const push = (at, icon, text, extra = "", cls = "") => out.push({ at, icon, text, title, emoji, extra, cls, who: [e.toUid, e.actorUid].filter(Boolean) });
+    if (e.type === "event") {
+      const a = personName(e.actorUid, e.actorName);
+      switch (e.ev) {
+        case "created": push(e.at, e.scheduled ? "⏰" : "📣", `${a} mandou pra ${e.count} pessoa${e.count === 1 ? "" : "s"}${e.scheduled ? " (agendado)" : ""}`); break;
+        case "answer": push(e.at, e.changes ? "🌀" : "💬", e.changes ? `${a} mudou pra: ${e.value} (${e.changes}ª vez)` : `${a} respondeu: ${e.value}`, "", "good"); break;
+        case "seen": push(e.at, "👁", `${a} visualizou`, "", "good"); break;
+        case "closed": push(e.at, "🔒", `${a} encerrou`); break;
+        case "expired": push(e.at, "⌛", "fechou (acabou o tempo)"); break;
+        case "muted": push(e.at, "🔕", `${a} silenciou`, "", "meh"); break;
+        case "unmuted": push(e.at, "🔔", `${a} reativou`); break;
+      }
+      continue;
+    }
+    // Delivery entry
+    const p = personName(e.toUid, e.toName);
+    const dev = e.device || "";
+    const noisy = NOISY_KINDS.includes(e.kind);
+    if (e.status === "failed") { push(e.at, "❌", `não chegou pra ${p}`, [dev, e.error].filter(Boolean).join(" · "), "bad"); continue; }
+    if (e.status === "nodevice") { if (!noisy) push(e.at, "⚠", `${p} não tem aparelho com notificação`, "", "bad"); continue; }
+    if (e.status === "quiet") { if (!noisy) push(e.at, "⏸", `${p} em horário de silêncio`, e.note || "", "meh"); continue; }
+    if (e.status === "muted") { push(e.at, "🔕", `${p} tinha silenciado, não recebeu`, "", "meh"); continue; }
+    if (noisy) continue; // the answer itself is already a line
+    const sentText = e.kind === "insistência" ? `insistiu com ${p}` : e.kind === "teste" ? `teste enviado pra ${p}` : `enviado pra ${p}`;
+    push(e.at, e.kind === "insistência" ? "🔁" : "📨", sentText, dev);
+    if (e.receivedAt) push(e.receivedAt, "✓✓", `chegou no celular de ${p}`, dev, "good");
+    if (e.openedAt) push(e.openedAt, "👆", `${p} abriu a notificação`, "", "good");
   }
+  return out.sort((a, b) => b.at - a.at);
+}
+
+function dayLabel(ms) {
+  const d = new Date(ms), today = new Date(), y = new Date(Date.now() - 86400000);
+  if (d.toDateString() === today.toDateString()) return "Hoje";
+  if (d.toDateString() === y.toDateString()) return "Ontem";
+  return `${cap(DAY_SHORT[d.getDay()].toLowerCase())}, ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)}`;
 }
 
 function renderAdminLog() {
   const list = $("adm-log");
   if (!list || !isAdminNow()) return;
-  // Filter chips: everyone + each person who appears in the log.
+  const events = flattenLog(logEntries);
+
+  // Filter chips: everyone + each person who appears.
   const people = {};
-  logEntries.forEach((e) => { if (e.toUid) people[e.toUid] = (family[e.toUid] && family[e.toUid].name) || e.toName || "?"; });
+  logEntries.forEach((e) => [e.toUid, e.actorUid].filter(Boolean).forEach((u) => { people[u] = personName(u, e.toName || e.actorName); }));
   const chips = $("log-filter");
   chips.innerHTML = "";
   [["all", "Todos"], ...Object.entries(people).sort((a, b) => a[1].localeCompare(b[1]))].forEach(([id, label]) => {
@@ -1799,29 +1836,22 @@ function renderAdminLog() {
     chips.appendChild(b);
   });
 
-  // Group the per-phone entries back into "one notification".
-  const groups = new Map();
-  for (const e of logEntries) {
-    if (logFilter !== "all" && e.toUid !== logFilter) continue;
-    const key = `${e.at}|${e.kind}|${e.title}`;
-    if (!groups.has(key)) groups.set(key, { at: e.at, kind: e.kind, title: e.title, fromUid: e.fromUid, rows: [] });
-    groups.get(key).rows.push(e);
-  }
-  list.innerHTML = groups.size ? "" : `<li class="muted small">Nada por aqui ainda.</li>`;
-  for (const g of groups.values()) {
-    const d = new Date(g.at);
-    const when = `${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} ${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
-    const from = g.fromUid ? ((family[g.fromUid] && family[g.fromUid].name) || "?") : "sistema";
-    const li = document.createElement("li");
-    li.className = "log-item";
-    li.innerHTML = `
-      <div class="log-head"><span class="log-kind">${esc(g.kind || "")}</span><span class="muted small">${esc(when)} · de ${esc(from)}</span></div>
-      <div class="log-title">${esc(g.title || "")}</div>
-      <ul class="log-rows">${g.rows.map((e) => {
-        const st = logStatus(e);
-        return `<li class="${st.cls}"><span class="log-icon">${st.icon}</span><span><b>${esc((family[e.toUid] && family[e.toUid].name) || e.toName || "?")}</b>${e.device ? ` <span class="muted">· ${esc(e.device)}</span>` : ""}<br><span class="muted">${esc(st.text)}</span></span></li>`;
-      }).join("")}</ul>`;
-    list.appendChild(li);
+  const shown = events.filter((ev) => logFilter === "all" || ev.who.includes(logFilter)).slice(0, 300);
+  list.innerHTML = shown.length ? "" : `<li class="muted small">Nada por aqui ainda.</li>`;
+  let lastDay = "";
+  for (const ev of shown) {
+    const day = dayLabel(ev.at);
+    if (day !== lastDay) {
+      lastDay = day;
+      list.insertAdjacentHTML("beforeend", `<li class="log-day">${esc(day)}</li>`);
+    }
+    const d = new Date(ev.at);
+    const sub = [ev.emoji + " " + ev.title, ev.extra].filter((x) => x && x.trim()).join(" · ");
+    list.insertAdjacentHTML("beforeend", `
+      <li class="log-line ${ev.cls}">
+        <span class="log-time">${pad2s(d.getHours())}:${pad2s(d.getMinutes())}</span>
+        <span class="log-body"><span class="log-text">${esc(ev.icon)} ${esc(ev.text)}</span>${sub ? `<span class="log-sub">${esc(sub)}</span>` : ""}</span>
+      </li>`);
   }
 }
 

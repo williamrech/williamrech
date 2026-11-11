@@ -134,7 +134,8 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
   const link = APP_URL + path;
   const now = Date.now();
   const bw = db.bulkWriter();
-  const base = { at: now, kind: meta.kind || "outro", roundId: meta.roundId || null, fromUid: meta.fromUid || null, title, body };
+  const base = { at: now, kind: meta.kind || "outro", roundId: meta.roundId || null, fromUid: meta.fromUid || null, title, body,
+    roundTitle: meta.roundTitle || null, emoji: meta.emoji || null };
   const logDoc = () => db.collection("notifLog").doc();
   const perUser = {};
   const msgs = [];
@@ -192,6 +193,11 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
   }
   await bw.close();
   return { sent, failed, perUser };
+}
+
+// Things that happen to a round (created, answered, seen, closed…) for the admin Logs.
+function logEvent(ev, data) {
+  return db.collection("notifLog").add({ type: "event", ev, at: Date.now(), ...data }).catch((e) => console.warn("logEvent", e));
 }
 
 // Sends to a list of users; anyone in quiet hours is skipped (logged).
@@ -273,7 +279,8 @@ async function createRound(tplRef, tpl, owner, { users, devices, kind } = {}) {
 
   const msg = { title: `${round.emoji} ${round.title}`, body: round.body || `${owner.name} quer saber.` };
   const res = await deliver(recipients, msg, `?rodada=${ref.id}`,
-    { kind: kind || "recado", roundId: ref.id, fromUid: tpl.ownerUid, quiet: "hold", mutedUids: pool.filter((u) => muted[u]) },
+    { kind: kind || "recado", roundId: ref.id, fromUid: tpl.ownerUid, quiet: "hold", mutedUids: pool.filter((u) => muted[u]),
+      roundTitle: round.title, emoji: round.emoji },
     { users, devices });
   const upd = {};
   for (const [u, st] of Object.entries(res.perUser)) {
@@ -281,6 +288,8 @@ async function createRound(tplRef, tpl, owner, { users, devices, kind } = {}) {
     upd[`delivery.${u}`] = { st, at: now };
   }
   if (Object.keys(upd).length) await ref.update(upd);
+  await logEvent("created", { at: now - 1, roundId: ref.id, roundTitle: round.title, emoji: round.emoji,
+    actorUid: tpl.ownerUid, actorName: owner.name, count: recipients.length, scheduled: kind === "agendado" });
   const delayed = Object.values(res.perUser).filter((x) => x === "quiet").length;
   return { id: ref.id, recipients: recipients.length, delayed, sent: res.sent, failed: res.failed };
 }
@@ -357,8 +366,28 @@ handlers.answerRound = async (req) => {
   const targets = round.visibility === "all"
     ? round.participants.filter((u) => u !== auth.uid)
     : [round.ownerUid].filter((u) => u !== auth.uid);
-  await sendToUids(targets, msg, `?rodada=${roundId}`, { kind: changes ? "mudou de ideia" : "resposta", roundId, fromUid: auth.uid });
+  await logEvent("answer", { roundId, roundTitle: round.title, emoji: round.emoji, actorUid: auth.uid, actorName: me.name, value, changes });
+  await sendToUids(targets, msg, `?rodada=${roundId}`, { kind: changes ? "mudou de ideia" : "resposta", roundId, fromUid: auth.uid,
+    roundTitle: round.title, emoji: round.emoji });
   return { ok: true, changes };
+};
+
+// "Visto": the recipient's app reports the round is on screen (first time only).
+handlers.seenRound = async (req) => {
+  const auth = requireAuth(req);
+  const ref = db.doc(`rounds/${String((req.data && req.data.roundId) || "")}`);
+  const first = await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists || !snap.get("recipients").includes(auth.uid)) return null;
+    if (snap.get(`seen.${auth.uid}`)) return null;
+    t.update(ref, { [`seen.${auth.uid}`]: Date.now() });
+    return snap.data();
+  });
+  if (first) {
+    const me = await profile(auth);
+    await logEvent("seen", { roundId: ref.id, roundTitle: first.title, emoji: first.emoji, actorUid: auth.uid, actorName: me.name });
+  }
+  return { ok: true };
 };
 
 handlers.closeRound = async (req) => {
@@ -368,6 +397,8 @@ handlers.closeRound = async (req) => {
   if (!snap.exists) throw new HttpsError("not-found", "Isso não existe mais.");
   if (snap.get("ownerUid") !== auth.uid) throw new HttpsError("permission-denied", "Só quem criou pode encerrar.");
   await ref.update({ open: false });
+  await logEvent("closed", { roundId: ref.id, roundTitle: snap.get("title"), emoji: snap.get("emoji"), actorUid: auth.uid,
+    actorName: snap.get("ownerName") });
   return { ok: true };
 };
 
@@ -410,6 +441,7 @@ handlers.muteTemplate = async (req) => {
       mutes: { [tSnap.id]: mute ? { title: tpl.title, emoji: tpl.emoji || "🔔", owner: (await profile({ uid: tpl.ownerUid, token: {} })).name } : FieldValue.delete() },
     }, { merge: true }),
   ]);
+  await logEvent(mute ? "muted" : "unmuted", { roundTitle: tpl.title, emoji: tpl.emoji || "🔔", actorUid: auth.uid, actorName: me.name });
   if (tpl.ownerUid !== auth.uid) {
     await sendToUids([tpl.ownerUid], message(mute ? "muted" : "unmuted", { name: me.name, gender: me.gender, title: tpl.title }), "",
       { kind: mute ? "silenciou" : "reativou", fromUid: auth.uid });
@@ -452,7 +484,11 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
   const mutedByTemplate = Object.fromEntries(tplDocs.filter((d) => d.exists).map((d) => [d.id, d.get("mutedBy") || {}]));
   for (const doc of open.docs) {
     const r = doc.data();
-    if (r.closesAt && r.closesAt.toMillis() <= now) { await doc.ref.update({ open: false }); continue; }
+    if (r.closesAt && r.closesAt.toMillis() <= now) {
+      await doc.ref.update({ open: false });
+      await logEvent("expired", { roundId: doc.id, roundTitle: r.title, emoji: r.emoji, actorUid: r.ownerUid, actorName: r.ownerName });
+      continue;
+    }
 
     const muted = mutedByTemplate[r.templateId] || {};
     const updates = {};
@@ -468,7 +504,8 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
         msg = message("nag", { emoji: r.emoji, title: r.title, owner: r.ownerName, name: (users[u] || {}).name || "", gender: (users[u] || {}).gender });
       }
       if (!msg) continue;
-      const res = await deliver([u], msg, `?rodada=${doc.id}`, { kind, roundId: doc.id, fromUid: r.ownerUid, quiet: "hold" }, { users, devices });
+      const res = await deliver([u], msg, `?rodada=${doc.id}`,
+        { kind, roundId: doc.id, fromUid: r.ownerUid, quiet: "hold", roundTitle: r.title, emoji: r.emoji }, { users, devices });
       updates[`notified.${u}`] = now;
       if (!last) updates[`delivery.${u}`] = { st: res.perUser[u] || "failed", at: now };
     }

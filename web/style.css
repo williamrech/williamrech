@@ -849,3 +849,15 @@ input[readonly] { opacity: 0.6; }
 .log-rows li.good .log-icon { color: #8fd694; }
 .log-rows li.bad .log-icon { color: #f0a594; }
 .log-rows li.meh .log-icon { color: #f0b46a; }
+
+/* ---------- Logs: one line per event ---------- */
+.log-list { gap: 0; }
+.log-day { list-style: none; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); padding: 10px 0 4px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.log-line { display: grid; grid-template-columns: 42px 1fr; gap: 8px; padding: 5px 0; align-items: start; border: 0; background: none; }
+.log-time { font-family: ui-monospace, Menlo, monospace; font-size: 0.74rem; color: var(--muted); padding-top: 1px; }
+.log-body { min-width: 0; display: grid; }
+.log-text { font-size: 0.84rem; overflow-wrap: anywhere; }
+.log-sub { font-size: 0.72rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-line.good .log-text { color: color-mix(in srgb, #8fd694 70%, var(--fg)); }
+.log-line.bad .log-text { color: #f0a594; }
+.log-line.meh .log-text { color: #f0b46a; }
