@@ -310,19 +310,20 @@ function placeDecor(spec, force = false) {
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 const EFFECTS = { confetti: "Confete", snow: "Neve", bubbles: "Bolhas", smoke: "Fumaça" };
+// A plain cup on a saucer in the theme's drawing colors (coffee on Espresso, matcha on Matcha…).
 const CUP_SVG = `<svg viewBox="0 0 140 100" aria-hidden="true">
-<ellipse cx="70" cy="86" rx="62" ry="11" fill="var(--d-pale, #efe5d8)" opacity=".45"/>
-<ellipse cx="70" cy="83" rx="44" ry="6.5" fill="var(--d-pale, #efe5d8)" opacity=".8"/>
-<path d="M106 46 q 22 -2 20 15 q -2 13 -22 13" fill="none" stroke="var(--d-pale, #efe5d8)" stroke-width="7" stroke-linecap="round"/>
-<path d="M30 36 Q30 79 70 81 Q110 79 110 36 Z" fill="var(--d-pale, #efe5d8)"/>
-<path d="M110 36 Q110 73 82 80 Q103 68 104 36 Z" fill="var(--d-dark, #3a2214)" opacity=".2"/>
-<path d="M39 45 Q41 64 53 72" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".3"/>
-<ellipse cx="70" cy="36" rx="40" ry="9" fill="var(--d-pale, #efe5d8)"/>
-<ellipse cx="70" cy="37" rx="35" ry="6.5" fill="var(--d-dark, #3a2214)"/>
-<ellipse cx="70" cy="37" rx="35" ry="6.5" fill="none" stroke="var(--d-mid, #c98b4f)" stroke-width="2" opacity=".8"/>
-<ellipse cx="62" cy="36" rx="11" ry="2.2" fill="var(--d-mid, #c98b4f)" opacity=".55"/>
+<ellipse cx="70" cy="86" rx="62" ry="11" fill="var(--d-pale)" opacity=".55"/>
+<ellipse cx="70" cy="83" rx="44" ry="6.5" fill="var(--d-pale)"/>
+<path d="M106 46 q 22 -2 20 15 q -2 13 -22 13" fill="none" stroke="var(--d-pale)" stroke-width="7" stroke-linecap="round"/>
+<path d="M30 36 Q30 79 70 81 Q110 79 110 36 Z" fill="var(--d-pale)"/>
+<path d="M110 36 Q110 73 82 80 Q103 68 104 36 Z" fill="var(--d-dark)" opacity=".25"/>
+<ellipse cx="70" cy="36" rx="40" ry="9" fill="var(--d-pale)"/>
+<ellipse cx="70" cy="37" rx="35" ry="6.5" fill="var(--d-mid)"/>
+<ellipse cx="70" cy="37" rx="35" ry="6.5" fill="var(--d-dark)" opacity=".55"/>
+<ellipse cx="62" cy="36" rx="11" ry="2.2" fill="var(--d-light)" opacity=".6"/>
 </svg>`;
-const PUFF_SVG = `<svg viewBox="0 0 24 100" preserveAspectRatio="none" aria-hidden="true"><path pathLength="100" d="M12 98 C4 86 20 76 12 62 C4 48 20 36 12 22 C8 14 14 8 12 2" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>`;
+// A little cloud of steam.
+const PUFF_SVG = `<svg viewBox="0 0 60 40" aria-hidden="true"><path d="M15 36 a11 11 0 0 1 -1 -22 a13 13 0 0 1 24 -5 a11 11 0 0 1 15 10 a9 9 0 0 1 -3 17 z" fill="currentColor"/></svg>`;
 function spawnEffect(layer, kind, scale = 1) {
   clearTimeout(layer._fxTimer);
   layer.innerHTML = "";
@@ -342,7 +343,7 @@ function spawnEffect(layer, kind, scale = 1) {
       for (let k = 0; k < n; k++) {
         const w = document.createElement("i");
         w.className = "puff";
-        w.style.cssText = `left:${50 + (Math.random() * 30 - 15)}%;--dur:${(3 + Math.random() * 1.4).toFixed(2)}s;--wob:${Math.round(Math.random() * 24 - 12)}px;--peak:${(0.35 + Math.random() * 0.25).toFixed(2)};animation-delay:${k * 0.5}s`;
+        w.style.cssText = `left:${50 + (Math.random() * 24 - 12)}%;--dur:${(3.2 + Math.random() * 1.4).toFixed(2)}s;--wob:${Math.round(Math.random() * 28 - 14)}px;--peak:${(0.16 + Math.random() * 0.08).toFixed(2)};animation-delay:${k * 0.6}s`;
         w.innerHTML = PUFF_SVG;
         w.addEventListener("animationend", (e) => { if (e.target === w) w.remove(); });
         cup.appendChild(w);

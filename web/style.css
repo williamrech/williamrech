@@ -654,18 +654,16 @@ dialog h2 { margin-bottom: 4px; }
 }
 /* Steaming cup (effect "smoke"): fixed low in the middle, behind the feed */
 #fx-back { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
-.steam-cup { position: absolute; left: 50%; bottom: calc(14vh + env(safe-area-inset-bottom)); width: 128px; transform: translateX(-50%); opacity: .9; }
-.steam-cup > svg { width: 100%; height: auto; display: block; }
-.puff { position: absolute; bottom: 62%; width: 24px; height: 96px; margin-left: -12px; color: var(--fg); font-style: normal; opacity: 0; filter: blur(1.6px); animation: puff-rise var(--dur, 3.6s) ease-out forwards; }
-.puff svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.puff path { stroke-dasharray: 100; stroke-dashoffset: 100; animation: puff-draw var(--dur, 3.6s) ease-in-out forwards; animation-delay: inherit; }
+.steam-cup { position: absolute; left: 50%; bottom: calc(12vh + env(safe-area-inset-bottom)); width: 192px; transform: translateX(-50%); }
+.steam-cup > svg { width: 100%; height: auto; display: block; opacity: .15; } /* same see-through as the big drawings */
+.puff { position: absolute; bottom: 60%; width: 54px; height: 36px; margin-left: -27px; color: var(--d-pale); font-style: normal; opacity: 0; filter: blur(1px); animation: puff-rise var(--dur, 3.8s) ease-out forwards; }
+.puff svg { width: 100%; height: 100%; display: block; }
 @keyframes puff-rise {
-  0% { transform: translateY(8px) scaleX(.8); opacity: 0; }
-  20% { opacity: var(--peak, .45); }
-  70% { opacity: calc(var(--peak, .45) * .6); }
-  100% { transform: translate(var(--wob, 0px), -44px) scaleX(1.35); opacity: 0; }
+  0% { transform: translateY(8px) scale(.3); opacity: 0; }
+  25% { opacity: var(--peak, .2); }
+  65% { opacity: calc(var(--peak, .2) * .7); }
+  100% { transform: translate(var(--wob, 0px), -110px) scale(1.3); opacity: 0; }
 }
-@keyframes puff-draw { 0% { stroke-dashoffset: 100; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; } }
 .fx-tag { font-size: 0.8em; }
 
 /* ---------- Palette picker ---------- */
@@ -679,7 +677,7 @@ dialog h2 { margin-bottom: 4px; }
 .palette .dots i { width: 12px; height: 12px; border-radius: 50%; margin-right: -3px; border: 1px solid rgba(0, 0, 0, 0.4); }
 
 /* ---------- Decor drawings follow the palette ---------- */
-#decor {
+#decor, #fx-back {
   --d-dark: color-mix(in srgb, var(--caramel) 45%, black);
   --d-mid: var(--caramel);
   --d-light: var(--crema);
@@ -1052,5 +1050,8 @@ html.big .ps-role { font-size: 0.62rem; }
 .mini { isolation: isolate; }
 .mini-fx.back { z-index: 0; }
 .mini > :not(.mini-decor):not(.mini-fx) { z-index: 1; }
-.mini-fx .steam-cup { bottom: 4px; width: 50px; }
-.mini-fx .puff { width: 11px; height: 42px; margin-left: -5px; filter: blur(.8px); }
+.mini-fx .steam-cup { bottom: 2px; width: 72px; }
+.mini-fx .puff { width: 20px; height: 14px; margin-left: -10px; filter: none; --rise-cloud: -40px; }
+.mini-fx .steam-cup > svg { opacity: .3; }
+.mini-fx .puff { animation-name: puff-rise-mini; }
+@keyframes puff-rise-mini { 0% { transform: translateY(4px) scale(.3); opacity: 0; } 25% { opacity: .4; } 100% { transform: translate(var(--wob, 0px), -42px) scale(1.2); opacity: 0; } }
