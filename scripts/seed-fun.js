@@ -65,6 +65,12 @@ const ref = getFirestore().doc("config/fun");
     }
     update.configVersion = 5;
   }
+  // configVersion 6: Espresso gets its coffee steam (only if it has no effect yet).
+  if ((Number(cur.configVersion) || 0) < 6) {
+    const e = cur.palettes && cur.palettes.espresso;
+    if (e && e.effect === undefined) update["palettes.espresso.effect"] = "smoke";
+    update.configVersion = 6;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

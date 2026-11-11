@@ -652,6 +652,15 @@ dialog h2 { margin-bottom: 4px; }
   92% { opacity: .9; }
   100% { transform: translate(0, var(--rise, -110vh)); opacity: 0; }
 }
+.smoke { position: absolute; color: var(--crema); opacity: 0; font-style: normal; filter: blur(2px); animation: smoke-rise ease-in-out infinite; }
+.smoke svg { width: 100%; height: 100%; display: block; overflow: visible; transform-origin: 50% 100%; animation: smoke-wave var(--wave, 4s) ease-in-out infinite alternate; }
+@keyframes smoke-rise {
+  0% { transform: translate(0, 0) scale(.7, .6); opacity: 0; }
+  20% { opacity: var(--peak, .3); }
+  60% { transform: translate(var(--wob), calc(var(--rise, -110vh) * .55)) scale(1, 1.2); opacity: calc(var(--peak, .3) * .7); }
+  100% { transform: translate(calc(var(--wob) * -0.6), var(--rise, -110vh)) scale(1.6, 1.6); opacity: 0; }
+}
+@keyframes smoke-wave { from { transform: skewX(-10deg) scaleX(.85); } to { transform: skewX(10deg) scaleX(1.15); } }
 .fx-tag { font-size: 0.8em; }
 
 /* ---------- Palette picker ---------- */

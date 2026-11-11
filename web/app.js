@@ -305,9 +305,11 @@ function placeDecor(spec, force = false) {
   });
 }
 
-// Effects: "confetti" (a burst on open), "snow" (gentle, falling) or "bubbles" (fizz rising from below).
+// Effects: "confetti" (a burst on open), "snow" (gentle, falling), "bubbles" (fizz rising from below)
+// or "smoke" (coffee steam: thin wavy lines slowly climbing and fading).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
-const EFFECTS = { confetti: "Confete", snow: "Neve", bubbles: "Bolhas" };
+const EFFECTS = { confetti: "Confete", snow: "Neve", bubbles: "Bolhas", smoke: "Fumaça" };
+const SMOKE_SVG = `<svg viewBox="0 0 24 100" preserveAspectRatio="none" aria-hidden="true"><path d="M12 98 C3 84 21 72 12 58 C3 44 21 32 12 18 C7 10 14 5 12 2" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/></svg>`;
 function spawnEffect(layer, kind, scale = 1) {
   layer.innerHTML = "";
   if (!(kind in EFFECTS) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -334,6 +336,13 @@ function spawnEffect(layer, kind, scale = 1) {
     for (let i = 0; i < Math.round(28 * scale); i++) {
       const size = rnd(4, 15) * Math.max(scale, 0.6);
       add("bubble", `left:${rnd(0, 100)}%;width:${size}px;height:${size}px;opacity:${rnd(0.35, 0.75)};animation-delay:${rnd(-14, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(6, 13) * Math.max(scale, 0.5)}s;--wob:${rnd(3, 10) * scale}px`);
+    }
+  }
+  else if (kind === "smoke") {
+    for (let i = 0; i < Math.max(4, Math.round(11 * scale)); i++) {
+      const w = rnd(16, 30) * Math.max(scale, 0.55), h = w * rnd(3.2, 4.4);
+      add("smoke", `left:${rnd(4, 92)}%;width:${w}px;height:${h}px;bottom:${-h}px;animation-delay:${rnd(-22, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(14, 24) * Math.max(scale, 0.55)}s;--wob:${rnd(-24, 24) * scale}px;--wave:${rnd(3, 6)}s;--peak:${rnd(0.22, 0.42)}`, "");
+      layer.lastChild.innerHTML = SMOKE_SVG;
     }
   }
   layer.dataset.fx = kind;
