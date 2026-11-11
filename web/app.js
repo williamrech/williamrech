@@ -1152,12 +1152,22 @@ const BLANK = { emoji: "🔔", title: "", body: "", answerType: "yesno", options
 const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
 const nameOf = (uid) => (family[uid] && family[uid].name) || "?";
 
-// Only mention the closing time when it's near: "fecha em 20 min".
-function closesSoon(ts) {
-  if (!ts || !ts.toMillis) return "";
-  const min = Math.round((ts.toMillis() - Date.now()) / 60000);
-  if (min <= 0) return "fechando…";
-  return min < 60 ? `fecha em ${min} min` : "";
+// Deadline, both ways: "até 18:00" + "faltam 2 h 15 min" (urgent in the last hour).
+function deadlineParts(ts) {
+  if (!ts || !ts.toMillis) return null;
+  const ms = ts.toMillis(), min = Math.round((ms - Date.now()) / 60000);
+  const d = new Date(ms), hm = `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
+  const same = (x, y) => x.toDateString() === y.toDateString();
+  const abs = same(d, new Date()) ? `até ${hm}` : same(d, new Date(Date.now() + 86400000)) ? `até amanhã ${hm}`
+    : `até ${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} ${hm}`;
+  const fal = (n, unit) => `${n === 1 ? "falta" : "faltam"} ${n} ${unit}`;
+  let rel;
+  if (min <= 0) rel = "fechando…";
+  else if (min < 60) rel = fal(min, "min");
+  else if (min < 6 * 60) { const h = Math.floor(min / 60), m = min % 60; rel = fal(h, "h") + (m ? ` ${m} min` : ""); }
+  else if (min < 24 * 60) rel = fal(Math.round(min / 60), "h");
+  else { const dd = Math.floor(min / 1440), h = Math.round((min % 1440) / 60); rel = dd === 1 ? `falta 1 dia${h ? ` e ${h} h` : ""}` : `faltam ${dd} dias`; }
+  return { abs, rel, urgent: min < 60 };
 }
 
 // "fecha às 21:30" / "fecha amanhã às 09:00" / "fecha sex 14/11 às 09:00"
@@ -1375,7 +1385,14 @@ async function fire(t, btn) {
   toast(d.delayed ? `${T.done(d.recipients)} ${d.delayed} em modo silêncio recebe(m) depois. 🌙` : T.done(d.recipients), 4000);
 }
 
-// Home: live feed of rounds
+// Home: live feed of rounds, in three groups from MY point of view:
+//  "Pra você"       — waiting for my answer (big buttons, on top)
+//  "Em andamento"   — I answered or sent it, someone's still missing; avisos still open
+//  "Resolvidos"     — everyone answered, or it's closed. One line each; today's shown, older behind a tap.
+// A question with a deadline stays until the deadline / the sender closes it; "resolvido" only moves it down.
+const allAnswered = (r) => r.answerType !== "none" && r.recipients.length > 0 && r.recipients.every((u) => r.answers && r.answers[u]);
+const isDone = (r) => !r.open || allAnswered(r);
+let showOlderDone = false;
 function renderRounds() {
   const list = $("rounds");
   if (!list || !auth.currentUser) return;
@@ -1384,19 +1401,32 @@ function renderRounds() {
   const dayAgo = Date.now() - 24 * 3600000;
   const hidden = (me && me.hidden) || {};
   const visible = rounds.filter((r) => !hidden[r.id] && (r.open || (r.createdAt && r.createdAt.toMillis() > dayAgo)));
-  // "Pra você": open questions still waiting for MY answer go first, with big buttons.
   const waitingForMe = (r) => r.open && r.answerType !== "none" && r.recipients.includes(uid) && !(r.answers && r.answers[uid]);
   const mineToAnswer = visible.filter(waitingForMe);
-  const others = visible.filter((r) => !waitingForMe(r));
+  const going = visible.filter((r) => !waitingForMe(r) && !isDone(r));
+  const done = visible.filter((r) => !waitingForMe(r) && isDone(r));
+  const today = new Date().toDateString();
+  const isToday = (r) => r.createdAt && new Date(r.createdAt.toMillis()).toDateString() === today;
+  const doneToday = done.filter(isToday), doneOlder = done.filter((r) => !isToday(r));
   list.innerHTML = "";
   show("rounds-empty", roundsLoaded && visible.length === 0);
 
-  if (mineToAnswer.length) {
-    list.insertAdjacentHTML("beforeend", `<li class="feed-head">Pra você</li>`);
-    mineToAnswer.forEach((r) => list.appendChild(buildRound(r, true)));
-    if (others.length) list.insertAdjacentHTML("beforeend", `<li class="feed-head">Outros</li>`);
+  const head = (txt) => list.insertAdjacentHTML("beforeend", `<li class="feed-head">${txt}</li>`);
+  const groups = [mineToAnswer.length, going.length, done.length].filter(Boolean).length;
+  if (mineToAnswer.length) { head("Pra você"); mineToAnswer.forEach((r) => list.appendChild(buildRound(r, true))); }
+  if (going.length) { if (groups > 1) head("Em andamento"); going.forEach((r) => list.appendChild(buildRound(r, false))); }
+  if (done.length) {
+    head(`Resolvidos <span class="feed-count">${done.length}</span>`);
+    doneToday.forEach((r) => list.appendChild(buildRound(r, false)));
+    if (doneOlder.length) {
+      if (showOlderDone) doneOlder.forEach((r) => list.appendChild(buildRound(r, false)));
+      const li = document.createElement("li");
+      li.className = "feed-more";
+      li.innerHTML = `<button type="button" class="link">${showOlderDone ? "Esconder os de ontem" : `Ver os de ontem (${doneOlder.length})`}</button>`;
+      li.querySelector("button").onclick = () => { showOlderDone = !showOlderDone; renderRounds(); };
+      list.appendChild(li);
+    }
   }
-  others.forEach((r) => list.appendChild(buildRound(r, false)));
 
   markSeen(visible);
   if (highlightRound) {
@@ -1405,62 +1435,68 @@ function renderRounds() {
   }
 }
 
+const editingAnswer = new Set(); // rounds where I tapped "mudar" (this session only)
 function buildRound(r, ask) {
   const uid = auth.currentUser.uid;
   const li = document.createElement("li");
-  const collapsed = !r.open && !expandedRounds.has(r.id) && r.id !== highlightRound;
-  li.className = "round" + (ask ? " ask" : "") + (r.open ? "" : " closed") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
+  const done = isDone(r);
+  const collapsed = done && !expandedRounds.has(r.id) && r.id !== highlightRound;
+  li.className = "round" + (ask ? " ask" : "") + (done ? " closed" : "") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
   const mine = r.ownerUid === uid;
   const isRecipient = r.recipients.includes(uid);
   const myAnswer = r.answers && r.answers[uid];
   const canSeeAll = mine || r.visibility === "all";
   const nameOfR = (u) => (u === uid ? "Você" : nameHtml(u, r.recipientNames && r.recipientNames[u]));
+  const changedHtml = (a) => (a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "");
 
-  // People + answers. The creator also gets one status icon per person who hasn't answered.
+  // Answers. Who's still missing only matters to the sender (with one status icon each);
+  // everyone else just sees answers as they arrive. My own answer has its own line below.
   let peopleHtml = "";
   if (r.answerType !== "none" || mine) {
-    const rows = r.recipients.filter((u) => canSeeAll || u === uid).map((u) => {
+    const rows = r.recipients.filter((u) => (canSeeAll || u === uid) && !(u === uid && myAnswer && isRecipient)).map((u) => {
       const a = r.answers && r.answers[u];
-      if (a) {
-        const changed = a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "";
-        return `<li>${nameOfR(u)} <b>${esc(a.value)}</b>${changed}</li>`;
-      }
-      const st = mine ? statusHtml(r, u) : "";
+      if (a) return `<li>${nameOfR(u)} <b>${esc(a.value)}</b>${changedHtml(a)}</li>`;
+      if (!mine) return "";
+      const st = statusHtml(r, u);
       if (r.answerType === "none") return `<li>${nameOfR(u)} ${st}</li>`;
       return `<li class="waiting">${nameOfR(u)} ${st || `<span class="dots">…</span>`}</li>`;
-    });
-    // In the "Pra você" card, the list of others is noise: just the question and the buttons.
+    }).filter(Boolean);
     if (rows.length && !(ask && !mine)) peopleHtml = `<ul class="answers">${rows.join("")}</ul>`;
     if (!canSeeAll && r.answerType !== "none" && !ask) peopleHtml += `<div class="muted small">Só ${esc(r.ownerName)} vê as respostas.</div>`;
   }
 
-  // Ended rounds collapse to one line: who answered what.
-  let closedSummary = "";
-  if (!r.open) {
+  // Resolved rounds collapse to one line: who answered what.
+  let doneSummary = "";
+  if (done) {
     const answered = Object.entries(r.answers || {});
-    if (r.answerType === "none") closedSummary = "aviso";
-    else if (!canSeeAll) closedSummary = myAnswer ? `você: ${myAnswer.value}` : "sem resposta sua";
-    else closedSummary = answered.map(([u, a]) => `${u === uid ? "você" : (family[u] && family[u].name) || a.name}: ${a.value}`).join(" · ") || "ninguém respondeu";
+    if (r.answerType === "none") doneSummary = "aviso";
+    else if (!canSeeAll) doneSummary = myAnswer ? `você: ${myAnswer.value}` : "sem resposta sua";
+    else doneSummary = answered.map(([u, a]) => `${u === uid ? "você" : (family[u] && family[u].name) || a.name}: ${a.value}`).join(" · ") || "ninguém respondeu";
   }
 
-  const soon = r.open ? closesSoon(r.closesAt) : "";
-  const meta = [mine ? "Você" : `de ${nameHtml(r.ownerUid, r.ownerName)}`, relTime(r.createdAt), soon, r.open ? "" : "encerrado"].filter(Boolean).join(" · ");
+  // Footer: who/when on the left, the deadline (absolute + time left) on the right.
+  const who = [mine ? "Você" : `de ${nameHtml(r.ownerUid, r.ownerName)}`, relTime(r.createdAt)].join(" · ");
+  const dl = r.open ? deadlineParts(r.closesAt) : null;
+  const when = !r.open ? `<span class="deadline">encerrado</span>`
+    : dl ? `<span class="deadline${dl.urgent ? " urgent" : ""}">⏳ ${esc(dl.abs)} · ${esc(dl.rel)}</span>` : "";
+
   li.innerHTML = `
     <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
-      <div><div class="round-title">${esc(r.title)}</div>
-      <div class="muted small">${meta}</div>
-      ${r.open ? "" : `<div class="closed-summary small">${collapsed ? esc(closedSummary) + " " : ""}<span class="chev">${collapsed ? "▾" : "▴ recolher"}</span></div>`}</div>
+      <div class="round-text"><div class="round-title">${esc(r.title)}</div>
+      ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
+      ${done ? `<div class="closed-summary small">${collapsed ? esc(doneSummary) + " " : ""}<span class="chev">${collapsed ? "▾" : "▴ recolher"}</span></div>` : ""}</div>
       <div class="round-corner"></div></div>
-    ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
     ${peopleHtml}
-    <div class="actions"></div>`;
+    <div class="my-answer"></div>
+    <div class="actions"></div>
+    <div class="round-meta small"><span class="who">${who}</span>${when}</div>`;
   const actions = li.querySelector(".actions");
 
   // Status icons: tap for the details.
   li.querySelectorAll(".st").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); toast(b.dataset.detail || "Sem detalhes.", 4500); }));
 
-  if (!r.open) {
-    // Tap the header of an ended round to expand / collapse it.
+  if (done) {
+    // Tap the header of a resolved round to expand / collapse it.
     li.querySelector(".round-head").addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
       expandedRounds.has(r.id) ? expandedRounds.delete(r.id) : expandedRounds.add(r.id);
@@ -1469,20 +1505,42 @@ function buildRound(r, ask) {
     });
   }
 
-  if (isRecipient && r.open && r.answerType !== "none") {
+  // My answer: a quiet line ("✓ Você: Eu não · mudar"); the buttons only come back to change it.
+  const canAnswer = isRecipient && r.open && r.answerType !== "none";
+  if (isRecipient && myAnswer && r.answerType !== "none" && !editingAnswer.has(r.id)) {
+    const box = li.querySelector(".my-answer");
+    box.innerHTML = `<span>✓ Você: <b>${esc(myAnswer.value)}</b>${changedHtml(myAnswer)}</span>`;
+    if (canAnswer) {
+      const ch = document.createElement("button");
+      ch.type = "button";
+      ch.className = "link";
+      ch.textContent = "mudar";
+      ch.onclick = (e) => {
+        e.stopPropagation();
+        if (r.answerType === "text") return openTextAnswer(r);
+        editingAnswer.add(r.id);
+        renderRounds();
+      };
+      box.appendChild(ch);
+    }
+  } else if (canAnswer) {
     if (r.answerType === "text") {
       const b = document.createElement("button");
-      b.className = myAnswer ? "secondary" : "primary";
-      b.textContent = myAnswer ? "Mudar resposta" : "Responder";
+      b.className = "primary";
+      b.textContent = "Responder";
       b.onclick = () => openTextAnswer(r);
       actions.appendChild(b);
     } else {
       for (const opt of r.options) {
         const b = document.createElement("button");
         const selected = myAnswer && myAnswer.value === opt;
-        b.className = selected ? "primary" : "secondary";
-        b.textContent = opt;
-        b.onclick = () => answer(r, opt, b);
+        b.className = "secondary" + (selected ? " chosen" : "");
+        b.textContent = selected ? `✓ ${opt}` : opt;
+        b.onclick = async () => {
+          if (selected) { editingAnswer.delete(r.id); return renderRounds(); }
+          editingAnswer.delete(r.id);
+          await answer(r, opt, b);
+        };
         actions.appendChild(b);
       }
     }
@@ -1497,7 +1555,7 @@ function buildRound(r, ask) {
       if (res) toast("Encerrado. 🔒");
     } });
   }
-  if (!r.open || r.answerType === "none") {
+  if (done || r.answerType === "none") {
     if (mine) {
       menu.push({ label: "🗑️ Apagar pra todo mundo", danger: true, run: async () => {
         if (!(await confirmBox("Apagar?", "Some do feed de todo mundo.", "Apagar"))) return;

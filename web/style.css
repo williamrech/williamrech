@@ -1055,3 +1055,20 @@ html.big .ps-role { font-size: 0.62rem; }
 .mini-fx .steam-cup > svg { opacity: .3; }
 .mini-fx .puff { animation-name: puff-rise-mini; }
 @keyframes puff-rise-mini { 0% { transform: translateY(4px) scale(.3); opacity: 0; } 25% { opacity: .4; } 100% { transform: translate(var(--wob, 0px), -42px) scale(1.2); opacity: 0; } }
+
+/* ---------- Feed cards: title + text tight, details in a footer ---------- */
+.round-head .round-text { flex: 1; min-width: 0; }
+.round-head .round-title { line-height: 1.25; }
+.round-head .round-body { margin: 2px 0 0; color: var(--fg); line-height: 1.35; }
+.round-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; margin-top: 10px; color: var(--muted); font-size: 0.78rem; }
+.round-meta .deadline { margin-left: auto; white-space: nowrap; }
+.round-meta .deadline.urgent { color: #f0b46a; font-weight: 600; }
+.round.collapsed .round-meta, .round.collapsed .my-answer { display: none; }
+.my-answer { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; font-size: 0.9rem; color: var(--fg); }
+.my-answer:empty { display: none; }
+.my-answer b { color: var(--crema); font-weight: 600; }
+.my-answer .link { padding: 0; font-size: 0.85rem; }
+.round .actions button.chosen { border-color: var(--crema); color: var(--crema); }
+.feed-count { font-weight: 400; opacity: .7; margin-left: 4px; }
+.feed-more { list-style: none; text-align: center; }
+.feed-more .link { font-size: 0.85rem; }
