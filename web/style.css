@@ -652,15 +652,20 @@ dialog h2 { margin-bottom: 4px; }
   92% { opacity: .9; }
   100% { transform: translate(0, var(--rise, -110vh)); opacity: 0; }
 }
-.smoke { position: absolute; color: var(--crema); opacity: 0; font-style: normal; filter: blur(2px); animation: smoke-rise ease-in-out infinite; }
-.smoke svg { width: 100%; height: 100%; display: block; overflow: visible; transform-origin: 50% 100%; animation: smoke-wave var(--wave, 4s) ease-in-out infinite alternate; }
-@keyframes smoke-rise {
-  0% { transform: translate(0, 0) scale(.7, .6); opacity: 0; }
-  20% { opacity: var(--peak, .3); }
-  60% { transform: translate(var(--wob), calc(var(--rise, -110vh) * .55)) scale(1, 1.2); opacity: calc(var(--peak, .3) * .7); }
-  100% { transform: translate(calc(var(--wob) * -0.6), var(--rise, -110vh)) scale(1.6, 1.6); opacity: 0; }
+/* Steaming cup (effect "smoke"): fixed low in the middle, behind the feed */
+#fx-back { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.steam-cup { position: absolute; left: 50%; bottom: calc(14vh + env(safe-area-inset-bottom)); width: 128px; transform: translateX(-50%); opacity: .9; }
+.steam-cup > svg { width: 100%; height: auto; display: block; }
+.puff { position: absolute; bottom: 62%; width: 24px; height: 96px; margin-left: -12px; color: var(--fg); font-style: normal; opacity: 0; filter: blur(1.6px); animation: puff-rise var(--dur, 3.6s) ease-out forwards; }
+.puff svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.puff path { stroke-dasharray: 100; stroke-dashoffset: 100; animation: puff-draw var(--dur, 3.6s) ease-in-out forwards; animation-delay: inherit; }
+@keyframes puff-rise {
+  0% { transform: translateY(8px) scaleX(.8); opacity: 0; }
+  20% { opacity: var(--peak, .45); }
+  70% { opacity: calc(var(--peak, .45) * .6); }
+  100% { transform: translate(var(--wob, 0px), -44px) scaleX(1.35); opacity: 0; }
 }
-@keyframes smoke-wave { from { transform: skewX(-10deg) scaleX(.85); } to { transform: skewX(10deg) scaleX(1.15); } }
+@keyframes puff-draw { 0% { stroke-dashoffset: 100; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; } }
 .fx-tag { font-size: 0.8em; }
 
 /* ---------- Palette picker ---------- */
@@ -909,7 +914,7 @@ html.big .round .actions button { min-height: 48px; }
 html.big .me-chip { font-size: 1.05rem; }
 
 /* ---------- Modo simples: just the feed ---------- */
-html.simple #pins, html.simple #decor, html.simple .tab[data-tab="chamados"] { display: none !important; }
+html.simple #pins, html.simple #decor, html.simple #fx-back, html.simple .tab[data-tab="chamados"] { display: none !important; }
 html.simple .round-body { font-size: 1rem; }
 
 /* ---------- Palette studio: one screen, no scrolling ----------
@@ -1044,3 +1049,8 @@ html.big .ps-role { font-size: 0.62rem; }
 .studio .icon-btn:focus-visible, .studio .ps-role:focus-visible, .studio .dg:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .ps:focus { outline: none; }
 .mini-fx { position: absolute !important; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; --fall: 260px; --rise: -260px; }
+.mini { isolation: isolate; }
+.mini-fx.back { z-index: 0; }
+.mini > :not(.mini-decor):not(.mini-fx) { z-index: 1; }
+.mini-fx .steam-cup { bottom: 4px; width: 50px; }
+.mini-fx .puff { width: 11px; height: 42px; margin-left: -5px; filter: blur(.8px); }

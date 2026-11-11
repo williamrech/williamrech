@@ -306,13 +306,53 @@ function placeDecor(spec, force = false) {
 }
 
 // Effects: "confetti" (a burst on open), "snow" (gentle, falling), "bubbles" (fizz rising from below)
-// or "smoke" (coffee steam: thin wavy lines slowly climbing and fading).
+// or "smoke" (a coffee cup low in the middle of the screen, behind the feed, that now and then
+// lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 const EFFECTS = { confetti: "Confete", snow: "Neve", bubbles: "Bolhas", smoke: "Fumaça" };
-const SMOKE_SVG = `<svg viewBox="0 0 24 100" preserveAspectRatio="none" aria-hidden="true"><path d="M12 98 C3 84 21 72 12 58 C3 44 21 32 12 18 C7 10 14 5 12 2" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/></svg>`;
+const CUP_SVG = `<svg viewBox="0 0 140 100" aria-hidden="true">
+<ellipse cx="70" cy="86" rx="62" ry="11" fill="var(--d-pale, #efe5d8)" opacity=".45"/>
+<ellipse cx="70" cy="83" rx="44" ry="6.5" fill="var(--d-pale, #efe5d8)" opacity=".8"/>
+<path d="M106 46 q 22 -2 20 15 q -2 13 -22 13" fill="none" stroke="var(--d-pale, #efe5d8)" stroke-width="7" stroke-linecap="round"/>
+<path d="M30 36 Q30 79 70 81 Q110 79 110 36 Z" fill="var(--d-pale, #efe5d8)"/>
+<path d="M110 36 Q110 73 82 80 Q103 68 104 36 Z" fill="var(--d-dark, #3a2214)" opacity=".2"/>
+<path d="M39 45 Q41 64 53 72" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".3"/>
+<ellipse cx="70" cy="36" rx="40" ry="9" fill="var(--d-pale, #efe5d8)"/>
+<ellipse cx="70" cy="37" rx="35" ry="6.5" fill="var(--d-dark, #3a2214)"/>
+<ellipse cx="70" cy="37" rx="35" ry="6.5" fill="none" stroke="var(--d-mid, #c98b4f)" stroke-width="2" opacity=".8"/>
+<ellipse cx="62" cy="36" rx="11" ry="2.2" fill="var(--d-mid, #c98b4f)" opacity=".55"/>
+</svg>`;
+const PUFF_SVG = `<svg viewBox="0 0 24 100" preserveAspectRatio="none" aria-hidden="true"><path pathLength="100" d="M12 98 C4 86 20 76 12 62 C4 48 20 36 12 22 C8 14 14 8 12 2" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>`;
 function spawnEffect(layer, kind, scale = 1) {
+  clearTimeout(layer._fxTimer);
   layer.innerHTML = "";
-  if (!(kind in EFFECTS) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  layer.dataset.fx = kind || "";
+  if (!(kind in EFFECTS)) return;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (kind === "smoke") {
+    // The cup stays put; steam only now and then (never with reduced motion).
+    const cup = document.createElement("div");
+    cup.className = "steam-cup";
+    cup.innerHTML = CUP_SVG;
+    layer.appendChild(cup);
+    if (still) return;
+    const puff = () => {
+      if (!cup.isConnected) return;
+      const n = Math.random() < 0.3 ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const w = document.createElement("i");
+        w.className = "puff";
+        w.style.cssText = `left:${50 + (Math.random() * 30 - 15)}%;--dur:${(3 + Math.random() * 1.4).toFixed(2)}s;--wob:${Math.round(Math.random() * 24 - 12)}px;--peak:${(0.35 + Math.random() * 0.25).toFixed(2)};animation-delay:${k * 0.5}s`;
+        w.innerHTML = PUFF_SVG;
+        w.addEventListener("animationend", (e) => { if (e.target === w) w.remove(); });
+        cup.appendChild(w);
+      }
+      layer._fxTimer = setTimeout(puff, 2500 + Math.random() * 4500);
+    };
+    layer._fxTimer = setTimeout(puff, 700);
+    return;
+  }
+  if (still) return;
   const css = getComputedStyle(layer);
   const colors = ["--caramel", "--crema", "--fg", "--muted"].map((v) => css.getPropertyValue(v).trim()).filter(Boolean).concat(["#ff8fb1", "#7fc8f8", "#f5d76e"]);
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -338,13 +378,6 @@ function spawnEffect(layer, kind, scale = 1) {
       add("bubble", `left:${rnd(0, 100)}%;width:${size}px;height:${size}px;opacity:${rnd(0.35, 0.75)};animation-delay:${rnd(-14, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(6, 13) * Math.max(scale, 0.5)}s;--wob:${rnd(3, 10) * scale}px`);
     }
   }
-  else if (kind === "smoke") {
-    for (let i = 0; i < Math.max(4, Math.round(11 * scale)); i++) {
-      const w = rnd(16, 30) * Math.max(scale, 0.55), h = w * rnd(3.2, 4.4);
-      add("smoke", `left:${rnd(4, 92)}%;width:${w}px;height:${h}px;bottom:${-h}px;animation-delay:${rnd(-22, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(14, 24) * Math.max(scale, 0.55)}s;--wob:${rnd(-24, 24) * scale}px;--wave:${rnd(3, 6)}s;--peak:${rnd(0.22, 0.42)}`, "");
-      layer.lastChild.innerHTML = SMOKE_SVG;
-    }
-  }
   layer.dataset.fx = kind;
 }
 let effectKey = null;
@@ -352,7 +385,10 @@ function runEffect(kind) {
   kind = kind || null;
   if (kind === effectKey) return;
   effectKey = kind;
-  spawnEffect(document.getElementById("fx"), kind);
+  // The steaming cup lives behind the feed (like the drawings); the rest float above it.
+  const behind = kind === "smoke";
+  spawnEffect(document.getElementById("fx"), behind ? null : kind);
+  spawnEffect(document.getElementById("fx-back"), behind ? kind : null);
 }
 
 // ---------- Phone only ----------
@@ -2182,7 +2218,11 @@ function renderStudio() {
 
   // The theme's effect, live in the mini-app
   const fxl = box.querySelector(".mini-fx");
-  if (fxl.dataset.k !== st.effect) { fxl.dataset.k = st.effect; spawnEffect(fxl, st.effect, 0.45); }
+  if (fxl.dataset.k !== st.effect) {
+    fxl.dataset.k = st.effect;
+    fxl.classList.toggle("back", st.effect === "smoke");
+    spawnEffect(fxl, st.effect, 0.45);
+  }
 
   // Role tiles = the palette
   const roles = $("pal-roles");
