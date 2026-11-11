@@ -1239,6 +1239,7 @@ function setAdminVisible(on) {
   show("tab-btn-admin", on);
   document.querySelector(".tabs").classList.toggle("three", on);
   if (!on && document.querySelector('.tab[data-tab="admin"].selected')) setTab("feed");
+  if (on && restoreAdminTab) { restoreAdminTab = false; setTab("admin"); }
   if (on) renderAdmin();
 }
 
@@ -1252,10 +1253,13 @@ function setTab(name) {
   show("tab-chamados", name === "chamados");
   show("tab-admin", name === "admin");
   if (name === "admin") { renderAdmin(); if (authUsers === null) loadAuthUsers(); }
-  try { localStorage.setItem("tab", name); } catch {}
+  if (!restoreAdminTab) { try { localStorage.setItem("tab", name); } catch {} }
 }
-document.querySelectorAll(".tab[data-tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
-setTab((() => { try { const t = localStorage.getItem("tab") || "feed"; return t === "admin" ? "feed" : t; } catch { return "feed"; } })());
+document.querySelectorAll(".tab[data-tab]").forEach((b) => b.addEventListener("click", () => { restoreAdminTab = false; setTab(b.dataset.tab); }));
+// The Admin tab can only be restored once we know the person is an admin (see setAdminVisible).
+const savedTab = (() => { try { return localStorage.getItem("tab") || "feed"; } catch { return "feed"; } })();
+let restoreAdminTab = savedTab === "admin";
+setTab(savedTab === "admin" ? "feed" : savedTab);
 
 async function fire(t, btn) {
   const who = t.recipients === "all" ? "todo mundo" : recipientsText(t.recipients);
