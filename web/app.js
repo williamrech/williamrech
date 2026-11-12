@@ -2503,7 +2503,8 @@ function flattenLog(entries) {
       : `enviado pra ${p}`;
     push(e.at, e.kind === "insistência" ? "🔁" : noisy ? "🔔" : "📨", sentText, dev);
     // Answer buttons: what the server attached vs what reached the phone (and what it can show).
-    const btn = e.buttons ? (e.phoneButtons === undefined ? "botões: enviados" : `botões: ${e.phoneButtons} chegaram, celular mostra até ${e.phoneMaxButtons}`) : "";
+    const btn = e.buttons ? (e.phoneButtons === undefined ? "botões enviados" : `botões ${e.phoneButtons}/${e.phoneMaxButtons}`) : "";
+    // botões A/B: A = buttons that reached the phone, B = how many its browser says it can show
     if (e.receivedAt) push(e.receivedAt, "✓✓", `chegou no celular de ${p}`, [dev, btn].filter(Boolean).join(" · "), "good");
     if (e.openedAt) push(e.openedAt, "👆", `${p} abriu a notificação`, "", "good");
   }
@@ -3374,6 +3375,23 @@ function adminOut(lines) {
   $("adm-out").innerHTML = lines.map(([ok, text]) =>
     `<div class="${ok ? "ok" : "warn"}">${ok ? "✓" : "⚠"} ${esc(text)}</div>`).join("");
 }
+
+// Does this phone's browser draw notification buttons at all? Shown locally: no server, no Firebase.
+$("adm-btn-test").addEventListener("click", async () => {
+  const max = (window.Notification && Notification.maxActions) || 0;
+  const out = $("adm-out");
+  try {
+    const reg = swReg || (await navigator.serviceWorker.ready);
+    await reg.showNotification("Teste de botões", {
+      body: `Este navegador diz que mostra até ${max} botões. Tem "Sim" e "Não" aqui embaixo?`,
+      icon: "icons/icon-192.png", tag: "teste-botoes",
+      actions: [{ action: "t0", title: "Sim" }, { action: "t1", title: "Não" }],
+    });
+    out.innerHTML = `<div>Notificação de teste enviada pelo próprio celular.</div><div class="${max ? "ok" : "warn"}">Notification.maxActions = ${max}</div><div class="ok">${esc(navigator.userAgent)}</div>`;
+  } catch (e) {
+    out.innerHTML = `<div class="warn">Não deu pra mostrar: ${esc(e.message || String(e))}</div>`;
+  }
+});
 
 $("adm-health").addEventListener("click", async () => {
   const lines = [];
