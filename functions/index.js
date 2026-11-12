@@ -156,7 +156,9 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
       const ref = logDoc();
       msgs.push({ ref, uid, name, d, message: {
         token: d.id,
-        notification: { title, body },
+        // Android cuts the title short (it shares the line with the site and time), so the
+        // title goes into the text: first line = title, second line = message. Title stays empty.
+        notification: { title: "", body: body ? `${title}\n${body}` : title },
         data: { url: link, logId: ref.id },
         webpush: {
           notification: meta.roundId

@@ -643,7 +643,7 @@ async function initMessaging() {
     const n = payload.notification || {};
     toast(`${n.title || ""} ${n.body || ""}`, 5000);
     if (Notification.permission === "granted") {
-      swReg.showNotification(n.title || "Ela gosta de sorvete?", {
+      swReg.showNotification(n.title || "", {
         body: n.body, icon: "icons/icon-192.png",
         data: { url: payload.data && payload.data.url, logId: payload.data && payload.data.logId },
       });
