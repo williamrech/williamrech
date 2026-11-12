@@ -1883,7 +1883,7 @@ function renderSchedule() {
   for (const i of WEEK_ORDER) {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "day-pill" + (ed.days.has(i) ? " on" : "");
+    b.className = "day-pill" + (ed.days.has(i) ? " on" : "") + (i === new Date().getDay() ? " today" : "");
     b.textContent = DAY_SHORT[i].slice(0, 1);
     b.title = DAY_SHORT[i];
     b.setAttribute("aria-label", DAY_SHORT[i]);
@@ -2030,8 +2030,7 @@ function loadEditor(t) {
   daySel.innerHTML = "";
   for (let i = 0; i < 120; i++) {
     const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + i);
-    const label = `${i === 0 ? "hoje" : i === 1 ? "amanhã" : DAY_SHORT[d.getDay()].toLowerCase()} · ${dmyOf(d, true)}`;
-    daySel.add(new Option(label, dateKeyOf(d)));
+    daySel.add(new Option(dmyOf(d, true), dateKeyOf(d)));
   }
   daySel.value = dateKeyOf(nextHour);
   fillTimeSelect($("ed-date-time"), TIMES_15, `${pad2s(nextHour.getHours())}:00`);

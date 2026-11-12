@@ -1174,3 +1174,6 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .pop-title { margin: 6px 8px 2px; font-weight: 700; font-size: 0.95rem; color: var(--fg); }
 .pop-confirm .pop-ask { margin-top: 2px; color: var(--muted); font-size: 0.85rem; }
 .pop-confirm .pop-ask[hidden] { display: none; }
+/* Today in the week row: highlighted outline (filled still means "picked") */
+.day-pill.today { border-color: var(--crema); color: var(--crema); box-shadow: inset 0 0 0 1px var(--crema); }
+.day-pill.today.on { color: var(--on-accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--crema); }
