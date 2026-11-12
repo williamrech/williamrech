@@ -1120,3 +1120,11 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .log-status { display: block; font-size: 0.74rem; color: var(--muted); }
 .log-row.bad .log-status { color: #f29a90; font-weight: 600; }
 .log-row.meh .log-status { color: #f0cc7a; }
+
+/* Flat log: question name first on every line, neutral colors, red/amber only on problems */
+.log-line .log-body { display: grid; gap: 1px; min-width: 0; }
+.log-q { font-weight: 700; font-size: 0.82rem; color: var(--crema); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-line .log-text, .log-line.good .log-text, .log-line.bad .log-text, .log-line.meh .log-text { color: var(--fg); font-size: 0.86rem; }
+.log-line.bad .log-status { color: #f29a90; font-weight: 600; }
+.log-line.meh .log-status { color: #f0cc7a; }
+.log-line { padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }

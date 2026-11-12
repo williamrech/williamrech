@@ -2590,21 +2590,23 @@ function renderAdminLog() {
     chips.appendChild(b);
   });
 
-  const shown = groups.filter((g) => logFilter === "all" || g.people.has(logFilter)).slice(0, 80);
+  // Flat timeline, newest first; every line starts with the question it belongs to.
+  const lines = [];
+  for (const g of groups) {
+    if (logFilter !== "all" && !g.people.has(logFilter)) continue;
+    for (const r of g.rows) lines.push({ ...r, q: `${g.emoji} ${g.title}`.trim() });
+  }
+  lines.sort((x, y) => y.at - x.at);
+  const shown = lines.slice(0, 300);
   list.innerHTML = shown.length ? "" : `<li class="muted small">Nada por aqui ainda.</li>`;
   let lastDay = "";
-  for (const g of shown) {
-    const day = dayLabel(g.last);
+  for (const r of shown) {
+    const day = dayLabel(r.at);
     if (day !== lastDay) { lastDay = day; list.insertAdjacentHTML("beforeend", `<li class="log-day">${esc(day)}</li>`); }
-    const rows = g.rows.map((r) => `
-      <div class="log-row ${r.cls}">
-        <span class="log-time">${hm(r.at)}</span>
-        <span class="log-body"><span class="log-text">${esc(r.icon)} ${esc(r.text)}</span>${r.status ? `<span class="log-status">${esc(r.status)}</span>` : ""}</span>
-      </div>`).join("");
     list.insertAdjacentHTML("beforeend", `
-      <li class="log-group${g.bad ? " has-bad" : ""}">
-        <div class="log-head"><span class="log-title">${esc(g.emoji)} ${esc(g.title)}</span><span class="log-meta">${g.from ? `de ${esc(g.from)} · ` : ""}${hm(g.first)}</span></div>
-        ${rows}
+      <li class="log-line ${r.cls}">
+        <span class="log-time">${hm(r.at)}</span>
+        <span class="log-body"><span class="log-q">${esc(r.q)}</span><span class="log-text">${esc(r.icon)} ${esc(r.text)}</span>${r.status ? `<span class="log-status">${esc(r.status)}</span>` : ""}</span>
       </li>`);
   }
 }
