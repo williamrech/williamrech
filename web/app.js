@@ -643,9 +643,12 @@ async function initMessaging() {
     const n = payload.notification || {};
     toast(`${n.title || ""} ${n.body || ""}`, 5000);
     if (Notification.permission === "granted") {
+      // Same notification as when the app is closed, answer buttons included.
+      const d = payload.data || {};
       swReg.showNotification(n.title || "", {
-        body: n.body, icon: "icons/icon-192.png",
-        data: { url: payload.data && payload.data.url, logId: payload.data && payload.data.logId },
+        body: n.body, icon: "icons/icon-192.png", data: { ...d },
+        ...(d.rid ? { tag: `rodada-${d.rid}`, renotify: true } : {}),
+        ...(d.rid && d.q0 && d.q1 ? { actions: [{ action: "q0", title: d.q0 }, { action: "q1", title: d.q1 }] } : {}),
       });
     }
   });
