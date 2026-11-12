@@ -517,6 +517,7 @@ const api = {
   seenRound: call("seenRound"),
   adminHealth: call("adminHealth"),
   adminBackend: call("adminBackend"),
+  joinRound: call("joinRound"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
   adminListUsers: call("adminListUsers"),
@@ -1741,6 +1742,33 @@ function buildRound(r, ask) {
         actions.appendChild(b);
       }
     }
+  }
+
+  // My own open question that I'm not answering: show what they see (faded, not tappable),
+  // with "também responder" to join in — then the real buttons appear.
+  if (mine && !isRecipient && r.open && r.answerType !== "none") {
+    actions.classList.add("preview");
+    const opts = r.answerType === "text" ? ["resposta em texto livre"] : r.options;
+    for (const opt of opts) {
+      const p = document.createElement("span");
+      p.className = "preview-opt";
+      p.textContent = opt;
+      actions.appendChild(p);
+    }
+    const join = document.createElement("div");
+    join.className = "join-line";
+    join.innerHTML = `<span class="muted small">É o que eles veem.</span>`;
+    const jb = document.createElement("button");
+    jb.type = "button";
+    jb.className = "link";
+    jb.textContent = "também responder";
+    jb.onclick = async (e) => {
+      e.stopPropagation();
+      const res = await withBusy(jb, () => api.joinRound({ roundId: r.id }), "…");
+      if (res) toast("Agora você também responde. 🙋");
+    };
+    join.appendChild(jb);
+    actions.after(join);
   }
 
   // Secondary actions live in a small "⋯" popover next to the button; risky ones ask right there.

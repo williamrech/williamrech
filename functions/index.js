@@ -363,6 +363,23 @@ handlers.sendOnce = async (req) => {
   return createRound(null, tpl, await profile(auth));
 };
 
+// The sender joins their own open question ("também responder" on the card).
+handlers.joinRound = async (req) => {
+  const auth = requireAuth(req);
+  const ref = db.doc(`rounds/${String((req.data && req.data.roundId) || "")}`);
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Isso não existe mais.");
+    const r = snap.data();
+    if (r.ownerUid !== auth.uid) throw new HttpsError("permission-denied", "Só quem mandou pode entrar assim.");
+    if (!r.open) throw new HttpsError("failed-precondition", "Já encerrou.");
+    if (r.answerType === "none") throw new HttpsError("failed-precondition", "Isso é só um aviso.");
+    if (r.recipients.includes(auth.uid)) return;
+    t.update(ref, { recipients: FieldValue.arrayUnion(auth.uid), participants: FieldValue.arrayUnion(auth.uid), ownerJoined: true });
+  });
+  return { ok: true };
+};
+
 // One answer, from the app or from a notification button.
 async function applyAnswer(uid, me, roundId, rawValue, via = "app") {
   let value = typeof rawValue === "string" ? rawValue.trim() : "";
@@ -554,6 +571,7 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
     const updates = {};
     for (const u of r.recipients) {
       if (muted[u] || (r.answers && r.answers[u]) || isQuiet(users[u], sp)) continue;
+      if (u === r.ownerUid && r.ownerJoined) continue; // joined their own question from the card: no nagging
       const last = r.notified && r.notified[u];
       let msg = null;
       let kind = "insistência";
