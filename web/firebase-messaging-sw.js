@@ -54,9 +54,9 @@ self.addEventListener("notificationclick", (event) => {
 // ---------------------------------------------------------------------------
 const RECEIPT_URL = `https://us-central1-${self.FIREBASE_CONFIG.projectId}.cloudfunctions.net/receipt`;
 
-function sendReceipt(logId, kind) {
+function sendReceipt(logId, kind, extra = "") {
   if (!logId || !/^[A-Za-z0-9]{20}$/.test(logId)) return Promise.resolve();
-  return fetch(`${RECEIPT_URL}?e=${kind}&id=${encodeURIComponent(logId)}`, {
+  return fetch(`${RECEIPT_URL}?e=${kind}&id=${encodeURIComponent(logId)}${extra}`, {
     method: "POST", mode: "no-cors", keepalive: true,
   }).catch(() => {});
 }
@@ -76,7 +76,13 @@ self.addEventListener("push", (event) => {
   try {
     const payload = event.data ? event.data.json() : null;
     const id = logIdFrom(payload);
-    if (id) event.waitUntil(sendReceipt(id, "recv"));
+    let extra = "";
+    try {
+      const acts = (payload && payload.notification && payload.notification.actions) || [];
+      const max = (self.Notification && self.Notification.maxActions) || 0;
+      extra = `&a=${acts.length}&m=${max}`;
+    } catch (e) {}
+    if (id) event.waitUntil(sendReceipt(id, "recv", extra));
   } catch (e) {}
 });
 

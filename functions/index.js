@@ -213,7 +213,7 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
           bw.delete(db.doc(`devices/${m.d.id}`));
         }
       }
-      bw.create(m.ref, { ...base, toUid: m.uid, toName: m.name, deviceId: m.d.id, device: deviceLabel(m.d.ua),
+      bw.create(m.ref, { ...base, toUid: m.uid, toName: m.name, deviceId: m.d.id, device: deviceLabel(m.d.ua), ...(qOpts ? { buttons: 2 } : {}),
         status: r.success ? "sent" : "failed", error: r.success ? null : fcmErrorText(code) });
     });
   }
@@ -742,6 +742,11 @@ exports.receipt = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB",
       if (!snap.exists) return null;
       const upd = {};
       if (!snap.get("receivedAt")) upd.receivedAt = now; // a tap also proves it arrived
+      // Diagnostics from the phone: buttons in the payload it got, and how many its browser shows.
+      if (e === "recv" && req.query.a !== undefined && snap.get("phoneButtons") === undefined) {
+        upd.phoneButtons = Math.min(9, Number(req.query.a) || 0);
+        upd.phoneMaxButtons = Math.min(9, Number(req.query.m) || 0);
+      }
       if (e === "open" && !snap.get("openedAt")) upd.openedAt = now;
       if (Object.keys(upd).length) t.update(ref, upd);
       return { log: snap.data(), upd };

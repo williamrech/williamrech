@@ -2502,7 +2502,9 @@ function flattenLog(entries) {
       : noisy ? `${p} foi avisad${(family[e.toUid] || {}).gender === "f" ? "a" : "o"} (${e.kind})`
       : `enviado pra ${p}`;
     push(e.at, e.kind === "insistência" ? "🔁" : noisy ? "🔔" : "📨", sentText, dev);
-    if (e.receivedAt) push(e.receivedAt, "✓✓", `chegou no celular de ${p}`, dev, "good");
+    // Answer buttons: what the server attached vs what reached the phone (and what it can show).
+    const btn = e.buttons ? (e.phoneButtons === undefined ? "botões: enviados" : `botões: ${e.phoneButtons} chegaram, celular mostra até ${e.phoneMaxButtons}`) : "";
+    if (e.receivedAt) push(e.receivedAt, "✓✓", `chegou no celular de ${p}`, [dev, btn].filter(Boolean).join(" · "), "good");
     if (e.openedAt) push(e.openedAt, "👆", `${p} abriu a notificação`, "", "good");
   }
   return out.sort((a, b) => b.at - a.at);
