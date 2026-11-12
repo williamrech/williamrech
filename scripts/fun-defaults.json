@@ -166,33 +166,6 @@
     }
   },
   "occasions": {
-    "aniver-1": {
-      "when": "12-27",
-      "version": "feliz.aniversario",
-      "palette": "festa",
-      "decor": "cake.svg balloon.svg party-hat.svg balloon.svg gift.svg",
-      "banner": "Feliz aniversário! 🎉",
-      "effect": "confetti",
-      "priority": 10
-    },
-    "aniver-2": {
-      "when": "12-25",
-      "version": "feliz.aniversario",
-      "palette": "festa",
-      "decor": "cake.svg balloon.svg flower.svg balloon.svg heart.svg",
-      "banner": "Feliz aniversário! 🎂",
-      "effect": "confetti",
-      "priority": 10
-    },
-    "aniver-3": {
-      "when": "12-26",
-      "version": "feliz.aniversario",
-      "palette": "festa",
-      "decor": "cake.svg balloon.svg party-hat.svg balloon.svg gift.svg",
-      "banner": "Feliz aniversário! 🎂",
-      "effect": "confetti",
-      "priority": 10
-    },
     "ano-novo": {
       "when": "01-01",
       "version": "2.0.0-ano.novo",

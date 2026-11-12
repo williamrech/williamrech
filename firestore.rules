@@ -49,7 +49,7 @@ service cloud.firestore {
 
     // Fun content, palettes, occasions: public; edited by admins (Admin tab) or in the console.
     match /config/{id} {
-      allow read: if true;
+      allow read: if signedIn(); // themes and occasions (birthdays) are only for the family
       allow write: if isAdmin();
     }
 

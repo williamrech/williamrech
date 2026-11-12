@@ -485,11 +485,17 @@ try {
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-// Fun content: live, so console edits show up without a reload.
-onSnapshot(doc(db, "config", "fun"), (snap) => {
-  FUN = snap.exists() ? snap.data() : {};
-  applyLook();
-}, (err) => { console.warn("config/fun", err); applyLook(); });
+// Fun content (themes, occasions): only readable when logged in. Before login the phone shows
+// the last look it remembers; once logged in this stays live, so admin edits show up right away.
+let funUnsub = null;
+function subscribeFun(on) {
+  if (funUnsub) { funUnsub(); funUnsub = null; }
+  if (!on) return;
+  funUnsub = onSnapshot(doc(db, "config", "fun"), (snap) => {
+    FUN = snap.exists() ? snap.data() : {};
+    applyLook();
+  }, (err) => console.warn("config/fun", err));
+}
 placeDecor(window.__lookDecor || null); // last known decor right away; config may swap it once loaded
 
 // Uploaded drawings: when they change, redraw the decor (and the admin gallery).
@@ -772,6 +778,7 @@ const messagingReady = initMessaging().catch((e) => { console.error(e); return f
 onAuthStateChanged(auth, async (user) => {
   unsubs.forEach((u) => u());
   unsubs = [];
+  subscribeFun(!!user);
   subscribeAdminData(false);
   me = null;
   meLoaded = false;
