@@ -141,6 +141,30 @@ async function quickSecret() {
 }
 const quickToken = (key, roundId, uid) => createHmac("sha256", key).update(`${roundId}:${uid}`).digest("base64url").slice(0, 32);
 
+// One push message. Every notification has a tag, so a resend replaces it instead of duplicating:
+// questions and their reminders share "rodada-<id>" (one "still waiting" in the shade); everything
+// else gets its own "n-<logId>".
+function buildPush({ token, logId, uid, title, body, link, kind, roundId, qOpts, qKey, resend = false }) {
+  const replacing = roundId && REPLACING_KINDS.includes(kind);
+  return {
+    token,
+    // Android cuts the title short, so the title goes into the text: line 1 = title, line 2 = message.
+    notification: { title: "", body: body ? `${title}\n${body}` : title },
+    data: { url: link, logId,
+      ...(qOpts ? { rid: roundId, u: uid, qt: quickToken(qKey, roundId, uid), q0: qOpts[0], q1: qOpts[1] } : {}) },
+    webpush: {
+      notification: {
+        icon: APP_URL + "icons/icon-192.png",
+        tag: replacing ? `rodada-${roundId}` : `n-${logId}`,
+        renotify: replacing && !resend, // a resend only fills a gap: no second buzz
+        ...(qOpts ? { actions: [{ action: "q0", title: qOpts[0] }, { action: "q1", title: qOpts[1] }] } : {}),
+      },
+      fcmOptions: { link },
+      headers: { Urgency: "high", TTL: "21600" },
+    },
+  };
+}
+
 async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
   const users = ctx.users || await loadUsers();
   const devices = ctx.devices || await loadDevices();
@@ -175,26 +199,8 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
     }
     for (const d of devs) {
       const ref = logDoc();
-      msgs.push({ ref, uid, name, d, message: {
-        token: d.id,
-        // Android cuts the title short (it shares the line with the site and time), so the
-        // title goes into the text: first line = title, second line = message. Title stays empty.
-        notification: { title: "", body: body ? `${title}\n${body}` : title },
-        data: { url: link, logId: ref.id,
-          ...(qOpts ? { rid: meta.roundId, u: uid, qt: quickToken(qKey, meta.roundId, uid), q0: qOpts[0], q1: qOpts[1] } : {}) },
-        webpush: {
-          // Only the question and its reminders replace each other (one "still waiting" in the shade);
-          // everything else — answers, changes, mutes — is its own notification, so the timeline stays true.
-          notification: {
-            icon: APP_URL + "icons/icon-192.png",
-            ...(meta.roundId && REPLACING_KINDS.includes(base.kind) ? { tag: `rodada-${meta.roundId}`, renotify: true } : {}),
-            // Two buttons right in the notification (Android allows at most 2).
-            ...(qOpts ? { actions: [{ action: "q0", title: qOpts[0] }, { action: "q1", title: qOpts[1] }] } : {}),
-          },
-          fcmOptions: { link },
-          headers: { Urgency: "high", TTL: "21600" },
-        },
-      } });
+      msgs.push({ ref, uid, name, d, message: buildPush({ token: d.id, logId: ref.id, uid, title, body, link,
+        kind: base.kind, roundId: meta.roundId, qOpts, qKey }) });
     }
   }
 
@@ -213,7 +219,7 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
           bw.delete(db.doc(`devices/${m.d.id}`));
         }
       }
-      bw.create(m.ref, { ...base, toUid: m.uid, toName: m.name, deviceId: m.d.id, device: deviceLabel(m.d.ua), ...(qOpts ? { buttons: 2 } : {}),
+      bw.create(m.ref, { ...base, link, toUid: m.uid, toName: m.name, deviceId: m.d.id, device: deviceLabel(m.d.ua), ...(qOpts ? { buttons: 2 } : {}),
         status: r.success ? "sent" : "failed", error: r.success ? null : fcmErrorText(code) });
     });
   }
@@ -599,6 +605,41 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
     await bw.close();
   }
 
+  // 3b) Resend what the phone hasn't confirmed: no "arrived" after 10 min → send again (max 2x).
+  //     Same tag, no second buzz: if it was there it's quietly replaced, if it was lost it shows up.
+  try {
+    const recent = await db.collection("notifLog").where("at", ">=", now - 50 * 60000).get();
+    const roundCache = {};
+    const getRound = async (id) => (id in roundCache ? roundCache[id] : (roundCache[id] = (await db.doc(`rounds/${id}`).get()).data() || null));
+    const todo = [];
+    for (const d of recent.docs) {
+      const e = d.data();
+      if (e.type === "event" || e.status !== "sent" || e.receivedAt || e.kind === "teste" || !e.deviceId) continue;
+      if ((e.retries || 0) >= 2 || now - (e.lastTry || e.at) < 10 * 60000) continue;
+      if (e.roundId && REPLACING_KINDS.includes(e.kind)) {
+        const r = await getRound(e.roundId);
+        if (!r || !r.open || (r.answers && r.answers[e.toUid])) continue; // nothing left to ask
+      }
+      if (!(devices[e.toUid] || []).some((x) => x.id === e.deviceId)) continue;
+      const r = e.roundId ? await getRound(e.roundId) : null;
+      const qOpts = r && REPLACING_KINDS.includes(e.kind) ? quickOptions(r) : null;
+      todo.push({ ref: d.ref, e, message: buildPush({ token: e.deviceId, logId: d.id, uid: e.toUid, title: e.title || "", body: e.body || "",
+        link: e.link || (e.roundId ? `${APP_URL}?rodada=${e.roundId}` : APP_URL), kind: e.kind, roundId: e.roundId,
+        qOpts, qKey: qOpts ? await quickSecret() : null, resend: true }) });
+    }
+    if (todo.length) {
+      const res = await getMessaging().sendEach(todo.map((x) => x.message));
+      const bw = db.bulkWriter();
+      res.responses.forEach((r, i) => {
+        const { ref, e } = todo[i];
+        const code = r.error && r.error.code;
+        bw.update(ref, { retries: (e.retries || 0) + 1, lastTry: now, ...(r.success ? {} : { retryError: fcmErrorText(code) }) });
+        if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") bw.delete(db.doc(`devices/${e.deviceId}`));
+      });
+      await bw.close();
+    }
+  } catch (e) { console.warn("resend", e.message); }
+
   // 4) Heartbeat for Admin → Backend (one small write per run).
   try {
     const fresh = await db.collection("templates").where("schedule.on", "==", true).get();
@@ -759,13 +800,16 @@ exports.receipt = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB",
       const snap = await t.get(ref);
       if (!snap.exists) return null;
       const upd = {};
-      if (!snap.get("receivedAt")) upd.receivedAt = now; // a tap also proves it arrived
+      // The phone sends the real moment (t) — it may report late, e.g. after the screen was locked.
+      const tPhone = Number(req.query.t);
+      const when = tPhone && tPhone >= (snap.get("at") || 0) - 60000 && tPhone <= now + 60000 ? Math.min(tPhone, now) : now;
+      if (!snap.get("receivedAt")) upd.receivedAt = when; // a tap also proves it arrived
       // Diagnostics from the phone: buttons in the payload it got, and how many its browser shows.
       if (e === "recv" && req.query.a !== undefined && snap.get("phoneButtons") === undefined) {
         upd.phoneButtons = Math.min(9, Number(req.query.a) || 0);
         upd.phoneMaxButtons = Math.min(9, Number(req.query.m) || 0);
       }
-      if (e === "open" && !snap.get("openedAt")) upd.openedAt = now;
+      if (e === "open" && !snap.get("openedAt")) upd.openedAt = when;
       if (Object.keys(upd).length) t.update(ref, upd);
       return { log: snap.data(), upd };
     });

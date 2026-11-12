@@ -54,12 +54,47 @@ self.addEventListener("notificationclick", (event) => {
 // ---------------------------------------------------------------------------
 const RECEIPT_URL = `https://us-central1-${self.FIREBASE_CONFIG.projectId}.cloudfunctions.net/receipt`;
 
-function sendReceipt(logId, kind, extra = "") {
-  if (!logId || !/^[A-Za-z0-9]{20}$/.test(logId)) return Promise.resolve();
-  return fetch(`${RECEIPT_URL}?e=${kind}&id=${encodeURIComponent(logId)}${extra}`, {
-    method: "POST", mode: "no-cors", keepalive: true,
-  }).catch(() => {});
+// Each receipt carries the real moment (t). If it can't be sent now (locked phone, no network),
+// it's kept in a small local queue and sent with the next push, tap, or app open.
+const QDB = "receipts";
+function qdb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(QDB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("q", { autoIncrement: true });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
 }
+async function qAdd(item) {
+  try { const db = await qdb(); await new Promise((res) => { const tx = db.transaction("q", "readwrite"); tx.objectStore("q").add(item); tx.oncomplete = res; tx.onerror = res; }); } catch (e) {}
+}
+async function qTakeAll() {
+  try {
+    const db = await qdb();
+    return await new Promise((res) => {
+      const tx = db.transaction("q", "readwrite"), st = tx.objectStore("q"), items = [];
+      st.openCursor().onsuccess = (ev) => { const c = ev.target.result; if (c) { items.push(c.value); c.delete(); c.continue(); } };
+      tx.oncomplete = () => res(items);
+      tx.onerror = () => res(items);
+    });
+  } catch (e) { return []; }
+}
+async function postReceipt(it) {
+  await fetch(`${RECEIPT_URL}?e=${it.kind}&id=${encodeURIComponent(it.id)}&t=${it.t}${it.extra || ""}`, { method: "POST", mode: "no-cors", keepalive: true });
+}
+async function flushReceipts() {
+  for (const it of await qTakeAll()) {
+    try { await postReceipt(it); } catch (e) { await qAdd(it); }
+  }
+}
+function sendReceipt(logId, kind, extra = "") {
+  if (!logId || !/^[A-Za-z0-9]{20}$/.test(logId)) return flushReceipts();
+  const it = { id: logId, kind, t: Date.now(), extra };
+  return postReceipt(it).catch(() => qAdd(it)).then(flushReceipts).catch(() => {});
+}
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "flush-receipts") event.waitUntil(flushReceipts());
+});
 
 // FCM puts our data either at payload.data or (for SDK-shown notifications) under FCM_MSG.
 function logIdFrom(obj) {

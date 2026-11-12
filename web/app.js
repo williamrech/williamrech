@@ -656,6 +656,13 @@ async function initMessaging() {
   return true;
 }
 
+// Arrival/tap reports the phone couldn't send while locked: send them now.
+function flushReceipts() {
+  try { navigator.serviceWorker && navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: "flush-receipts" }); } catch {}
+}
+flushReceipts();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") flushReceipts(); });
+
 async function registerDevice() {
   if (!messaging) return;
   try {
@@ -2496,52 +2503,65 @@ $("adm-add-form").addEventListener("submit", async (e) => {
   loadAuthUsers();
 });
 
-// ---------- Logs: one line per thing that happened ----------
-// Delivery entries (one per phone) become up to 3 events: sent, arrived, opened.
-// Event entries (type "event") are things done to a round: created, answered, seen, closed…
+// ---------- Logs: grouped by question ----------
+// Each question is one block: a header (emoji, title, who sent it, when) and, in order, everything
+// that happened: who it went to and whether it arrived / was opened, reminders, answers, views.
+// Neutral by default; red / amber only for problems.
 const NOISY_KINDS = ["resposta", "mudou de ideia", "silenciou", "reativou"]; // telling others about an answer
 function personName(uid, fallback) { return (uid && family[uid] && family[uid].name) || fallback || "?"; }
+const hm = (ms) => { const d = new Date(ms); return `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`; };
 
-function flattenLog(entries) {
-  const out = [];
+function logGroups(entries) {
+  const groups = new Map();
   for (const e of entries) {
-    const title = e.roundTitle || e.title || "";
-    const emoji = e.emoji || "";
-    const push = (at, icon, text, extra = "", cls = "") => out.push({ at, icon, text, title, emoji, extra, cls, who: [e.toUid, e.actorUid].filter(Boolean) });
+    const key = e.roundId || (e.kind === "teste" ? `teste-${new Date(e.at).toDateString()}` : `solo-${e.id}`);
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { key, rows: [], people: new Set(), first: e.at, last: e.at, title: "", emoji: "", from: "", bad: false }));
+    g.title ||= e.roundTitle || (e.kind === "teste" ? "Notificações de teste" : e.title || "");
+    g.emoji ||= e.emoji || (e.kind === "teste" ? "🧪" : "🔔");
+    [e.toUid, e.actorUid, e.fromUid].filter(Boolean).forEach((u) => g.people.add(u));
+    const row = (at, icon, text, status = "", cls = "") => {
+      g.rows.push({ at, icon, text, status, cls });
+      g.first = Math.min(g.first, at);
+      g.last = Math.max(g.last, at, e.receivedAt || 0, e.openedAt || 0);
+      if (cls === "bad") g.bad = true;
+    };
     if (e.type === "event") {
       const a = personName(e.actorUid, e.actorName);
       switch (e.ev) {
-        case "created": push(e.at, e.scheduled ? "⏰" : "📣", `${a} mandou pra ${e.count} pessoa${e.count === 1 ? "" : "s"}${e.scheduled ? " (agendado)" : ""}`); break;
-        case "answer": push(e.at, e.changes ? "🌀" : "💬", (e.changes ? `${a} mudou pra: ${e.value} (${e.changes}ª vez)` : `${a} respondeu: ${e.value}`)
-          + (e.via ? ` (pela ${e.via})` : ""), "", "good"); break;
-        case "seen": push(e.at, "👁", `${a} visualizou`, "", "good"); break;
-        case "closed": push(e.at, "🔒", `${a} encerrou`); break;
-        case "expired": push(e.at, "⌛", "fechou (acabou o tempo)"); break;
-        case "muted": push(e.at, "🔕", `${a} silenciou`, "", "meh"); break;
-        case "unmuted": push(e.at, "🔔", `${a} reativou`); break;
+        case "created": g.from = a; row(e.at, e.scheduled ? "⏰" : "📣", `${a} mandou pra ${e.count} pessoa${e.count === 1 ? "" : "s"}${e.scheduled ? " (agendado)" : ""}`); break;
+        case "answer": row(e.at, e.changes ? "🌀" : "💬", e.changes ? `${a} mudou pra: ${e.value}` : `${a} respondeu: ${e.value}`, e.via ? `pela ${e.via}` : ""); break;
+        case "seen": row(e.at, "👁", `${a} viu no app`); break;
+        case "closed": row(e.at, "🔒", `${a} encerrou`); break;
+        case "expired": row(e.at, "⌛", "fechou (acabou o tempo)"); break;
+        case "muted": row(e.at, "🔕", `${a} silenciou`, "", "meh"); break;
+        case "unmuted": row(e.at, "🔔", `${a} reativou`); break;
       }
       continue;
     }
-    // Delivery entry
+    // A notification to one phone: where it went and what happened to it.
     const p = personName(e.toUid, e.toName);
-    const dev = e.device || "";
-    const noisy = NOISY_KINDS.includes(e.kind);
-    if (e.status === "failed") { push(e.at, "❌", `não chegou pra ${p}`, [dev, e.error].filter(Boolean).join(" · "), "bad"); continue; }
-    if (e.status === "nodevice") { if (!noisy) push(e.at, "⚠", `${p} não tem aparelho com notificação`, "", "bad"); continue; }
-    if (e.status === "quiet") { if (!noisy) push(e.at, "⏸", `${p} em horário de silêncio`, e.note || "", "meh"); continue; }
-    if (e.status === "muted") { push(e.at, "🔕", `${p} tinha silenciado, não recebeu`, "", "meh"); continue; }
-    const sentText = e.kind === "insistência" ? `insistiu com ${p}`
-      : e.kind === "teste" ? `teste enviado pra ${p}`
-      : noisy ? `${p} foi avisad${(family[e.toUid] || {}).gender === "f" ? "a" : "o"} (${e.kind})`
-      : `enviado pra ${p}`;
-    push(e.at, e.kind === "insistência" ? "🔁" : noisy ? "🔔" : "📨", sentText, dev);
-    // Answer buttons: what the server attached vs what reached the phone (and what it can show).
-    const btn = e.buttons ? (e.phoneButtons === undefined ? "botões enviados" : `botões ${e.phoneButtons}/${e.phoneMaxButtons}`) : "";
-    // botões A/B: A = buttons that reached the phone, B = how many its browser says it can show
-    if (e.receivedAt) push(e.receivedAt, "✓✓", `chegou no celular de ${p}`, [dev, btn].filter(Boolean).join(" · "), "good");
-    if (e.openedAt) push(e.openedAt, "👆", `${p} abriu a notificação`, "", "good");
+    const what = e.kind === "insistência" || e.kind === "recado (depois do silêncio)" ? `lembrete pra ${p}`
+      : NOISY_KINDS.includes(e.kind) ? `aviso de ${e.kind} pra ${p}`
+      : e.kind === "teste" ? `teste pra ${p}` : `notificação pra ${p}`;
+    const icon = e.kind === "insistência" ? "🔁" : NOISY_KINDS.includes(e.kind) ? "↪" : "📨";
+    if (e.status === "failed") { row(e.at, icon, what, `falhou${e.error ? `: ${e.error}` : ""}`, "bad"); continue; }
+    if (e.status === "nodevice") { row(e.at, icon, what, "sem celular cadastrado", "bad"); continue; }
+    if (e.status === "quiet") { row(e.at, icon, what, "segurada: não perturbe", "meh"); continue; }
+    if (e.status === "muted") { row(e.at, icon, what, "não mandada: silenciou", "meh"); continue; }
+    const chain = [];
+    if (e.receivedAt) chain.push(`chegou ${hm(e.receivedAt)}${e.receivedAt - e.at > 5 * 60000 ? ` (+${Math.round((e.receivedAt - e.at) / 60000)} min)` : ""}`);
+    if (e.openedAt) chain.push(`abriu ${hm(e.openedAt)}`);
+    let cls = e.receivedAt && e.receivedAt - e.at > 5 * 60000 ? "meh" : "";
+    if (!e.receivedAt) {
+      if (Date.now() - e.at < 3 * 60000) chain.push("aguardando o celular…");
+      else { chain.push("celular não confirmou a chegada"); cls = "bad"; }
+    }
+    if (e.retries) chain.push(`reenviada ${e.retries}x${e.retryError ? ` (${e.retryError})` : ""}`);
+    row(e.at, icon, what, chain.join(" · "), cls);
   }
-  return out.sort((a, b) => b.at - a.at);
+  for (const g of groups.values()) g.rows.sort((x, y) => x.at - y.at);
+  return [...groups.values()].sort((x, y) => y.last - x.last);
 }
 
 function dayLabel(ms) {
@@ -2554,7 +2574,7 @@ function dayLabel(ms) {
 function renderAdminLog() {
   const list = $("adm-log");
   if (!list || !isAdminNow()) return;
-  const events = flattenLog(logEntries);
+  const groups = logGroups(logEntries);
 
   // Filter chips: everyone + each person who appears.
   const people = {};
@@ -2570,21 +2590,21 @@ function renderAdminLog() {
     chips.appendChild(b);
   });
 
-  const shown = events.filter((ev) => logFilter === "all" || ev.who.includes(logFilter)).slice(0, 300);
+  const shown = groups.filter((g) => logFilter === "all" || g.people.has(logFilter)).slice(0, 80);
   list.innerHTML = shown.length ? "" : `<li class="muted small">Nada por aqui ainda.</li>`;
   let lastDay = "";
-  for (const ev of shown) {
-    const day = dayLabel(ev.at);
-    if (day !== lastDay) {
-      lastDay = day;
-      list.insertAdjacentHTML("beforeend", `<li class="log-day">${esc(day)}</li>`);
-    }
-    const d = new Date(ev.at);
-    const sub = [ev.emoji + " " + ev.title, ev.extra].filter((x) => x && x.trim()).join(" · ");
+  for (const g of shown) {
+    const day = dayLabel(g.last);
+    if (day !== lastDay) { lastDay = day; list.insertAdjacentHTML("beforeend", `<li class="log-day">${esc(day)}</li>`); }
+    const rows = g.rows.map((r) => `
+      <div class="log-row ${r.cls}">
+        <span class="log-time">${hm(r.at)}</span>
+        <span class="log-body"><span class="log-text">${esc(r.icon)} ${esc(r.text)}</span>${r.status ? `<span class="log-status">${esc(r.status)}</span>` : ""}</span>
+      </div>`).join("");
     list.insertAdjacentHTML("beforeend", `
-      <li class="log-line ${ev.cls}">
-        <span class="log-time">${pad2s(d.getHours())}:${pad2s(d.getMinutes())}</span>
-        <span class="log-body"><span class="log-text">${esc(ev.icon)} ${esc(ev.text)}</span>${sub ? `<span class="log-sub">${esc(sub)}</span>` : ""}</span>
+      <li class="log-group${g.bad ? " has-bad" : ""}">
+        <div class="log-head"><span class="log-title">${esc(g.emoji)} ${esc(g.title)}</span><span class="log-meta">${g.from ? `de ${esc(g.from)} · ` : ""}${hm(g.first)}</span></div>
+        ${rows}
       </li>`);
   }
 }
