@@ -1810,7 +1810,7 @@ function openPop(anchor, build, onClose) {
   };
   (anchor.closest("dialog[open]") || document.body).appendChild(el);
   anchor.setAttribute("aria-expanded", "true");
-  popMenu = { el, anchor, onClose };
+  popMenu = { el, anchor, onClose, place, scrollAt: scrollY };
   build(el, place);
   place();
   el.querySelector("button")?.focus({ preventScroll: true });
@@ -1838,7 +1838,7 @@ function openPopMenu(anchor, items) {
       no.onclick = () => { list(); place(); };
       yes.onclick = () => { closePopMenu(); it.run(); };
       place();
-      yes.focus();
+      yes.focus({ preventScroll: true });
     };
     list();
   });
@@ -1859,7 +1859,7 @@ function confirmPop(anchor, title, body, yes) {
       no.onclick = () => closePopMenu(false);
       ok.onclick = () => closePopMenu(true);
     }, (result) => resolve(result === true));
-    setTimeout(() => popMenu && popMenu.el.querySelector(".pop-row button:last-child")?.focus(), 0);
+    setTimeout(() => popMenu && popMenu.el.querySelector(".pop-row button:last-child")?.focus({ preventScroll: true }), 0);
   });
 }
 let lastTap = null, lastTapAt = 0;
@@ -1868,7 +1868,12 @@ document.addEventListener("pointerdown", (e) => {
   lastTap = e.target.closest && e.target.closest("button, .chip, [role=button]");
   lastTapAt = Date.now();
 }, true);
-addEventListener("scroll", (e) => { if (popMenu && !popMenu.el.contains(e.target)) closePopMenu(); }, true);
+addEventListener("scroll", (e) => {
+  if (!popMenu || popMenu.el.contains(e.target)) return;
+  // Small jumps (focus, address bar, a finger wobble) keep the menu open; a real scroll closes it.
+  if (Math.abs(scrollY - popMenu.scrollAt) > 60) closePopMenu();
+  else if (popMenu.place) popMenu.place();
+}, true);
 addEventListener("resize", () => closePopMenu());
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && popMenu) { e.preventDefault(); closePopMenu(); } }, true);
 
