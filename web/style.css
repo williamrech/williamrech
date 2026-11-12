@@ -1146,7 +1146,7 @@ select.add-time { width: auto; padding: 5px 10px; min-height: 0; font-size: 0.85
 .sched-empty { margin: 6px 0 0; }
 #ed-dates:empty { display: none; }
 .date-add { display: flex; gap: 6px; margin-top: 8px; }
-.date-add input { flex: 1; min-width: 0; margin: 0; }
+.date-add input, .date-add #ed-date-day { flex: 1; min-width: 0; margin: 0; }
 .date-add select { width: auto; margin: 0; }
 .date-add .small-btn { flex: none; }
 .chips.quick { margin-top: 6px; }

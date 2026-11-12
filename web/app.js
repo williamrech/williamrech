@@ -49,6 +49,9 @@ function easter(y) {
 
 const WD = { sun: 0, dom: 0, mon: 1, seg: 1, tue: 2, ter: 2, wed: 3, qua: 3, thu: 4, qui: 4, fri: 5, sex: 5, sat: 6, sab: 6 };
 const pad2s = (n) => String(n).padStart(2, "0");
+// Dates are always d.m.y: "14.11" this year, "14.11.2027" otherwise (or always, with year=true).
+const dmy = (d, m, y, year = false) => `${pad2s(d)}.${pad2s(m)}${year || y !== new Date().getFullYear() ? "." + y : ""}`;
+const dmyOf = (date, year = false) => dmy(date.getDate(), date.getMonth() + 1, date.getFullYear(), year);
 
 // Does one date pattern match today? Patterns:
 //   12-25 | 2026-11-10 | fri-13 | 2sun-05 | lastfri-11 | easter-47 | 12-20..01-06
@@ -590,7 +593,7 @@ function whenText(date) {
   if (d.key === now.key) return `hoje às ${d.time}`;
   if (d.key === tomorrow.key) return `amanhã às ${d.time}`;
   const [, m, day] = d.key.split("-");
-  return `${DAY_NAMES[d.weekday]} (${day}/${m}) às ${d.time}`;
+  return `${DAY_NAMES[d.weekday]} (${dmy(+day, +m, +d.key.slice(0, 4))}) às ${d.time}`;
 }
 
 function friendlyError(err) {
@@ -1183,7 +1186,7 @@ function deadlineParts(ts) {
   const d = new Date(ms), hm = `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
   const same = (x, y) => x.toDateString() === y.toDateString();
   const abs = same(d, new Date()) ? `até ${hm}` : same(d, new Date(Date.now() + 86400000)) ? `até amanhã ${hm}`
-    : `até ${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} ${hm}`;
+    : `até ${DAY_SHORT[d.getDay()].toLowerCase()} ${dmyOf(d)} ${hm}`;
   const fal = (n, unit) => `${n === 1 ? "falta" : "faltam"} ${n} ${unit}`;
   let rel;
   if (min <= 0) rel = "fechando…";
@@ -1204,7 +1207,7 @@ function closesText(ts) {
   if (d.getTime() <= Date.now()) return "fechando…";
   if (same(d, today)) return `fecha às ${hm}`;
   if (same(d, tomorrow)) return `fecha amanhã às ${hm}`;
-  return `fecha ${DAY_SHORT[d.getDay()].toLowerCase()} ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)} às ${hm}`;
+  return `fecha ${DAY_SHORT[d.getDay()].toLowerCase()} ${dmyOf(d)} às ${hm}`;
 }
 
 // Creator's view: ONE icon per person with only the furthest step reached:
@@ -1276,7 +1279,7 @@ function whenLabel(date) {
   const today = new Date(), tom = new Date(Date.now() + 86400000);
   if (date.toDateString() === today.toDateString()) return `hoje ${hm}`;
   if (date.toDateString() === tom.toDateString()) return `amanhã ${hm}`;
-  return `${DAY_SHORT[date.getDay()].toLowerCase()} ${pad2s(date.getDate())}/${pad2s(date.getMonth() + 1)} ${hm}`;
+  return `${DAY_SHORT[date.getDay()].toLowerCase()} ${dmyOf(date)} ${hm}`;
 }
 function nextFire(s) {
   if (!s || !s.on) return null;
@@ -2022,8 +2025,15 @@ function loadEditor(t) {
   ed.times = sets.length ? sets[0].split(",") : ["08:00"];
   ed.dates = (ed.schedule.dates || []).filter((x) => parseWhen(x).getTime() > Date.now());
   const nextHour = new Date(Math.ceil((Date.now() + 1) / 3600000) * 3600000);
-  $("ed-date-day").value = dateKeyOf(nextHour);
-  $("ed-date-day").min = dateKeyOf(new Date());
+  // Day list (next 120 days) in d.m.y, so it never depends on the browser's language.
+  const daySel = $("ed-date-day");
+  daySel.innerHTML = "";
+  for (let i = 0; i < 120; i++) {
+    const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + i);
+    const label = `${i === 0 ? "hoje" : i === 1 ? "amanhã" : DAY_SHORT[d.getDay()].toLowerCase()} · ${dmyOf(d, true)}`;
+    daySel.add(new Option(label, dateKeyOf(d)));
+  }
+  daySel.value = dateKeyOf(nextHour);
   fillTimeSelect($("ed-date-time"), TIMES_15, `${pad2s(nextHour.getHours())}:00`);
   renderRecipients();
   renderSchedule();
@@ -2199,7 +2209,7 @@ function nextDates(when, n = 3) {
   }
   return out;
 }
-const fmtDate = ({ i, t }) => (i === 0 ? "hoje" : i === 1 ? "amanhã" : `${DAY_SHORT[t.weekday].toLowerCase()} ${pad2s(t.d)}/${pad2s(t.m)}${t.y !== spToday().y ? "/" + String(t.y).slice(2) : ""}`);
+const fmtDate = ({ i, t }) => (i === 0 ? "hoje" : i === 1 ? "amanhã" : `${DAY_SHORT[t.weekday].toLowerCase()} ${dmy(t.d, t.m, t.y)}`);
 
 function renderAdmin() {
   if (!isAdminNow() || !$("tab-admin") || $("tab-admin").hidden) return;
@@ -2392,7 +2402,7 @@ function dayLabel(ms) {
   const d = new Date(ms), today = new Date(), y = new Date(Date.now() - 86400000);
   if (d.toDateString() === today.toDateString()) return "Hoje";
   if (d.toDateString() === y.toDateString()) return "Ontem";
-  return `${cap(DAY_SHORT[d.getDay()].toLowerCase())}, ${pad2s(d.getDate())}/${pad2s(d.getMonth() + 1)}`;
+  return `${cap(DAY_SHORT[d.getDay()].toLowerCase())}, ${dmyOf(d)}`;
 }
 
 function renderAdminLog() {
@@ -2874,7 +2884,7 @@ $("adm-pal-new").addEventListener("click", () => openPaletteEditor(null));
 function renderAdminOccasions() {
   const today = todaysOccasion();
   const t = spToday();
-  $("adm-today").textContent = `Hoje (${DAY_SHORT[t.weekday].toLowerCase()}, ${pad2s(t.d)}/${pad2s(t.m)}): ${today ? "“" + today.id + "”" : "nenhuma ocasião"}${previewOcc || previewPal ? " (prévia ativa)" : ""}`;
+  $("adm-today").textContent = `Hoje (${DAY_SHORT[t.weekday].toLowerCase()}, ${dmy(t.d, t.m, t.y)}): ${today ? "“" + today.id + "”" : "nenhuma ocasião"}${previewOcc || previewPal ? " (prévia ativa)" : ""}`;
   const list = $("adm-occasions");
   list.innerHTML = "";
   Object.entries(allOccasions())
