@@ -71,6 +71,12 @@ const ref = getFirestore().doc("config/fun");
     if (e && e.effect === undefined) update["palettes.espresso.effect"] = "smoke";
     update.configVersion = 6;
   }
+  // configVersion 7: Namorados palette (event-only, sparkles) and the Dia dos Namorados occasion.
+  if ((Number(cur.configVersion) || 0) < 7) {
+    if (!(cur.palettes && cur.palettes.namorados)) update["palettes.namorados"] = defaults.palettes.namorados;
+    if (!(cur.occasions && cur.occasions["dia-dos-namorados"])) update["occasions.dia-dos-namorados"] = defaults.occasions["dia-dos-namorados"];
+    update.configVersion = 7;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

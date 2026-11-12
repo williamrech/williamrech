@@ -310,7 +310,8 @@ function placeDecor(spec, force = false) {
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 // One list of names, used in the palette studio, the occasion editor and Configurações.
-const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete" };
+const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos" };
+const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor"/></svg>`;
 function fillEffectSelect(sel) {
   const keep = sel.value;
   sel.innerHTML = `<option value="">Nenhum</option>`;
@@ -417,6 +418,23 @@ function spawnEffect(layer, kind, scale = 1) {
     for (let i = 0; i < Math.round(9 * scale); i++) {
       const size = rnd(6, 13) * Math.max(scale, 0.6);
       add("bubble", `left:${rnd(0, 100)}%;width:${size}px;height:${size}px;opacity:${rnd(0.25, 0.5)};animation-delay:${rnd(-14, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(7, 13) * Math.max(scale, 0.5)}s;--wob:${rnd(3, 9) * scale}px`);
+    }
+  }
+  else if (kind === "sparkles") {
+    // Little four-point stars twinkling in random spots; each one hops somewhere new after it fades.
+    const tints = ["--crema", "--fg", "--caramel"].map((v) => css.getPropertyValue(v).trim()).filter(Boolean).concat(["#ffffff"]);
+    for (let i = 0; i < Math.max(6, Math.round(26 * scale)); i++) {
+      const el = add("sparkle", `animation-duration:${rnd(2.2, 3.6)}s;animation-delay:${-rnd(0, 3.6)}s`);
+      el.innerHTML = SPARKLE_SVG;
+      const move = () => {
+        const size = rnd(9, 20) * Math.max(scale, 0.6);
+        el.style.left = `${rnd(2, 95)}%`;
+        el.style.top = `${rnd(3, 92)}%`;
+        el.style.width = el.style.height = `${size}px`;
+        el.style.color = tints[Math.floor(Math.random() * tints.length)];
+      };
+      move();
+      el.addEventListener("animationiteration", move);
     }
   }
   layer.dataset.fx = kind;
@@ -2176,7 +2194,7 @@ function renderAdminPalettes() {
     const used = usedByOccasions(id);
     const li = document.createElement("li");
     li.innerHTML = `<button class="adm-row"><span class="dots">${paletteDots(p)}</span>
-      <span class="adm-row-text"><b>${esc(p.name || id)}</b><span class="muted small">${esc(id)}${raw.onlyOccasions ? " · só ocasiões" : ""}${used.length ? " · usada em " + esc(used.join(", ")) : ""}</span></span></button>`;
+      <span class="adm-row-text"><b>${esc(p.name || id)}${raw.onlyOccasions ? ` <span class="lock-tag" title="Só em ocasiões">🔒</span>` : ""}${EFFECTS[raw.effect] ? ` <span class="fx-tag" title="${esc(EFFECTS[raw.effect])}">✨</span>` : ""}</b><span class="muted small">${esc(id)}${raw.onlyOccasions ? " · só ocasiões" : ""}${used.length ? " · usada em " + esc(used.join(", ")) : ""}</span></span></button>`;
     li.querySelector("button").onclick = () => openPaletteEditor(id);
     list.appendChild(li);
   });
