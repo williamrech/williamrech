@@ -77,6 +77,15 @@ const ref = getFirestore().doc("config/fun");
     if (!(cur.occasions && cur.occasions["dia-dos-namorados"])) update["occasions.dia-dos-namorados"] = defaults.occasions["dia-dos-namorados"];
     update.configVersion = 7;
   }
+  // configVersion 8: the occasion id "aniver-3" becomes "aniver-3" (content unchanged).
+  if ((Number(cur.configVersion) || 0) < 8) {
+    const occ = cur.occasions || {};
+    if (occ["aniver-3"] && !occ["aniver-3"]) {
+      update["occasions.aniver-3"] = occ["aniver-3"];
+      update["occasions.aniver-3"] = FieldValue.delete();
+    }
+    update.configVersion = 8;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

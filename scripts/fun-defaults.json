@@ -273,7 +273,7 @@
     }
   },
   "decorVersion": 2,
-  "configVersion": 7,
+  "configVersion": 8,
   "terms": {
     "recado": {
       "weight": 70,

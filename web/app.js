@@ -2194,7 +2194,7 @@ function renderAdminPalettes() {
     const used = usedByOccasions(id);
     const li = document.createElement("li");
     li.innerHTML = `<button class="adm-row"><span class="dots">${paletteDots(p)}</span>
-      <span class="adm-row-text"><b>${esc(p.name || id)}${raw.onlyOccasions ? ` <span class="lock-tag" title="Só em ocasiões">🔒</span>` : ""}${EFFECTS[raw.effect] ? ` <span class="fx-tag" title="${esc(EFFECTS[raw.effect])}">✨</span>` : ""}</b><span class="muted small">${esc(id)}${raw.onlyOccasions ? " · só ocasiões" : ""}${used.length ? " · usada em " + esc(used.join(", ")) : ""}</span></span></button>`;
+      <span class="adm-row-text"><b>${esc(p.name || id)}${EFFECTS[raw.effect] ? ` <span class="fx-tag" title="${esc(EFFECTS[raw.effect])}">✨</span>` : ""}</b><span class="muted small">${esc(id)}${raw.onlyOccasions ? " · só ocasiões" : ""}${used.length ? " · usada em " + esc(used.join(", ")) : ""}</span></span>${raw.onlyOccasions ? `<span class="adm-lock" title="Só em ocasiões" aria-label="Só em ocasiões">🔒</span>` : ""}</button>`;
     li.querySelector("button").onclick = () => openPaletteEditor(id);
     list.appendChild(li);
   });
