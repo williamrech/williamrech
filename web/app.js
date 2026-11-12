@@ -2476,7 +2476,8 @@ function flattenLog(entries) {
       const a = personName(e.actorUid, e.actorName);
       switch (e.ev) {
         case "created": push(e.at, e.scheduled ? "⏰" : "📣", `${a} mandou pra ${e.count} pessoa${e.count === 1 ? "" : "s"}${e.scheduled ? " (agendado)" : ""}`); break;
-        case "answer": push(e.at, e.changes ? "🌀" : "💬", e.changes ? `${a} mudou pra: ${e.value} (${e.changes}ª vez)` : `${a} respondeu: ${e.value}`, "", "good"); break;
+        case "answer": push(e.at, e.changes ? "🌀" : "💬", (e.changes ? `${a} mudou pra: ${e.value} (${e.changes}ª vez)` : `${a} respondeu: ${e.value}`)
+          + (e.via ? ` (pela ${e.via})` : ""), "", "good"); break;
         case "seen": push(e.at, "👁", `${a} visualizou`, "", "good"); break;
         case "closed": push(e.at, "🔒", `${a} encerrou`); break;
         case "expired": push(e.at, "⌛", "fechou (acabou o tempo)"); break;

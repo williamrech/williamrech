@@ -4,7 +4,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getAuth } = require("firebase-admin/auth");
-const { randomInt } = require("crypto");
+const { randomInt, randomBytes, createHmac, timingSafeEqual } = require("crypto");
 
 initializeApp();
 const db = getFirestore();
@@ -122,6 +122,25 @@ function fcmErrorText(code) {
 
 // targets: uids. meta: { kind, roundId, fromUid, quiet: "hold" | "skip", mutedUids }
 // Returns { sent, failed, perUser: { uid: "sent" | "failed" | "nodevice" | "quiet" } }.
+// ---------- Answer from the notification (2-option questions) ----------
+// Each notification carries a key valid only for that person + question; the button sends it
+// to /quick, which answers exactly like the app. The secret lives in server/quick (no client access).
+const quickOptions = (r) => (r.answerType !== "text" && r.answerType !== "none" && Array.isArray(r.options) && r.options.length === 2 ? r.options : null);
+let quickKey = null;
+async function quickSecret() {
+  if (quickKey) return quickKey;
+  const ref = db.doc("server/quick");
+  quickKey = await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (snap.exists && snap.get("key")) return snap.get("key");
+    const key = randomBytes(32).toString("hex");
+    t.set(ref, { key, createdAt: Date.now() });
+    return key;
+  });
+  return quickKey;
+}
+const quickToken = (key, roundId, uid) => createHmac("sha256", key).update(`${roundId}:${uid}`).digest("base64url").slice(0, 32);
+
 async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
   const users = ctx.users || await loadUsers();
   const devices = ctx.devices || await loadDevices();
@@ -134,6 +153,8 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
   const logDoc = () => db.collection("notifLog").doc();
   const perUser = {};
   const msgs = [];
+  const qOpts = meta.roundId && meta.quickOptions ? meta.quickOptions : null;
+  const qKey = qOpts ? await quickSecret() : null;
 
   for (const uid of meta.mutedUids || []) {
     bw.create(logDoc(), { ...base, toUid: uid, toName: (users[uid] || {}).name || "?", status: "muted" });
@@ -159,13 +180,17 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
         // Android cuts the title short (it shares the line with the site and time), so the
         // title goes into the text: first line = title, second line = message. Title stays empty.
         notification: { title: "", body: body ? `${title}\n${body}` : title },
-        data: { url: link, logId: ref.id },
+        data: { url: link, logId: ref.id,
+          ...(qOpts ? { rid: meta.roundId, u: uid, qt: quickToken(qKey, meta.roundId, uid), q0: qOpts[0], q1: qOpts[1] } : {}) },
         webpush: {
           // Only the question and its reminders replace each other (one "still waiting" in the shade);
           // everything else — answers, changes, mutes — is its own notification, so the timeline stays true.
-          notification: meta.roundId && REPLACING_KINDS.includes(base.kind)
-            ? { icon: APP_URL + "icons/icon-192.png", tag: `rodada-${meta.roundId}`, renotify: true }
-            : { icon: APP_URL + "icons/icon-192.png" },
+          notification: {
+            icon: APP_URL + "icons/icon-192.png",
+            ...(meta.roundId && REPLACING_KINDS.includes(base.kind) ? { tag: `rodada-${meta.roundId}`, renotify: true } : {}),
+            // Two buttons right in the notification (Android allows at most 2).
+            ...(qOpts ? { actions: [{ action: "q0", title: qOpts[0] }, { action: "q1", title: qOpts[1] }] } : {}),
+          },
           fcmOptions: { link },
           headers: { Urgency: "high", TTL: "21600" },
         },
@@ -284,7 +309,7 @@ async function createRound(tplRef, tpl, owner, { users, devices, kind } = {}) {
   const msg = { title: `${round.emoji} ${round.title}`, body: round.body || `${owner.name} quer saber.` };
   const res = await deliver(recipients, msg, `?rodada=${ref.id}`,
     { kind: kind || "recado", roundId: ref.id, fromUid: tpl.ownerUid, quiet: "hold", mutedUids: pool.filter((u) => muted[u]),
-      roundTitle: round.title, emoji: round.emoji },
+      roundTitle: round.title, emoji: round.emoji, quickOptions: quickOptions(round) },
     { users, devices });
   const upd = {};
   for (const [u, st] of Object.entries(res.perUser)) {
@@ -338,18 +363,15 @@ handlers.sendOnce = async (req) => {
   return createRound(null, tpl, await profile(auth));
 };
 
-handlers.answerRound = async (req) => {
-  const auth = requireAuth(req);
-  const roundId = req.data && String(req.data.roundId || "");
-  let value = req.data && typeof req.data.value === "string" ? req.data.value.trim() : "";
-  const me = await profile(auth);
+// One answer, from the app or from a notification button.
+async function applyAnswer(uid, me, roundId, rawValue, via = "app") {
+  let value = typeof rawValue === "string" ? rawValue.trim() : "";
   const ref = db.doc(`rounds/${roundId}`);
-
   const { round, changes } = await db.runTransaction(async (t) => {
     const snap = await t.get(ref);
     if (!snap.exists) throw new HttpsError("not-found", "Isso não existe mais.");
     const round = snap.data();
-    if (!round.recipients.includes(auth.uid)) throw new HttpsError("permission-denied", "Não perguntaram pra você. 💅");
+    if (!round.recipients.includes(uid)) throw new HttpsError("permission-denied", "Não perguntaram pra você. 💅");
     if (!round.open) throw new HttpsError("failed-precondition", "Já encerrou. Chegou tarde.");
     if (round.answerType === "none") throw new HttpsError("failed-precondition", "Isso é só um aviso.");
     if (round.answerType === "text") {
@@ -358,10 +380,10 @@ handlers.answerRound = async (req) => {
     } else if (!round.options.includes(value)) {
       throw new HttpsError("invalid-argument", "Opção inválida.");
     }
-    const prev = round.answers && round.answers[auth.uid];
+    const prev = round.answers && round.answers[uid];
     if (prev && prev.value === value) throw new HttpsError("already-exists", "Você já respondeu isso. 😉");
     const changes = prev ? (prev.changes || 0) + 1 : 0;
-    t.update(ref, { [`answers.${auth.uid}`]: { value, name: me.name, gender: me.gender, changes, at: Date.now() } });
+    t.update(ref, { [`answers.${uid}`]: { value, name: me.name, gender: me.gender, changes, at: Date.now() } });
     return { round, changes };
   });
 
@@ -373,12 +395,19 @@ handlers.answerRound = async (req) => {
       : `${me.name}: ${value} — ${fill(pick(COPY.answerTail), vars)}`,
   };
   const targets = round.visibility === "all"
-    ? round.participants.filter((u) => u !== auth.uid)
-    : [round.ownerUid].filter((u) => u !== auth.uid);
-  await logEvent("answer", { roundId, roundTitle: round.title, emoji: round.emoji, actorUid: auth.uid, actorName: me.name, value, changes });
-  await sendToUids(targets, msg, `?rodada=${roundId}`, { kind: changes ? "mudou de ideia" : "resposta", roundId, fromUid: auth.uid,
+    ? round.participants.filter((u) => u !== uid)
+    : [round.ownerUid].filter((u) => u !== uid);
+  await logEvent("answer", { roundId, roundTitle: round.title, emoji: round.emoji, actorUid: uid, actorName: me.name, value, changes,
+    ...(via !== "app" ? { via } : {}) });
+  await sendToUids(targets, msg, `?rodada=${roundId}`, { kind: changes ? "mudou de ideia" : "resposta", roundId, fromUid: uid,
     roundTitle: round.title, emoji: round.emoji });
-  return { ok: true, changes };
+  return { ok: true, changes, value };
+}
+
+handlers.answerRound = async (req) => {
+  const auth = requireAuth(req);
+  const me = await profile(auth);
+  return applyAnswer(auth.uid, me, req.data && String(req.data.roundId || ""), req.data && req.data.value);
 };
 
 // "Visto": the recipient's app reports the round is on screen (first time only).
@@ -537,7 +566,7 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
       }
       if (!msg) continue;
       const res = await deliver([u], msg, `?rodada=${doc.id}`,
-        { kind, roundId: doc.id, fromUid: r.ownerUid, quiet: "hold", roundTitle: r.title, emoji: r.emoji }, { users, devices });
+        { kind, roundId: doc.id, fromUid: r.ownerUid, quiet: "hold", roundTitle: r.title, emoji: r.emoji, quickOptions: quickOptions(r) }, { users, devices });
       updates[`notified.${u}`] = now;
       if (!last) updates[`delivery.${u}`] = { st: res.perUser[u] || "failed", at: now };
     }
@@ -675,6 +704,32 @@ handlers.adminBackend = async (req) => {
 // Receipts: the phone's service worker calls this when a notification arrives
 // (e=recv) or is tapped (e=open). The id is the unguessable log id it came with.
 // ---------------------------------------------------------------------------
+// Notification button → answer. Body (text/plain JSON): { r: roundId, u: uid, t: key, i: 0|1 }.
+exports.quick = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB", cors: true }, async (req, res) => {
+  const out = (code, body) => res.status(code).json(body);
+  if (req.method !== "POST") return out(405, { ok: false });
+  let b = req.body;
+  try { if (typeof b === "string") b = JSON.parse(b); } catch { return out(400, { ok: false }); }
+  const roundId = String((b && b.r) || ""), uid = String((b && b.u) || ""), tok = String((b && b.t) || "");
+  const i = Number(b && b.i);
+  if (!/^[A-Za-z0-9]{1,40}$/.test(roundId) || !/^[A-Za-z0-9]{1,128}$/.test(uid) || !tok || ![0, 1].includes(i)) return out(400, { ok: false });
+  const want = Buffer.from(quickToken(await quickSecret(), roundId, uid));
+  const got = Buffer.from(tok);
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return out(403, { ok: false, msg: "Chave inválida." });
+  try {
+    const snap = await db.doc(`rounds/${roundId}`).get();
+    if (!snap.exists) return out(200, { ok: false, msg: "Essa pergunta não existe mais." });
+    const value = (snap.get("options") || [])[i];
+    const uSnap = await db.doc(`users/${uid}`).get();
+    const u = uSnap.exists ? uSnap.data() : {};
+    const r = await applyAnswer(uid, { name: u.name || "Alguém", gender: u.gender || "m" }, roundId, value, "notificação");
+    return out(200, { ok: true, value: r.value });
+  } catch (e) {
+    if (e.code === "already-exists") return out(200, { ok: true, value: (b && b.v) || "" , same: true });
+    return out(200, { ok: false, msg: e.message || "Não deu." });
+  }
+});
+
 exports.receipt = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB", cors: true }, async (req, res) => {
   const id = String(req.query.id || "");
   const e = req.query.e === "open" ? "open" : "recv";

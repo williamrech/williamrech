@@ -6,6 +6,47 @@ importScripts("https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging-com
 importScripts("./firebase-config.js");
 
 // ---------------------------------------------------------------------------
+// Answer buttons ("Sim" / "Não" on 2-option questions). The Firebase SDK leaves button
+// taps to us; this runs first and stops the other click handlers (no app opening).
+// ---------------------------------------------------------------------------
+const QUICK_URL = `https://us-central1-${self.FIREBASE_CONFIG.projectId}.cloudfunctions.net/quick`;
+const ICON = "icons/icon-192.png";
+function fcmData(n) {
+  const d = (n && n.data) || {};
+  return (d.FCM_MSG && d.FCM_MSG.data) || d.data || d;
+}
+async function quickAnswer(n, idx) {
+  const d = fcmData(n);
+  const value = d[`q${idx}`] || "";
+  const tag = n.tag || `rodada-${d.rid}`;
+  const title = n.body ? n.body.split("\n")[0] : n.title || "";
+  n.close();
+  let ok = false, msg = "";
+  try {
+    const res = await fetch(QUICK_URL, { method: "POST", headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ r: d.rid, u: d.u, t: d.qt, i: idx, v: value }) });
+    const j = await res.json();
+    ok = !!j.ok;
+    msg = j.msg || "";
+  } catch (e) { msg = "Sem internet agora."; }
+  if (ok) {
+    // Quick check, no sound, gone in a few seconds.
+    await self.registration.showNotification(title, { body: `✓ Respondido: ${value}`, tag, silent: true, icon: ICON, data: { url: d.url } });
+    await new Promise((r) => setTimeout(r, 4000));
+    (await self.registration.getNotifications({ tag })).forEach((x) => x.close());
+  } else {
+    await self.registration.showNotification(title, { body: `Não deu pra responder${msg ? ` (${msg})` : ""}. Toca pra abrir.`,
+      tag, icon: ICON, data: { url: d.url } });
+  }
+}
+self.addEventListener("notificationclick", (event) => {
+  const a = event.action;
+  if (a !== "q0" && a !== "q1") return;
+  event.stopImmediatePropagation();
+  event.waitUntil(quickAnswer(event.notification, a === "q0" ? 0 : 1).catch(() => {}));
+});
+
+// ---------------------------------------------------------------------------
 // Receipts (for the admin log): tell the server "arrived" / "tapped".
 // These listeners are registered BEFORE the Firebase SDK's own ones, and they
 // never show, hide or change notifications — the SDK still does all of that.
