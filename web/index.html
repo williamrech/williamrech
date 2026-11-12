@@ -19,7 +19,6 @@
       }
       var C = JSON.parse(localStorage.getItem("comfort") || "null");
       if (C && C.big) document.documentElement.classList.add("big");
-      if (C && C.simple) document.documentElement.classList.add("simple");
     } catch (e) {}
   </script>
   <!-- iPhone: needed so "Add to Home Screen" makes a real app (required for push on iOS) -->
@@ -394,11 +393,6 @@
   </dialog>
 
   <!-- Card "⋯" menu -->
-  <dialog id="dlg-actions">
-    <h2 id="actions-title"></h2>
-    <div id="actions-list" class="actions-list"></div>
-    <button id="actions-cancel" class="link small close-link">fechar</button>
-  </dialog>
 
   <!-- Modal: generic confirm -->
   <dialog id="dlg-confirm">
@@ -427,6 +421,7 @@
     <div class="tabs dlg-tabs" role="tablist">
       <button class="tab selected" data-stab="general" role="tab">Configurações</button>
       <button class="tab" data-stab="name" role="tab" id="stab-btn-name">Seu nome<span class="new-dot" id="name-dot" hidden></span></button>
+      <button class="tab" data-stab="muted" role="tab" id="stab-btn-muted" hidden>Silenciados</button>
     </div>
 
     <!-- Tab: general settings -->
@@ -434,26 +429,30 @@
       <h3>Aparência</h3>
       <p class="muted small" id="palette-forced" hidden></p>
       <div id="palettes" class="palettes"></div>
-      <label class="toggle" id="fx-row" hidden><input type="checkbox" id="set-fx" checked> <span id="set-fx-label">Efeito do tema</span></label>
-
-      <h3>Facilidades</h3>
-      <label class="toggle"><input type="checkbox" id="set-big"> <span>Letra grande</span></label>
-      <label class="toggle"><input type="checkbox" id="set-simple"> <span>Modo simples (só o feed, sem enfeites)</span></label>
-
-      <h3>Não me perturbe</h3>
-      <label class="toggle"><input type="checkbox" id="quiet-on"> <span>Segurar notificações num horário</span></label>
-      <div class="pick-row" id="quiet-times" hidden>
-        <select id="quiet-start" aria-label="Das"></select>
-        <select id="quiet-end" aria-label="Até"></select>
+      <div class="toggles">
+        <label class="toggle" id="fx-row" hidden><input type="checkbox" id="set-fx" checked> <span id="set-fx-label">Efeito do tema</span></label>
+        <label class="toggle"><input type="checkbox" id="set-big"> <span>Letra grande</span></label>
+        <label class="toggle"><input type="checkbox" id="quiet-on"> <span>Não perturbe</span></label>
+        <div class="pick-row" id="quiet-times" hidden>
+          <select id="quiet-start" aria-label="Das"></select>
+          <select id="quiet-end" aria-label="Até"></select>
+        </div>
+        <p class="muted small" id="quiet-hint" hidden>Perguntas que chegarem nesse horário te esperam acordar. Avisos de resposta são pulados.</p>
       </div>
-      <p class="muted small" id="quiet-hint" hidden>Perguntas que chegarem nesse horário te esperam acordar. Avisos de resposta são pulados.</p>
 
-      <h3 id="muted-title">Recados que você silenciou</h3>
-      <ul id="muted-list" class="plain-list"></ul>
       <div class="row-buttons">
         <button id="settings-close" class="primary">Fechar</button>
       </div>
       <p class="muted small who-row"><span id="who"></span><button id="logout" class="link small">sair</button></p>
+    </div>
+
+    <!-- Tab: silenced chamados (only shown when there are any) -->
+    <div id="stab-muted" role="tabpanel" hidden>
+      <p class="muted small" id="muted-title">Você não recebe esses. Dá pra reativar quando quiser.</p>
+      <ul id="muted-list" class="plain-list"></ul>
+      <div class="row-buttons">
+        <button type="button" class="primary" id="muted-close">Fechar</button>
+      </div>
     </div>
 
     <!-- Tab: name & style (everyone sees it in the feed) -->

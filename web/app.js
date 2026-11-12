@@ -202,7 +202,7 @@ function applyTerms() {
   const set = (sel, text) => { const el = document.querySelector(sel); if (el) el.textContent = text; };
   set('.tab[data-tab="chamados"]', T.Many);
   set("#chamados-new .tile-title", `${T.novo} ${T.one}`);
-  set("#muted-title", `${T.Many} que você silenciou`);
+  set("#stab-btn-muted", "Silenciados");
   if (typeof renderChamados === "function" && typeof auth !== "undefined" && auth.currentUser) renderChamados();
 }
 
@@ -962,7 +962,10 @@ function renderSettings() {
 
   const list = $("muted-list");
   const mutes = Object.entries((me && me.mutes) || {});
-  list.innerHTML = mutes.length ? "" : `<li class="muted small">Nenhum. Que pessoa paciente. 😇</li>`;
+  // The "Silenciados" tab only exists while something is silenced.
+  show("stab-btn-muted", mutes.length > 0);
+  if (!mutes.length && !$("stab-muted").hidden) setSettingsTab("general");
+  list.innerHTML = "";
   for (const [tid, m] of mutes) {
     const li = document.createElement("li");
     li.innerHTML = `<span>${esc(m.emoji || "🔔")} ${esc(m.title)} <span class="muted small">· de ${esc(m.owner || "?")}</span></span>`;
@@ -984,7 +987,7 @@ async function saveQuiet() {
   show("quiet-hint", quiet.on);
   try {
     await setDoc(doc(db, "users", auth.currentUser.uid), { quiet, updatedAt: serverTimestamp() }, { merge: true });
-    toast(quiet.on ? `Silêncio das ${quiet.start} às ${quiet.end}. 🌙` : "Não me perturbe desligado. Coragem.");
+    toast(quiet.on ? `Não perturbe das ${quiet.start} às ${quiet.end}. 🌙` : "Não perturbe desligado. Coragem.");
   } catch (err) { toast(friendlyError(err)); }
 }
 ["quiet-on", "quiet-start", "quiet-end"].forEach((id) => $(id).addEventListener("change", saveQuiet));
@@ -995,7 +998,6 @@ $("set-fx").addEventListener("change", async (e) => {
     toast(e.target.checked ? "Efeito ligado. ✨" : "Efeito desligado.");
   } catch (err) { e.target.checked = !e.target.checked; toast(friendlyError(err)); }
 });
-$("set-simple").addEventListener("change", (e) => saveComfort("simple", e.target.checked));
 
 $("open-settings").addEventListener("click", () => openSettings("general"));
 $("settings-close").addEventListener("click", () => $("dlg-settings").close());
@@ -1088,6 +1090,7 @@ function setSettingsTab(name) {
   document.querySelectorAll("[data-stab]").forEach((b) => b.classList.toggle("selected", b.dataset.stab === name));
   show("stab-general", name === "general");
   show("stab-name", name === "name");
+  show("stab-muted", name === "muted");
   if (name === "name") {
     draftStyle = cleanStyle(me && me.style);
     renderStyleEditor();
@@ -1104,23 +1107,20 @@ function openSettings(tab) {
 document.querySelectorAll("[data-stab]").forEach((b) => b.addEventListener("click", () => setSettingsTab(b.dataset.stab)));
 $("me-chip").addEventListener("click", () => openSettings("name"));
 $("style-cancel").addEventListener("click", () => $("dlg-settings").close());
+$("muted-close").addEventListener("click", () => $("dlg-settings").close());
 
-// "Letra grande" and "Modo simples": classes on <html>, remembered for the next launch.
+// "Letra grande": a class on <html>, remembered for the next launch.
 function applyComfort() {
-  const big = !!(me && me.bigText), simple = !!(me && me.simple);
+  const big = !!(me && me.bigText);
   document.documentElement.classList.toggle("big", big);
-  document.documentElement.classList.toggle("simple", simple);
-  try { localStorage.setItem("comfort", JSON.stringify({ big, simple })); } catch {}
-  // Simple mode: only the feed (admins keep their Admin tab).
-  const tabs = document.querySelector(".tabs[role=tablist]:not(.dlg-tabs)");
-  if (tabs) tabs.hidden = simple && !(me && me.admin);
-  if (simple && !document.querySelector('.tab[data-tab="admin"].selected')) setTab("feed");
-  if ($("set-big")) { $("set-big").checked = big; $("set-simple").checked = simple; }
+  document.documentElement.classList.remove("simple");
+  try { localStorage.setItem("comfort", JSON.stringify({ big })); } catch {}
+  if ($("set-big")) $("set-big").checked = big;
 }
 async function saveComfort(key, value) {
   try {
     await setDoc(doc(db, "users", auth.currentUser.uid), { [key]: value, updatedAt: serverTimestamp() }, { merge: true });
-    toast(key === "bigText" ? (value ? "Letra grande ligada. 🔎" : "Letra normal.") : (value ? "Modo simples ligado. 🌿" : "Modo completo."));
+    toast(value ? "Letra grande ligada. 🔎" : "Letra normal.");
   } catch (err) { toast(friendlyError(err)); }
 }
 
@@ -1556,19 +1556,17 @@ function buildRound(r, ask) {
     }
   }
 
-  // Secondary actions live in a "⋯" menu so the card stays simple.
+  // Secondary actions live in a small "⋯" popover next to the button; risky ones ask right there.
   const menu = [];
   if (mine && r.open && r.answerType !== "none") {
-    menu.push({ label: "🔒 Encerrar", run: async () => {
-      if (!(await confirmBox("Encerrar?", "Ninguém mais responde e para de insistir.", "Encerrar"))) return;
+    menu.push({ label: "🔒 Encerrar", ask: "Ninguém mais responde e para de insistir.", yes: "Encerrar", run: async () => {
       const res = await withBusy(null, () => api.closeRound({ roundId: r.id }));
       if (res) toast("Encerrado. 🔒");
     } });
   }
   if (done || r.answerType === "none") {
     if (mine) {
-      menu.push({ label: "🗑️ Apagar pra todo mundo", danger: true, run: async () => {
-        if (!(await confirmBox("Apagar?", "Some do feed de todo mundo.", "Apagar"))) return;
+      menu.push({ label: "🗑️ Apagar pra todo mundo", danger: true, ask: "Some do feed de todo mundo.", yes: "Apagar", run: async () => {
         const res = await withBusy(null, () => api.deleteRound({ roundId: r.id }));
         if (res) toast("Apagado. 🧹");
       } });
@@ -1582,8 +1580,7 @@ function buildRound(r, ask) {
     }
   }
   if (isRecipient && r.templateId && r.allowMute !== false && !(me && me.mutes && me.mutes[r.templateId])) {
-    menu.push({ label: `🔕 Silenciar ${T.esse} ${T.one}`, run: async () => {
-      if (!(await confirmBox("Silenciar?", `Você para de receber “${r.title}”. ${r.ownerName} vai ficar sabendo. 😬`, "Silenciar"))) return;
+    menu.push({ label: `🔕 Silenciar ${T.esse} ${T.one}`, ask: `Você para de receber “${r.title}”. ${r.ownerName} vai ficar sabendo. 😬`, yes: "Silenciar", run: async () => {
       const res = await withBusy(null, () => api.muteTemplate({ roundId: r.id, mute: true }));
       if (res) toast("Silenciado. Dá pra reativar nas configurações. 🔕");
     } });
@@ -1592,29 +1589,87 @@ function buildRound(r, ask) {
     const b = document.createElement("button");
     b.className = "more";
     b.setAttribute("aria-label", "Mais opções");
+    b.setAttribute("aria-haspopup", "menu");
     b.textContent = "⋯";
-    b.onclick = (e) => { e.stopPropagation(); openActionSheet(r.title, menu); };
+    b.onclick = (e) => { e.stopPropagation(); openPopMenu(b, menu); };
     li.querySelector(".round-corner").appendChild(b);
   }
   return li;
 }
 
-// Small menu of actions for a card.
-function openActionSheet(title, items) {
-  const dlg = $("dlg-actions");
-  $("actions-title").textContent = title;
-  const wrap = $("actions-list");
-  wrap.innerHTML = "";
-  for (const it of items) {
-    const b = document.createElement("button");
-    b.className = it.danger ? "danger" : "secondary";
-    b.textContent = it.label;
-    b.onclick = () => { dlg.close(); it.run(); };
-    wrap.appendChild(b);
-  }
-  dlg.showModal();
+// Small popover menu anchored to a button. Closes on outside tap, scroll, Esc.
+let popMenu = null;
+function closePopMenu() {
+  if (!popMenu) return;
+  popMenu.el.remove();
+  popMenu.anchor.setAttribute("aria-expanded", "false");
+  popMenu = null;
 }
-$("actions-cancel").addEventListener("click", () => $("dlg-actions").close());
+function openPopMenu(anchor, items) {
+  const again = popMenu && popMenu.anchor === anchor;
+  closePopMenu();
+  if (again) return;
+  const el = document.createElement("div");
+  el.className = "pop-menu";
+  el.setAttribute("role", "menu");
+  const place = () => {
+    const a = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+    const left = Math.max(8, Math.min(a.right - w, innerWidth - w - 8));
+    const below = a.bottom + 6 + h < innerHeight - 8;
+    el.style.left = `${left}px`;
+    el.style.top = `${below ? a.bottom + 6 : Math.max(8, a.top - 6 - h)}px`;
+  };
+  const list = () => {
+    el.innerHTML = "";
+    for (const it of items) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "menuitem");
+      b.className = it.danger ? "danger-text" : "";
+      b.textContent = it.label;
+      b.onclick = () => (it.ask ? confirmStep(it) : (closePopMenu(), it.run()));
+      el.appendChild(b);
+    }
+  };
+  const confirmStep = (it) => {
+    el.innerHTML = `<p class="pop-ask"></p><div class="pop-row"><button type="button" class="secondary">Cancelar</button><button type="button" class="${it.danger ? "danger" : "primary"}"></button></div>`;
+    el.querySelector(".pop-ask").textContent = it.ask;
+    const [no, yes] = el.querySelectorAll(".pop-row button");
+    yes.textContent = it.yes;
+    no.onclick = () => { list(); place(); };
+    yes.onclick = () => { closePopMenu(); it.run(); };
+    place();
+    yes.focus();
+  };
+  list();
+  document.body.appendChild(el);
+  anchor.setAttribute("aria-expanded", "true");
+  popMenu = { el, anchor };
+  place();
+  el.querySelector("button")?.focus({ preventScroll: true });
+}
+document.addEventListener("pointerdown", (e) => { if (popMenu && !popMenu.el.contains(e.target) && e.target !== popMenu.anchor) closePopMenu(); }, true);
+addEventListener("scroll", () => closePopMenu(), true);
+addEventListener("resize", () => closePopMenu());
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopMenu(); });
+
+// Every popup closes when you tap outside it (unless it can't be closed, like the first-time ones).
+document.querySelectorAll("dialog").forEach((d) => {
+  let downOutside = false;
+  const outside = (e) => {
+    if (e.target !== d) return false;
+    const r = d.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  };
+  d.addEventListener("pointerdown", (e) => { downOutside = outside(e); });
+  d.addEventListener("click", (e) => {
+    if (!downOutside || !outside(e)) return;
+    downOutside = false;
+    const ev = new Event("cancel", { cancelable: true });
+    d.dispatchEvent(ev);
+    if (!ev.defaultPrevented && d.open) d.close();
+  });
+});
 setInterval(renderRounds, 60000);
 
 async function answer(r, value, btn) {
@@ -1971,10 +2026,6 @@ function renderAdminPeople() {
         }, lastAdmin);
       }
       if (p.name) {
-        link(p.simple ? "✓ modo simples" : "modo simples", async (b) => {
-          const res = await withBusy(b, () => api.adminSetUserFlag({ uid: r.uid, key: "simple", value: !p.simple }), "…");
-          if (res) toast(`${p.name}: modo simples ${p.simple ? "desligado" : "ligado"}.`);
-        });
         link(p.bigText ? "✓ letra grande" : "letra grande", async (b) => {
           const res = await withBusy(b, () => api.adminSetUserFlag({ uid: r.uid, key: "bigText", value: !p.bigText }), "…");
           if (res) toast(`${p.name}: letra grande ${p.bigText ? "desligada" : "ligada"}.`);
