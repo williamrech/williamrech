@@ -524,7 +524,6 @@ const api = {
 // ---------- Constants ----------
 const TZ = "America/Sao_Paulo";
 const DAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const DAY_NAMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const DEFAULT_NAMES = [
   "Véia Coroca", "Doidinha", "Tio do Pavê", "Fiscal de Promoção", "Rainha do Hortifruti",
   "Rei do Carrinho", "Gerente do Corredor 5", "Sommelier de Pão de Queijo",
@@ -586,15 +585,6 @@ function spParts(date = new Date()) {
   };
 }
 
-function whenText(date) {
-  const now = spParts();
-  const d = spParts(date);
-  const tomorrow = spParts(new Date(Date.now() + 86400000));
-  if (d.key === now.key) return `hoje às ${d.time}`;
-  if (d.key === tomorrow.key) return `amanhã às ${d.time}`;
-  const [, m, day] = d.key.split("-");
-  return `${DAY_NAMES[d.weekday]} (${dmy(+day, +m, +d.key.slice(0, 4))}) às ${d.time}`;
-}
 
 function friendlyError(err) {
   return (err && err.message && !err.message.startsWith("internal")) ? err.message : "Deu ruim. Tenta de novo.";
@@ -1134,7 +1124,6 @@ $("muted-close").addEventListener("click", () => $("dlg-settings").close());
 function applyComfort() {
   const big = !!(me && me.bigText);
   document.documentElement.classList.toggle("big", big);
-  document.documentElement.classList.remove("simple");
   try { localStorage.setItem("comfort", JSON.stringify({ big })); } catch {}
   if ($("set-big")) $("set-big").checked = big;
 }
@@ -1197,18 +1186,6 @@ function deadlineParts(ts) {
   return { abs, rel, urgent: min < 60 };
 }
 
-// "fecha às 21:30" / "fecha amanhã às 09:00" / "fecha sex 14/11 às 09:00"
-function closesText(ts) {
-  if (!ts || !ts.toMillis) return "aberto";
-  const d = new Date(ts.toMillis());
-  const hm = `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
-  const today = new Date(); const tomorrow = new Date(Date.now() + 86400000);
-  const same = (a, b) => a.toDateString() === b.toDateString();
-  if (d.getTime() <= Date.now()) return "fechando…";
-  if (same(d, today)) return `fecha às ${hm}`;
-  if (same(d, tomorrow)) return `fecha amanhã às ${hm}`;
-  return `fecha ${DAY_SHORT[d.getDay()].toLowerCase()} ${dmyOf(d)} às ${hm}`;
-}
 
 // Creator's view: ONE icon per person with only the furthest step reached:
 // enviado ✓ < chegou ✓✓ < viu 👁 < clicou 👆 (an answer replaces the icon). Tap = details.
@@ -1825,8 +1802,6 @@ for (const id of ["ed-type", "ed-visibility", "ed-when"]) {
   });
 }
 
-function syncEditorVisibility() { syncEditor(); }
-
 function renderRecipients() {
   const wrap = $("ed-recipients");
   wrap.innerHTML = "";
@@ -2185,10 +2160,6 @@ $("editor-form").addEventListener("submit", async (e) => {
 const funRef = () => doc(db, "config", "fun");
 const isAdminNow = () => !!(me && me.admin === true);
 const SLUG = /^[a-z0-9-]{2,40}$/;
-const PAL_FIELDS = [
-  ["bg", "Fundo"], ["surface", "Cartões"], ["text", "Texto"],
-  ["muted", "Texto fraco"], ["accent", "Botões"], ["highlight", "Realces"],
-];
 let builtinDrawings = [];
 fetch("decor/index.json", { cache: "no-cache" }).then((r) => r.json()).then((list) => { builtinDrawings = Array.isArray(list) ? list : []; renderAdmin(); }).catch(() => {});
 
@@ -2493,7 +2464,6 @@ const ROLES = [
   { key: "accent", label: "Botões", hint: "botões principais e o ＋" },
   { key: "highlight", label: "Realces", hint: "títulos, seleção e destaques" },
 ];
-const roleOf = (k) => ROLES.find((r) => r.key === k);
 
 // --- color math ---
 function hexToRgb(hex) {

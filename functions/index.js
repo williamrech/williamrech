@@ -762,12 +762,12 @@ handlers.adminDeleteUser = async (req) => {
   return { ok: true };
 };
 
-// Admin sets someone's "modo simples" / "letra grande".
+// Admin sets someone's "letra grande".
 handlers.adminSetUserFlag = async (req) => {
   await requireAdmin(req);
   const uid = String((req.data && req.data.uid) || "");
   const key = req.data && req.data.key;
-  if (!["simple", "bigText"].includes(key)) throw new HttpsError("invalid-argument", "Opção inválida.");
+  if (!["bigText"].includes(key)) throw new HttpsError("invalid-argument", "Opção inválida.");
   const ref = db.doc(`users/${uid}`);
   if (!(await ref.get()).exists) throw new HttpsError("not-found", "Pessoa não encontrada.");
   await ref.update({ [key]: !!(req.data && req.data.value) });
