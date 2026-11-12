@@ -2486,9 +2486,11 @@ function flattenLog(entries) {
     if (e.status === "nodevice") { if (!noisy) push(e.at, "⚠", `${p} não tem aparelho com notificação`, "", "bad"); continue; }
     if (e.status === "quiet") { if (!noisy) push(e.at, "⏸", `${p} em horário de silêncio`, e.note || "", "meh"); continue; }
     if (e.status === "muted") { push(e.at, "🔕", `${p} tinha silenciado, não recebeu`, "", "meh"); continue; }
-    if (noisy) continue; // the answer itself is already a line
-    const sentText = e.kind === "insistência" ? `insistiu com ${p}` : e.kind === "teste" ? `teste enviado pra ${p}` : `enviado pra ${p}`;
-    push(e.at, e.kind === "insistência" ? "🔁" : "📨", sentText, dev);
+    const sentText = e.kind === "insistência" ? `insistiu com ${p}`
+      : e.kind === "teste" ? `teste enviado pra ${p}`
+      : noisy ? `${p} foi avisad${(family[e.toUid] || {}).gender === "f" ? "a" : "o"} (${e.kind})`
+      : `enviado pra ${p}`;
+    push(e.at, e.kind === "insistência" ? "🔁" : noisy ? "🔔" : "📨", sentText, dev);
     if (e.receivedAt) push(e.receivedAt, "✓✓", `chegou no celular de ${p}`, dev, "good");
     if (e.openedAt) push(e.openedAt, "👆", `${p} abriu a notificação`, "", "good");
   }

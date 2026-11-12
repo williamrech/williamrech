@@ -161,8 +161,10 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
         notification: { title: "", body: body ? `${title}\n${body}` : title },
         data: { url: link, logId: ref.id },
         webpush: {
-          notification: meta.roundId
-            ? { icon: APP_URL + "icons/icon-192.png", tag: `rodada-${meta.roundId}`, renotify: true } // replaces older ones for the same question
+          // Only the question and its reminders replace each other (one "still waiting" in the shade);
+          // everything else — answers, changes, mutes — is its own notification, so the timeline stays true.
+          notification: meta.roundId && REPLACING_KINDS.includes(base.kind)
+            ? { icon: APP_URL + "icons/icon-192.png", tag: `rodada-${meta.roundId}`, renotify: true }
             : { icon: APP_URL + "icons/icon-192.png" },
           fcmOptions: { link },
           headers: { Urgency: "high", TTL: "21600" },
@@ -193,6 +195,8 @@ async function deliver(targets, { title, body }, path, meta = {}, ctx = {}) {
   await bw.close();
   return { sent, failed, perUser };
 }
+
+const REPLACING_KINDS = ["recado", "agendado", "insistência", "recado (depois do silêncio)"];
 
 // Things that happen to a round (created, answered, seen, closed…) for the admin Logs.
 function logEvent(ev, data) {
