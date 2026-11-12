@@ -3,7 +3,7 @@ import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, deleteField, FieldPath,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, deleteField, FieldPath,
   disableNetwork, enableNetwork, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where,
   orderBy, limit, serverTimestamp, Timestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -205,7 +205,7 @@ function applyTerms() {
   const set = (sel, text) => { const el = document.querySelector(sel); if (el) el.textContent = text; };
   set('.tab[data-tab="chamados"]', T.Many);
   set("#chamados-new .tile-title", `${T.novo} ${T.one}`);
-  set("#stab-btn-muted", "Silenciados e ocultos");
+  set("#stab-btn-muted", "Escondidos");
   if (typeof renderChamados === "function" && typeof auth !== "undefined" && auth.currentUser) renderChamados();
 }
 
@@ -1014,10 +1014,10 @@ function renderSettings() {
   if (hiddenOnes.length) list.insertAdjacentHTML("beforeend", `<li class="muted small list-sub">Ocultos do seu feed</li>`);
   for (const [rid, v] of hiddenOnes) {
     const r = rounds.find((x) => x.id === rid);
-    const title = (v && v.title) || (r && r.title) || "Pergunta antiga";
-    const emoji = (v && v.emoji) || (r && r.emoji) || "🙈";
+    const known = (v && v.title) ? v : r ? { title: r.title, emoji: r.emoji } : hiddenTitles[rid];
     const li = document.createElement("li");
-    li.innerHTML = `<span>${esc(emoji)} ${esc(title)}</span>`;
+    li.innerHTML = `<span>${esc((known && known.emoji) || "🔔")} ${esc((known && known.title) || "…")}</span>`;
+    if (!known) loadHiddenTitle(rid);
     const b = document.createElement("button");
     b.className = "link small";
     b.textContent = "mostrar de novo";
@@ -1030,6 +1030,18 @@ function renderSettings() {
     li.appendChild(b);
     list.appendChild(li);
   }
+}
+
+// Older hidden questions aren't among the ones the feed loads: fetch their title once.
+const hiddenTitles = {};
+async function loadHiddenTitle(rid) {
+  if (rid in hiddenTitles) return;
+  hiddenTitles[rid] = null;
+  try {
+    const snap = await getDoc(doc(db, "rounds", rid));
+    hiddenTitles[rid] = snap.exists() ? { title: snap.get("title"), emoji: snap.get("emoji") } : { title: "(apagada)", emoji: "🗑️" };
+  } catch { hiddenTitles[rid] = { title: "(sem acesso)", emoji: "🔒" }; }
+  renderSettings();
 }
 
 async function saveQuiet() {
