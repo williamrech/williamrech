@@ -510,6 +510,7 @@ const api = {
   sendOnce: call("sendOnce"),
   seenRound: call("seenRound"),
   adminHealth: call("adminHealth"),
+  adminBackend: call("adminBackend"),
   adminTest: call("adminTest"),
   adminReset: call("adminReset"),
   adminListUsers: call("adminListUsers"),
@@ -1400,11 +1401,105 @@ function subscribeAdminData(on) {
     logEntries = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderAdminLog();
   }, (err) => console.warn("notifLog", err)));
+  adminUnsubs.push(onSnapshot(doc(db, "meta", "backend"), (snap) => {
+    beHeart = snap.exists() ? snap.data() : null;
+    renderBackend();
+  }, (err) => console.warn("meta/backend", err)));
   adminUnsubs.push(onSnapshot(collection(db, "devices"), (snap) => {
     adminDevices = {};
     snap.docs.forEach((d) => (adminDevices[d.get("uid")] ||= []).push({ id: d.id, ...d.data() }));
     renderAdminPeople();
   }, (err) => console.warn("devices", err)));
+}
+
+// ---------- Admin → Backend: live status, real usage vs the free allowance, today's activity ----------
+let beHeart = null, beData = null, beLoading = false, beLoadedAt = 0;
+const FREE = { reads: 50000, writes: 20000, deletes: 20000, runs: 2000000 }; // per day (Firestore) / per month (runs)
+const fmtN = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(".", ",")} mi` : n >= 1000 ? `${(n / 1000).toFixed(n >= 1e4 ? 0 : 1).replace(".", ",")} mil` : String(Math.round(n)));
+const beAgo = (ms) => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? "agora" : m < 60 ? `há ${m} min` : `há ${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ""}`.trim(); };
+async function loadBackend(refresh = false) {
+  if (beLoading) return;
+  beLoading = true;
+  renderBackend();
+  try { beData = (await api.adminBackend({ refresh })).data; beLoadedAt = Date.now(); }
+  catch (e) { beData = { error: friendlyError(e) }; }
+  beLoading = false;
+  renderBackend();
+}
+$("be-sec").addEventListener("toggle", () => { if ($("be-sec").open && Date.now() - beLoadedAt > 120000) loadBackend(); });
+setInterval(() => { if ($("be-sec").open || beHeart) renderBackend(); }, 60000);
+function renderBackend() {
+  const h = beHeart, d = beData, u = d && d.usage;
+  // Health from the heartbeat: the server leaves a note every 15 minutes.
+  const age = h ? Date.now() - h.lastTick : Infinity;
+  const health = age < 20 * 60000 ? ["ok", "Tudo certo"] : age < 60 * 60000 ? ["meh", "Atrasado"] : ["bad", h ? "Parado" : "Sem sinal ainda"];
+  let projection = "";
+  if (u && u.ok) {
+    const perDay = (k) => u.month[k] / Math.max(1, u.dayOfMonth - 1 + 0.5);
+    const over = ["reads", "writes", "deletes"].some((k) => u.today[k] > FREE[k] || perDay(k) > FREE[k]) || u.month.runs / u.dayOfMonth * u.daysInMonth > FREE.runs;
+    projection = over ? "pode passar do grátis" : "R$ 0 previsto";
+  }
+  $("be-sum").innerHTML = `<i class="be-dot ${health[0]}"></i>${esc(health[1])}${h ? ` · ${esc(beAgo(h.lastTick))}` : ""}${projection ? ` · ${esc(projection)}` : ""}`;
+  if (!$("be-sec").open) return;
+
+  const row = (label, value, cls = "") => `<div class="be-row ${cls}"><span>${label}</span><b>${value}</b></div>`;
+  const bar = (label, used, cap, note) => {
+    const pct = Math.min(100, (used / cap) * 100);
+    const cls = pct > 90 ? "bad" : pct > 60 ? "meh" : "ok";
+    return `<div class="be-bar"><div class="be-bar-top"><span>${label}</span><b>${fmtN(used)} <small>/ ${fmtN(cap)}${note ? ` ${note}` : ""}</small></b></div>
+      <div class="be-track"><i class="${cls}" style="width:${Math.max(pct, used ? 1.5 : 0)}%"></i></div></div>`;
+  };
+  const site = document.querySelector('meta[name="app-version"]')?.content || "";
+  const nextTick = h ? new Date(Math.ceil((h.lastTick + 60000) / 900000) * 900000) : null;
+  let html = `<section><h4>Servidor</h4>
+    ${row("Última checagem", h ? `${esc(beAgo(h.lastTick))} <small>(${(h.tickMs / 1000).toFixed(1).replace(".", ",")} s)</small>` : "—", health[0])}
+    ${row("Próxima", nextTick ? `${pad2s(nextTick.getHours())}:${pad2s(nextTick.getMinutes())}` : "—")}
+    ${row("Versão do servidor", h && h.build && h.build.sha ? `${esc(h.build.sha)} <small>· ${esc(dmyOf(new Date(h.build.at)))} ${pad2s(new Date(h.build.at).getHours())}:${pad2s(new Date(h.build.at).getMinutes())}</small>` : "—")}
+    ${row("Versão do site", site && !site.startsWith("__") ? esc(site) : "local")}
+    ${h && h.counts ? row("Agora", `${h.counts.users} pessoas · ${h.counts.devices} celulares · ${h.counts.scheduled} agendados · ${h.counts.open} abertas`, "wrap") : ""}
+  </section>`;
+
+  html += `<section><h4>Uso do Firebase <small>${u && u.at ? `· ${esc(beAgo(u.at))}` : ""}</small></h4>`;
+  if (beLoading && !u) html += `<p class="muted small">Lendo os números…</p>`;
+  else if (d && d.error) html += `<p class="be-warn">${esc(d.error)}</p>`;
+  else if (u && u.ok) {
+    const proj = (k) => (u.month[k] / Math.max(1, u.dayOfMonth - 0.5)) * u.daysInMonth;
+    html += bar("Leituras hoje", u.today.reads, FREE.reads, "grátis/dia")
+      + bar("Gravações hoje", u.today.writes, FREE.writes, "grátis/dia")
+      + bar("Exclusões hoje", u.today.deletes, FREE.deletes, "grátis/dia")
+      + bar("Execuções no mês", u.month.runs, FREE.runs, "grátis/mês")
+      + `<p class="be-proj">Mês até agora: ${fmtN(u.month.reads)} leituras · ${fmtN(u.month.writes)} gravações. No ritmo atual, ~${fmtN(proj("reads"))} leituras no mês (${fmtN(proj("reads") / u.daysInMonth)}/dia) → <b>${esc(projection)}</b>.</p>`;
+  } else if (u && u.reason === "permission") {
+    html += `<div class="be-warn"><p><b>Uso real desligado:</b> o servidor ainda não tem permissão pra ler os números do Google.</p>
+      <ol class="be-steps">
+        <li>Abre <a href="https://console.cloud.google.com/iam-admin/iam?project=${encodeURIComponent(d.project || "")}" target="_blank" rel="noopener">o IAM do projeto</a> (dá pra fazer no celular).</li>
+        <li>Toca em <b>Conceder acesso</b> (Grant access).</li>
+        <li>Em "Novos principais", cola: <code class="be-copy">${esc(d.principal || "PROJECT_NUMBER-compute@developer.gserviceaccount.com")}</code></li>
+        <li>Papel: <b>Monitoring Viewer</b> (Leitor do Monitoring) → <b>Salvar</b>.</li>
+        <li>Volta aqui e toca em <b>Atualizar</b>.</li>
+      </ol></div>`;
+  } else if (u) html += `<p class="be-warn">Não deu pra ler o uso agora (${esc(u.reason || "erro")}).</p>`;
+  html += `</section>`;
+
+  if (d && d.activity) {
+    const a = d.activity;
+    html += `<section><h4>Hoje</h4>
+      ${row("Perguntas", `${a.roundsToday} hoje · ${a.rounds7} em 7 dias`)}
+      ${row("Notificações", `${a.sent} entregues${a.failed ? ` · <span class="bad">${a.failed} ${a.failed === 1 ? "falhou" : "falharam"}</span>` : ""}${a.quiet ? ` · ${a.quiet} no não perturbe` : ""}${a.muted ? ` · ${a.muted} silenciadas` : ""}`, "wrap")}
+      ${row("Respostas", String(a.answers))}
+      ${a.failedPhones.length ? row("Celular falhou", esc(a.failedPhones.join(", ")), "bad wrap") : ""}
+      ${a.noPhone.length ? row("Sem celular", esc(a.noPhone.join(", ")), "meh wrap") : ""}
+    </section>`;
+  }
+  if (h && h.next && h.next.length) {
+    html += `<section><h4>Próximos envios</h4>${h.next.map((x) => `<div class="be-next"><span>${esc(whenLabel(parseWhen(x.when)))}</span><span>${esc(x.emoji)} ${esc(x.title)} <small>· ${esc(x.owner)}</small></span></div>`).join("")}</section>`;
+  }
+  html += `<button type="button" class="secondary wide" id="be-refresh">${beLoading ? "Atualizando…" : "Atualizar"}</button>`;
+  $("be-body").innerHTML = html;
+  $("be-refresh").disabled = beLoading;
+  $("be-refresh").onclick = () => loadBackend(true);
+  const cp = $("be-body").querySelector(".be-copy");
+  if (cp) cp.onclick = () => navigator.clipboard?.writeText(cp.textContent).then(() => toast("Copiado. 📋"), () => {});
 }
 
 function setAdminVisible(on) {

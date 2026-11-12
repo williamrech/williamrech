@@ -37,6 +37,7 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js">
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.14.0/firebase-functions.js">
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging.js">
+  <meta name="app-version" content="__V__">
   <link rel="modulepreload" href="app.js?v=__V__">
   <!-- ?v=__V__ is replaced with the commit id on deploy, so phones never mix old and new files -->
   <link rel="stylesheet" href="style.css?v=__V__">
@@ -115,6 +116,11 @@
 
       <!-- Admin tab (only for admins) -->
       <div id="tab-admin" role="tabpanel" hidden>
+        <details class="adm-sec" id="be-sec">
+          <summary>🖥️ Backend <span class="be-sum" id="be-sum"></span></summary>
+          <div id="be-body" class="be"><p class="muted small">Carregando…</p></div>
+        </details>
+
         <details class="adm-sec">
           <summary>🛠️ Ferramentas</summary>
           <div class="admin-grid">

@@ -43,6 +43,10 @@ jobs:
         run: npm install --omit=dev
         working-directory: functions
 
+      - name: Stamp backend build (shown in Admin → Backend)
+        if: steps.check.outputs.ready == 'true'
+        run: echo "{\"sha\":\"${GITHUB_SHA::8}\",\"at\":$(date +%s)000}" > functions/build.json
+
       - name: Deploy
         if: steps.check.outputs.ready == 'true'
         run: |
@@ -55,6 +59,18 @@ jobs:
           # Auto-delete old function build images so they don't slowly add storage cost.
           npx --yes firebase-tools@latest functions:artifacts:setpolicy \
             --project "$PROJECT_ID" --location us-central1 --days 7 --force --non-interactive || true
+
+      - name: Let the functions read usage numbers (Monitoring Viewer), if this account may grant it
+        if: steps.check.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          echo "$SA_KEY" > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet
+          NUM=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+          gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+            --member="serviceAccount:${NUM}-compute@developer.gserviceaccount.com" \
+            --role="roles/monitoring.viewer" --condition=None --quiet --format=none \
+            && echo "MONITORING_GRANT=ok" || echo "MONITORING_GRANT=denied"
 
       - name: Seed fun content (only if missing)
         if: steps.check.outputs.ready == 'true'

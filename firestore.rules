@@ -76,5 +76,9 @@ service cloud.firestore {
     match /notifLog/{id} {
       allow read: if isAdmin();
     }
+    // Backend status for Admin (written by the server only)
+    match /meta/{id} {
+      allow read: if isAdmin();
+    }
   }
 }

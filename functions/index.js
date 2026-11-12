@@ -547,7 +547,125 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
     old.docs.forEach((d) => bw.delete(d.ref));
     await bw.close();
   }
+
+  // 4) Heartbeat for Admin → Backend (one small write per run).
+  try {
+    const fresh = await db.collection("templates").where("schedule.on", "==", true).get();
+    await db.doc("meta/backend").set({
+      lastTick: now, tickMs: Date.now() - now, build: BUILD,
+      counts: { users: Object.keys(users).length, devices: Object.values(devices).reduce((n, l) => n + l.length, 0),
+        scheduled: fresh.size, open: open.size },
+      next: upcomingSends(fresh.docs, users, 3),
+    });
+  } catch (e) { console.warn("heartbeat", e.message); }
 });
+
+// ---------------------------------------------------------------------------
+// Admin → Backend: what's deployed, the next sends, today's activity and real Firebase usage.
+// ---------------------------------------------------------------------------
+let BUILD = {};
+try { BUILD = require("./build.json"); } catch { /* written by the deploy workflow */ }
+const PROJECT = process.env.GCLOUD_PROJECT || (JSON.parse(process.env.FIREBASE_CONFIG || "{}").projectId);
+
+// Next sends across all scheduled recados (Brasília keys "YYYY-MM-DD HH:MM").
+function upcomingSends(docs, users, n) {
+  const nowSp = spParts();
+  const nowKey = `${nowSp.key} ${nowSp.hm}`;
+  const days = Array.from({ length: 8 }, (_, k) => spParts(new Date(Date.now() + k * 86400000)));
+  const out = [];
+  for (const doc of docs) {
+    const t = doc.data(), s = t.schedule || {};
+    const slots = Array.isArray(s.slots) ? s.slots : (Array.isArray(s.days) && s.time ? s.days.map((d) => ({ d, t: s.time })) : []);
+    const cands = (s.dates || []).filter((x) => x > nowKey);
+    for (const day of days) for (const x of slots) if (x.d === day.weekday) cands.push(`${day.key} ${x.t}`);
+    const next = cands.filter((x) => x > nowKey).sort()[0];
+    if (next) out.push({ when: next, title: t.title || "", emoji: t.emoji || "🔔", owner: (users[t.ownerUid] || {}).name || "?" });
+  }
+  return out.sort((a, b) => (a.when < b.when ? -1 : 1)).slice(0, n);
+}
+
+// Sum of a Cloud Monitoring metric over [start, end] (needs "Monitoring Viewer" on the functions' account).
+async function metricSum(type, startMs, endMs) {
+  const tok = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+    { headers: { "Metadata-Flavor": "Google" } }).then((r) => r.json());
+  const secs = Math.max(60, Math.round((endMs - startMs) / 1000));
+  const q = new URLSearchParams({
+    filter: `metric.type="${type}"`,
+    "interval.startTime": new Date(startMs).toISOString(), "interval.endTime": new Date(endMs).toISOString(),
+    "aggregation.alignmentPeriod": `${secs}s`, "aggregation.perSeriesAligner": "ALIGN_SUM",
+    "aggregation.crossSeriesReducer": "REDUCE_SUM",
+  });
+  const res = await fetch(`https://monitoring.googleapis.com/v3/projects/${PROJECT}/timeSeries?${q}`,
+    { headers: { Authorization: `Bearer ${tok.access_token}` } });
+  if (res.status === 403) { const e = new Error("permission"); e.code = 403; throw e; }
+  if (!res.ok) throw new Error(`monitoring ${res.status}`);
+  const body = await res.json();
+  let sum = 0;
+  for (const ts of body.timeSeries || []) for (const pt of ts.points || []) sum += Number(pt.value.int64Value ?? pt.value.doubleValue ?? 0);
+  return sum;
+}
+async function readUsage() {
+  const sp = spParts();
+  const end = Date.now();
+  const dayStart = Date.parse(`${sp.key}T00:00:00-03:00`);
+  const monthStart = Date.parse(`${sp.key.slice(0, 7)}-01T00:00:00-03:00`);
+  const pick = async (types, start) => {
+    for (const t of types) { const v = await metricSum(t, start, end); if (v) return v; }
+    return 0;
+  };
+  const M = {
+    reads: ["firestore.googleapis.com/document/read_ops_count", "firestore.googleapis.com/document/read_count"],
+    writes: ["firestore.googleapis.com/document/write_ops_count", "firestore.googleapis.com/document/write_count"],
+    deletes: ["firestore.googleapis.com/document/delete_ops_count", "firestore.googleapis.com/document/delete_count"],
+    runs: ["run.googleapis.com/request_count"],
+  };
+  const today = {}, month = {};
+  for (const [k, types] of Object.entries(M)) { today[k] = await pick(types, dayStart); month[k] = await pick(types, monthStart); }
+  const [y, m] = sp.key.split("-").map(Number);
+  return { ok: true, at: end, today, month, dayOfMonth: Number(sp.key.slice(8)), daysInMonth: new Date(y, m, 0).getDate() };
+}
+
+handlers.adminBackend = async (req) => {
+  await requireAdmin(req);
+  const sp = spParts();
+  const dayStart = Date.parse(`${sp.key}T00:00:00-03:00`);
+  // Real usage, cached 30 min (or on "atualizar").
+  const uRef = db.doc("meta/usage");
+  let usage = (await uRef.get()).data() || null;
+  if (!usage || (req.data && req.data.refresh) || Date.now() - (usage.at || 0) > 30 * 60000) {
+    try { usage = await readUsage(); } catch (e) { usage = { ok: false, at: Date.now(), reason: e.code === 403 ? "permission" : e.message }; }
+    await uRef.set(usage);
+  }
+  // Today's activity from the notification log (small: one family's day).
+  const [logSnap, rounds7, roundsToday, users, devices] = await Promise.all([
+    db.collection("notifLog").where("at", ">=", dayStart).select("status", "type", "ev", "deviceId", "toName").get(),
+    db.collection("rounds").where("createdAt", ">=", Timestamp.fromMillis(dayStart - 6 * 86400000)).count().get(),
+    db.collection("rounds").where("createdAt", ">=", Timestamp.fromMillis(dayStart)).count().get(),
+    db.collection("users").select("name").get(), db.collection("devices").select("uid").get(),
+  ]);
+  const a = { sent: 0, failed: 0, quiet: 0, nodevice: 0, muted: 0, answers: 0 };
+  const failedPhones = new Set();
+  for (const d of logSnap.docs) {
+    const x = d.data();
+    if (x.type === "event") { if (x.ev === "answer") a.answers++; continue; }
+    if (x.status in a) a[x.status]++;
+    if (x.status === "failed") failedPhones.add(x.toName || "?");
+  }
+  const withPhone = new Set(devices.docs.map((d) => d.get("uid")));
+  let principal = null;
+  if (!usage.ok) {
+    try {
+      const num = await fetch("http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id",
+        { headers: { "Metadata-Flavor": "Google" } }).then((r) => r.text());
+      principal = `${num.trim()}-compute@developer.gserviceaccount.com`;
+    } catch { /* shown generically */ }
+  }
+  return {
+    usage, principal, project: PROJECT,
+    activity: { ...a, roundsToday: roundsToday.data().count, rounds7: rounds7.data().count, failedPhones: [...failedPhones],
+      noPhone: users.docs.filter((d) => !withPhone.has(d.id)).map((d) => d.get("name") || "(sem apelido)") },
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Receipts: the phone's service worker calls this when a notification arrives
