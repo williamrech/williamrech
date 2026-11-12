@@ -1524,6 +1524,38 @@ function setTab(name) {
   if (!restoreAdminTab) { try { localStorage.setItem("tab", name); } catch {} }
 }
 document.querySelectorAll(".tab[data-tab]").forEach((b) => b.addEventListener("click", () => { restoreAdminTab = false; setTab(b.dataset.tab); }));
+// Swipe sideways to change tab. No live sliding: a short, slow or mostly-vertical swipe is
+// ignored; a clear sideways swipe (≥ 90 px or a quarter of the screen, at least twice as wide
+// as it is tall) goes to the next / previous tab. Ignored on sliders, text fields, sideways
+// scrolling rows and while a popup is open.
+(() => {
+  let start = null;
+  const blocked = (el) => el.closest("input, textarea, select, [contenteditable], dialog, .pop-menu, .ps-decor, .chips, .day-pills, .time-row, .no-swipe")
+    || [...document.querySelectorAll("dialog")].some((d) => d.open);
+  document.addEventListener("touchstart", (e) => {
+    start = null;
+    if (e.touches.length !== 1 || blocked(e.target) || !e.target.closest("main")) return;
+    const t = e.touches[0];
+    start = { x: t.clientX, y: t.clientY, at: Date.now() };
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y, ms = Date.now() - start.at;
+    start = null;
+    if (Math.abs(dx) < Math.max(90, innerWidth * 0.25) || Math.abs(dx) < 2 * Math.abs(dy) || ms > 900) return;
+    if (getSelection && String(getSelection()).length) return; // selecting text, not swiping
+    const tabs = [...document.querySelectorAll(".tab[data-tab]")].filter((b) => !b.hidden);
+    const cur = tabs.findIndex((b) => b.classList.contains("selected"));
+    const next = tabs[cur + (dx < 0 ? 1 : -1)];
+    if (!next) return;
+    restoreAdminTab = false;
+    setTab(next.dataset.tab);
+    scrollTo({ top: 0 });
+  }, { passive: true });
+  document.addEventListener("touchcancel", () => { start = null; }, { passive: true });
+})();
+
 // The Admin tab can only be restored once we know the person is an admin (see setAdminVisible).
 const savedTab = (() => { try { return localStorage.getItem("tab") || "feed"; } catch { return "feed"; } })();
 let restoreAdminTab = savedTab === "admin";
