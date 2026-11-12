@@ -1170,7 +1170,7 @@ const STARTERS = [
   { emoji: "☕", title: "Café?", body: "Tô passando um agora.", answerType: "options", options: ["Quero ☕", "Não, valeu"] },
   { emoji: "🎬", title: "Filme hoje à noite?", body: "Escolhe o horário.", answerType: "options", options: ["20h", "21h", "Hoje não"] },
 ];
-const BLANK = { emoji: "🔔", title: "", body: "", answerType: "yesno", options: [], recipients: "all", visibility: "all",
+const BLANK = { emoji: "", title: "", body: "", answerType: "yesno", options: [], recipients: "all", visibility: "all",
   nagEveryMin: 15, durationHours: 2, schedule: { on: false, slots: [], dates: [] }, allowMute: true, keep: true };
 
 const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
@@ -1319,6 +1319,12 @@ function scheduleText(s) {
 
 // Generic confirm popup → Promise<boolean>
 function confirmBox(title, body, yes = "Mandar") {
+  // Came from a tap on a visible button (in the popup on top, if any)? Ask right there.
+  const a = lastTap;
+  const top = [...document.querySelectorAll("dialog[open]")].pop();
+  if (a && a.isConnected && Date.now() - lastTapAt < 2000 && a.getClientRects().length && (!top || top.contains(a))) {
+    return confirmPop(a, title, body, yes);
+  }
   return new Promise((resolve) => {
     $("confirm-title").textContent = title;
     $("confirm-body").textContent = body;
@@ -1661,21 +1667,23 @@ function buildRound(r, ask) {
   return li;
 }
 
-// Small popover menu anchored to a button. Closes on outside tap, scroll, Esc.
+// Small popover anchored to a button (inside the open popup if there is one, so it shows on top).
+// Closes on outside tap, scroll, Esc — closing without choosing counts as "cancel".
 let popMenu = null;
-function closePopMenu() {
+function closePopMenu(result) {
   if (!popMenu) return;
-  popMenu.el.remove();
-  popMenu.anchor.setAttribute("aria-expanded", "false");
+  const p = popMenu;
   popMenu = null;
+  p.el.remove();
+  p.anchor.setAttribute("aria-expanded", "false");
+  if (p.onClose) p.onClose(result);
 }
-function openPopMenu(anchor, items) {
+function openPop(anchor, build, onClose) {
   const again = popMenu && popMenu.anchor === anchor;
   closePopMenu();
-  if (again) return;
+  if (again) { if (onClose) onClose(); return; }
   const el = document.createElement("div");
   el.className = "pop-menu";
-  el.setAttribute("role", "menu");
   const place = () => {
     const a = anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
     const left = Math.max(8, Math.min(a.right - w, innerWidth - w - 8));
@@ -1683,39 +1691,69 @@ function openPopMenu(anchor, items) {
     el.style.left = `${left}px`;
     el.style.top = `${below ? a.bottom + 6 : Math.max(8, a.top - 6 - h)}px`;
   };
-  const list = () => {
-    el.innerHTML = "";
-    for (const it of items) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.setAttribute("role", "menuitem");
-      b.className = it.danger ? "danger-text" : "";
-      b.textContent = it.label;
-      b.onclick = () => (it.ask ? confirmStep(it) : (closePopMenu(), it.run()));
-      el.appendChild(b);
-    }
-  };
-  const confirmStep = (it) => {
-    el.innerHTML = `<p class="pop-ask"></p><div class="pop-row"><button type="button" class="secondary">Cancelar</button><button type="button" class="${it.danger ? "danger" : "primary"}"></button></div>`;
-    el.querySelector(".pop-ask").textContent = it.ask;
-    const [no, yes] = el.querySelectorAll(".pop-row button");
-    yes.textContent = it.yes;
-    no.onclick = () => { list(); place(); };
-    yes.onclick = () => { closePopMenu(); it.run(); };
-    place();
-    yes.focus();
-  };
-  list();
-  document.body.appendChild(el);
+  (anchor.closest("dialog[open]") || document.body).appendChild(el);
   anchor.setAttribute("aria-expanded", "true");
-  popMenu = { el, anchor };
+  popMenu = { el, anchor, onClose };
+  build(el, place);
   place();
   el.querySelector("button")?.focus({ preventScroll: true });
 }
-document.addEventListener("pointerdown", (e) => { if (popMenu && !popMenu.el.contains(e.target) && e.target !== popMenu.anchor) closePopMenu(); }, true);
-addEventListener("scroll", () => closePopMenu(), true);
+function openPopMenu(anchor, items) {
+  openPop(anchor, (el, place) => {
+    el.setAttribute("role", "menu");
+    const list = () => {
+      el.innerHTML = "";
+      for (const it of items) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("role", "menuitem");
+        b.className = it.danger ? "danger-text" : "";
+        b.textContent = it.label;
+        b.onclick = () => (it.ask ? confirmStep(it) : (closePopMenu(), it.run()));
+        el.appendChild(b);
+      }
+    };
+    const confirmStep = (it) => {
+      el.innerHTML = `<p class="pop-ask"></p><div class="pop-row"><button type="button" class="secondary">Cancelar</button><button type="button" class="${it.danger ? "danger" : "primary"}"></button></div>`;
+      el.querySelector(".pop-ask").textContent = it.ask;
+      const [no, yes] = el.querySelectorAll(".pop-row button");
+      yes.textContent = it.yes;
+      no.onclick = () => { list(); place(); };
+      yes.onclick = () => { closePopMenu(); it.run(); };
+      place();
+      yes.focus();
+    };
+    list();
+  });
+}
+// "Are you sure?" right next to the button you tapped → Promise<boolean>
+function confirmPop(anchor, title, body, yes) {
+  return new Promise((resolve) => {
+    openPop(anchor, (el) => {
+      el.setAttribute("role", "alertdialog");
+      el.classList.add("pop-confirm");
+      const risky = /^(Apagar|Remover|Sair|Substituir|Tirar)/.test(yes) || /^(Apagar|Remover|Tirar)/.test(title);
+      el.innerHTML = `<p class="pop-title"></p><p class="pop-ask"></p><div class="pop-row"><button type="button" class="secondary">Cancelar</button><button type="button" class="${risky ? "danger" : "primary"}"></button></div>`;
+      el.querySelector(".pop-title").textContent = title;
+      el.querySelector(".pop-ask").textContent = body;
+      el.querySelector(".pop-ask").hidden = !body;
+      const [no, ok] = el.querySelectorAll(".pop-row button");
+      ok.textContent = yes;
+      no.onclick = () => closePopMenu(false);
+      ok.onclick = () => closePopMenu(true);
+    }, (result) => resolve(result === true));
+    setTimeout(() => popMenu && popMenu.el.querySelector(".pop-row button:last-child")?.focus(), 0);
+  });
+}
+let lastTap = null, lastTapAt = 0;
+document.addEventListener("pointerdown", (e) => {
+  if (popMenu && !popMenu.el.contains(e.target) && e.target !== popMenu.anchor && !popMenu.anchor.contains(e.target)) closePopMenu();
+  lastTap = e.target.closest && e.target.closest("button, .chip, [role=button]");
+  lastTapAt = Date.now();
+}, true);
+addEventListener("scroll", (e) => { if (popMenu && !popMenu.el.contains(e.target)) closePopMenu(); }, true);
 addEventListener("resize", () => closePopMenu());
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && popMenu) { e.preventDefault(); closePopMenu(); } }, true);
 
 // Every popup closes when you tap outside it (unless it can't be closed, like the first-time ones).
 document.querySelectorAll("dialog").forEach((d) => {
@@ -2006,6 +2044,43 @@ function openEditor(t, opts = {}) {
   syncEditor();
   $("dlg-editor").showModal();
 }
+// Emoji: tap opens a small grid; "outro" opens the keyboard for anything else.
+const EMOJI_PICKS = ["🔔", "❓", "📢", "🚨", "⏰", "📅", "🍝", "🍕", "🍔", "🥗", "☕", "🍦", "🍷", "🍺", "🛒", "📦",
+  "🚗", "✈️", "🏠", "🛏️", "🚿", "🧺", "🧹", "🗑️", "💊", "🩺", "🐶", "🐱", "🎂", "🎉", "🎁", "❤️",
+  "💘", "😂", "😴", "🙏", "👍", "💰", "🔑", "📞", "🎬", "📺", "🎮", "⚽", "🏖️", "☀️", "🌧️", "🌙"];
+const edEmoji = $("ed-emoji");
+edEmoji.readOnly = true;
+edEmoji.setAttribute("inputmode", "none");
+edEmoji.addEventListener("click", () => {
+  if (!edEmoji.readOnly) return;
+  openPop(edEmoji, (el) => {
+    el.classList.add("pop-emoji");
+    el.innerHTML = `<div class="emoji-grid"></div><button type="button" class="emoji-other">⌨️ Outro emoji (teclado)</button>`;
+    const grid = el.querySelector(".emoji-grid");
+    for (const e of EMOJI_PICKS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = e;
+      b.setAttribute("aria-label", e);
+      b.classList.toggle("on", edEmoji.value === e);
+      b.onclick = () => { edEmoji.value = e; closePopMenu(); };
+      grid.appendChild(b);
+    }
+    el.querySelector(".emoji-other").onclick = () => {
+      closePopMenu();
+      edEmoji.readOnly = false;
+      edEmoji.removeAttribute("inputmode");
+      edEmoji.value = "";
+      edEmoji.focus();
+    };
+  });
+});
+edEmoji.addEventListener("input", () => {
+  const g = firstGrapheme(edEmoji.value.trim());
+  if (g && g !== edEmoji.value) edEmoji.value = g;
+});
+edEmoji.addEventListener("blur", () => { edEmoji.readOnly = true; edEmoji.setAttribute("inputmode", "none"); });
+
 let lastStarter = -1;
 $("ed-random").addEventListener("click", () => {
   let i;

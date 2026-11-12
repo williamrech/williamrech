@@ -1159,3 +1159,18 @@ select.add-time { width: auto; padding: 5px 10px; min-height: 0; font-size: 0.85
 .ed-more[open] summary::after { content: "▴"; }
 .next-fire { display: block; color: var(--crema); }
 select.add-time { -webkit-appearance: none; appearance: none; background-image: none; padding-right: 10px; text-align: center; }
+
+/* Emoji field: grey 🔔 until you pick one; tap opens the picker */
+#ed-emoji { cursor: pointer; caret-color: transparent; }
+#ed-emoji:not([readonly]) { caret-color: auto; }
+#ed-emoji::placeholder { color: transparent; text-shadow: 0 0 0 color-mix(in srgb, var(--fg) 45%, transparent); opacity: 1; }
+.pop-emoji { width: min(316px, calc(100vw - 16px)); max-width: none; }
+.emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.emoji-grid button { background: transparent; border: 0; border-radius: 8px; padding: 0; height: 36px; min-height: 0; font-size: 1.3rem; line-height: 1; }
+.emoji-grid button:active, .emoji-grid button.on { background: var(--card); }
+.pop-menu > .emoji-other { margin-top: 4px; text-align: center; font-size: 0.85rem; color: var(--muted); }
+/* "Are you sure?" popover */
+.pop-confirm { width: min(290px, calc(100vw - 16px)); }
+.pop-title { margin: 6px 8px 2px; font-weight: 700; font-size: 0.95rem; color: var(--fg); }
+.pop-confirm .pop-ask { margin-top: 2px; color: var(--muted); font-size: 0.85rem; }
+.pop-confirm .pop-ask[hidden] { display: none; }
