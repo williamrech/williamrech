@@ -36,12 +36,13 @@ service cloud.firestore {
       allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
         && !('mutedBy' in request.resource.data) && !('lastFiredKey' in request.resource.data)
+        && !('firedKeys' in request.resource.data)
         && request.resource.data.title is string && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 80;
       allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == request.auth.uid
         && changed().hasOnly(['emoji', 'title', 'body', 'answerType', 'options', 'recipients',
-             'visibility', 'allowMute', 'nagEveryMin', 'durationHours', 'schedule', 'favorite', 'updatedAt'])
+             'visibility', 'allowMute', 'nagEveryMin', 'durationHours', 'schedule', 'keep', 'favorite', 'updatedAt'])
         && request.resource.data.title is string && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 80;
     }

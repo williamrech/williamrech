@@ -213,10 +213,9 @@
   <!-- Modal: create / edit a chamado -->
   <dialog id="dlg-editor">
     <form id="editor-form">
-      <h2 id="editor-title">Novo recado</h2>
-      <div id="starter-wrap">
-        <p class="muted small pick-label">Começar de um modelo:</p>
-        <div class="chips" id="starter-chips"></div>
+      <div class="ed-top">
+        <h2 id="editor-title">Novo recado</h2>
+        <button type="button" id="ed-random" class="icon-btn" aria-label="Exemplo aleatório" title="Exemplo aleatório">🎲</button>
       </div>
 
       <div class="title-row">
@@ -237,51 +236,63 @@
       <p class="muted small pick-label">Pra quem</p>
       <div class="chips" id="ed-recipients"></div>
 
-      <div id="ed-answer-opts">
-        <p class="muted small pick-label">Quem vê as respostas</p>
-        <div class="chips seg" id="ed-visibility">
-          <button type="button" class="chip" data-v="all">Todo mundo</button>
-          <button type="button" class="chip" data-v="owner">Só eu</button>
-        </div>
-        <p class="muted small pick-label">Insistir com quem não respondeu</p>
-        <select id="ed-nag" aria-label="Insistir">
-          <option value="0">Não insistir</option>
-          <option value="15">A cada 15 min</option>
-          <option value="30">A cada 30 min</option>
-          <option value="60">A cada 1 h</option>
-          <option value="120">A cada 2 h</option>
-        </select>
-      </div>
-
-      <p class="muted small pick-label">Fica aberto por</p>
-      <select id="ed-duration" aria-label="Fica aberto por">
-        <option value="1">1 hora</option>
-        <option value="2">2 horas</option>
-        <option value="4">4 horas</option>
-        <option value="8">8 horas</option>
-        <option value="12">12 horas</option>
-        <option value="24">1 dia</option>
-        <option value="48">2 dias</option>
-        <option value="72">3 dias</option>
-      </select>
-      <p class="muted small">Depois disso fecha sozinho (ninguém mais responde e para de insistir). Dá pra encerrar antes.</p>
-
-      <label class="toggle keep-toggle" id="ed-keep-wrap" hidden><input type="checkbox" id="ed-keep"> <span id="ed-keep-label">Salvar nos meus recados</span></label>
-
-      <div id="ed-when-wrap">
       <p class="muted small pick-label">Quando</p>
       <div class="chips seg" id="ed-when">
-        <button type="button" class="chip" data-v="button">Quando eu apertar</button>
-        <button type="button" class="chip" data-v="schedule">Repetir</button>
+        <button type="button" class="chip" data-v="now">Agora</button>
+        <button type="button" class="chip" data-v="schedule">Agendar</button>
+        <button type="button" class="chip" data-v="button" id="ed-when-button">Só no botão</button>
       </div>
-      <div id="ed-schedule" hidden>
-        <div class="days" id="ed-days"></div>
-        <select id="ed-time" aria-label="Horário"></select>
+      <div id="ed-schedule" class="ed-sched" hidden>
+        <div class="sched-block">
+          <div class="sched-head"><span>Toda semana</span><button type="button" class="link" id="ed-perday"></button></div>
+          <div class="day-pills" id="ed-days"></div>
+          <div id="ed-slot-times"></div>
+        </div>
+        <div class="sched-block">
+          <div class="sched-head"><span>Datas</span></div>
+          <div class="chips" id="ed-dates"></div>
+          <div class="date-add">
+            <input type="date" id="ed-date-day" aria-label="Dia">
+            <select id="ed-date-time" aria-label="Horário"></select>
+            <button type="button" class="secondary small-btn" id="ed-date-add" aria-label="Adicionar data">＋</button>
+          </div>
+          <div class="chips quick" id="ed-date-quick"></div>
+        </div>
       </div>
 
-      </div>
+      <label class="toggle keep-toggle" id="ed-keep-wrap"><input type="checkbox" id="ed-keep"> <span id="ed-keep-label">Salvar nos meus recados</span></label>
+      <p class="muted small" id="ed-keep-hint" hidden></p>
 
-      <label class="toggle" id="ed-mute-wrap"><input type="checkbox" id="ed-mute"> <span>Deixar as pessoas silenciarem</span></label>
+      <details class="ed-more" id="ed-more">
+        <summary><span>Mais opções</span> <span class="muted small" id="ed-more-sum"></span></summary>
+        <div id="ed-answer-opts">
+          <p class="muted small pick-label">Quem vê as respostas</p>
+          <div class="chips seg" id="ed-visibility">
+            <button type="button" class="chip" data-v="all">Todo mundo</button>
+            <button type="button" class="chip" data-v="owner">Só eu</button>
+          </div>
+          <p class="muted small pick-label">Insistir com quem não respondeu</p>
+          <select id="ed-nag" aria-label="Insistir">
+            <option value="0">Não insistir</option>
+            <option value="15">A cada 15 min</option>
+            <option value="30">A cada 30 min</option>
+            <option value="60">A cada 1 h</option>
+            <option value="120">A cada 2 h</option>
+          </select>
+        </div>
+        <p class="muted small pick-label">Fica aberto por</p>
+        <select id="ed-duration" aria-label="Fica aberto por">
+          <option value="1">1 hora</option>
+          <option value="2">2 horas</option>
+          <option value="4">4 horas</option>
+          <option value="8">8 horas</option>
+          <option value="12">12 horas</option>
+          <option value="24">1 dia</option>
+          <option value="48">2 dias</option>
+          <option value="72">3 dias</option>
+        </select>
+        <label class="toggle" id="ed-mute-wrap"><input type="checkbox" id="ed-mute"> <span>Deixar as pessoas silenciarem</span></label>
+      </details>
 
       <div class="row-buttons">
         <button type="button" id="ed-delete" class="danger" hidden>Apagar</button>

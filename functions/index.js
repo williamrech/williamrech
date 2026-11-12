@@ -226,7 +226,8 @@ const handlers = {};
 //
 // template: ownerUid, emoji, title, body, answerType ("none"|"yesno"|"options"|"text"),
 //   options[], recipients ("all" | [uid]), visibility ("all"|"owner"), allowMute,
-//   nagEveryMin (0 = never), durationHours, schedule { on, days[], time "HH:MM" },
+//   nagEveryMin (0 = never), durationHours, keep (false = vanishes after its last date),
+//   schedule { on, slots: [{ d: 0-6, t: "HH:MM" }], dates: ["YYYY-MM-DD HH:MM"] } (older: { days[], time }),
 //   mutedBy { uid: name }  ← server only, lastFiredKey ← server only
 //
 // round: copy of the template's look + recipients/participants, answers { uid: {value,name,changes,at} },
@@ -463,21 +464,43 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
   const now = Date.now();
   const [users, devices] = await Promise.all([loadUsers(), loadDevices()]);
 
-  // 1) Scheduled templates due today (fire within 60 min after their time, once per day).
+  // 1) Scheduled templates: weekly slots { d, t } and one-off dates "YYYY-MM-DD HH:MM" (Brasília).
+  //    Each fires within 60 min after its time, once. One-offs are removed after firing (or when
+  //    missed); a recado saved with keep:false disappears after its last date.
   const scheduled = await db.collection("templates").where("schedule.on", "==", true).get();
+  const nowKey = `${sp.key} ${sp.hm}`;
+  const inWindow = (t) => { const diff = nowMin - toMin(t); return diff >= 0 && diff <= 60; };
   for (const doc of scheduled.docs) {
     const tpl = doc.data();
     const s = tpl.schedule || {};
-    if (!Array.isArray(s.days) || !s.days.includes(sp.weekday) || !s.time) continue;
-    const diff = nowMin - toMin(s.time);
-    if (diff < 0 || diff > 60 || tpl.lastFiredKey === sp.key) continue;
-    await doc.ref.update({ lastFiredKey: sp.key });
+    const legacy = !Array.isArray(s.slots);
+    const slots = legacy ? (Array.isArray(s.days) && s.time ? s.days.map((d) => ({ d, t: s.time })) : []) : s.slots;
+    const fired = tpl.firedKeys || {};
+    const dueSlots = slots.filter((x) => x.d === sp.weekday && x.t && inWindow(x.t)
+      && fired[`${x.d}-${x.t}`] !== sp.key && !(legacy && tpl.lastFiredKey === sp.key));
+    const dates = Array.isArray(s.dates) ? s.dates : [];
+    const dueDates = dates.filter((x) => x.slice(0, 10) === sp.key && inWindow(x.slice(11)));
+    const remaining = dates.filter((x) => !dueDates.includes(x) && x > nowKey);
+    const stillOn = slots.length > 0 || remaining.length > 0;
+    const vanish = tpl.keep === false && !stillOn;
+    if (!dueSlots.length && !dueDates.length) {
+      // Clean up dates that were missed (e.g. while the server was down).
+      if (remaining.length !== dates.length) {
+        if (vanish) await doc.ref.delete();
+        else await doc.ref.update({ "schedule.dates": remaining, "schedule.on": stillOn });
+      }
+      continue;
+    }
+    const upd = { lastFiredKey: sp.key, "schedule.dates": remaining, "schedule.on": stillOn };
+    for (const x of dueSlots) upd[`firedKeys.${x.d}-${x.t}`] = sp.key;
+    await doc.ref.update(upd);
     const owner = users[tpl.ownerUid] || {};
     try {
       await createRound(doc.ref, tpl, { name: owner.name || "Alguém", gender: owner.gender || "m" }, { users, devices, kind: "agendado" });
     } catch (e) {
       console.warn("scheduled fire skipped", doc.id, e.message);
     }
+    if (vanish) await doc.ref.delete();
   }
 
   // 2) Open rounds: close, deliver delayed, nag.

@@ -1157,25 +1157,21 @@ $("style-save").addEventListener("click", async () => {
 });
 
 // ---------- Chamados: buttons, live feed, editor ----------
+// 🎲 in the editor fills one of these (content only; who/when stay as you set them).
 const STARTERS = [
-  { emoji: "🍝", title: "Vai ter almoço hoje?", body: "Responde logo que a gente precisa se organizar.", answerType: "options",
-    options: ["Sim", "Não", "Só se alguém ajudar"], recipients: [], visibility: "all", nagEveryMin: 30, durationHours: 4,
-    schedule: { on: true, days: [0], time: "09:00" }, allowMute: false, label: "Almoço de domingo" },
-  { emoji: "🛒", title: "Precisa de algo do mercado?", body: "Tô indo. Fala agora ou cala pra sempre.", answerType: "text",
-    options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 2,
-    schedule: { on: false, days: [], time: "12:00" }, allowMute: true, label: "Precisa de algo?" },
-  { emoji: "🛒", title: "Vai no mercado hoje?", body: "Sim ou não, sem enrolação.", answerType: "yesno",
-    options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 8,
-    schedule: { on: true, days: [0, 1, 2, 3, 4, 5, 6], time: "12:00" }, allowMute: true, label: "Mercado do dia" },
-  { emoji: "🚗", title: "Tô indo no mercado, quem vai junto?", body: "Saindo daqui a pouco.", answerType: "options",
-    options: ["Vou junto 🙋", "Não vou"], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 2,
-    schedule: { on: false, days: [], time: "18:00" }, allowMute: true, label: "Quem vai junto?" },
-  { emoji: "🍕", title: "Bora pedir janta?", body: "", answerType: "yesno",
-    options: [], recipients: "all", visibility: "all", nagEveryMin: 0, durationHours: 2,
-    schedule: { on: false, days: [], time: "19:00" }, allowMute: true, label: "Janta?" },
+  { emoji: "🍝", title: "Vai ter almoço hoje?", body: "Responde logo que a gente precisa se organizar.", answerType: "options", options: ["Sim", "Não", "Só se alguém ajudar"] },
+  { emoji: "🛒", title: "Precisa de algo do mercado?", body: "Tô indo. Fala agora ou cala pra sempre.", answerType: "text", options: [] },
+  { emoji: "🛒", title: "Vai no mercado hoje?", body: "Sim ou não, sem enrolação.", answerType: "yesno", options: [] },
+  { emoji: "🚗", title: "Tô indo no mercado, quem vai junto?", body: "Saindo daqui a pouco.", answerType: "options", options: ["Vou junto 🙋", "Não vou"] },
+  { emoji: "🍕", title: "Bora pedir janta?", body: "", answerType: "yesno", options: [] },
+  { emoji: "💊", title: "Tomou o remédio?", body: "Não me faz perguntar de novo.", answerType: "yesno", options: [] },
+  { emoji: "🗑️", title: "Hoje é dia de lixo!", body: "Quem leva?", answerType: "options", options: ["Eu levo", "Já levei", "Hoje não dá"] },
+  { emoji: "🏠", title: "Chegou bem?", body: "Só pra eu dormir tranquila.", answerType: "yesno", options: [] },
+  { emoji: "☕", title: "Café?", body: "Tô passando um agora.", answerType: "options", options: ["Quero ☕", "Não, valeu"] },
+  { emoji: "🎬", title: "Filme hoje à noite?", body: "Escolhe o horário.", answerType: "options", options: ["20h", "21h", "Hoje não"] },
 ];
 const BLANK = { emoji: "🔔", title: "", body: "", answerType: "yesno", options: [], recipients: "all", visibility: "all",
-  nagEveryMin: 0, durationHours: 12, schedule: { on: false, days: [], time: "12:00" }, allowMute: true };
+  nagEveryMin: 15, durationHours: 2, schedule: { on: false, slots: [], dates: [] }, allowMute: true, keep: true };
 
 const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
 const nameOf = (uid) => (family[uid] && family[uid].name) || "?";
@@ -1266,11 +1262,59 @@ function recipientsText(r) {
   const names = (r || []).map((u) => (u === self ? "você" : nameOf(u)));
   return names.length ? names.join(", ") : "ninguém";
 }
+// Schedule = { on, slots: [{ d: 0-6, t: "HH:MM" }] (every week), dates: ["YYYY-MM-DD HH:MM"] (once each) }.
+// Older recados have { days: [], time } — read as slots.
+function scheduleSlots(s) {
+  if (!s) return [];
+  if (Array.isArray(s.slots)) return s.slots;
+  return Array.isArray(s.days) && s.time ? s.days.map((d) => ({ d, t: s.time })) : [];
+}
+const dateKeyOf = (d) => `${d.getFullYear()}-${pad2s(d.getMonth() + 1)}-${pad2s(d.getDate())}`;
+const parseWhen = (str) => { const [ymd, hm] = str.split(" "); const [y, m, d] = ymd.split("-").map(Number); const [h, mi] = hm.split(":").map(Number); return new Date(y, m - 1, d, h, mi); };
+function whenLabel(date) {
+  const hm = `${pad2s(date.getHours())}:${pad2s(date.getMinutes())}`;
+  const today = new Date(), tom = new Date(Date.now() + 86400000);
+  if (date.toDateString() === today.toDateString()) return `hoje ${hm}`;
+  if (date.toDateString() === tom.toDateString()) return `amanhã ${hm}`;
+  return `${DAY_SHORT[date.getDay()].toLowerCase()} ${pad2s(date.getDate())}/${pad2s(date.getMonth() + 1)} ${hm}`;
+}
+function nextFire(s) {
+  if (!s || !s.on) return null;
+  const now = Date.now();
+  let best = null;
+  for (const x of s.dates || []) { const t = parseWhen(x); if (t.getTime() > now - 60000 && (!best || t < best)) best = t; }
+  const slots = scheduleSlots(s);
+  for (let k = 0; k < 8 && slots.length; k++) {
+    const day = new Date(); day.setDate(day.getDate() + k);
+    for (const sl of slots) {
+      if (sl.d !== day.getDay()) continue;
+      const [h, m] = sl.t.split(":").map(Number);
+      const t = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
+      if (t.getTime() > now && (!best || t < best)) best = t;
+    }
+  }
+  return best;
+}
+// "seg, qua 08:00 · sáb 10:00, 18:00 · 📅 sex 14/11 09:00 +2"
 function scheduleText(s) {
-  if (!s || !s.on) return "Botão";
-  const days = (s.days || []).slice().sort();
-  const d = days.length === 7 ? "todo dia" : days.map((i) => DAY_SHORT[i].toLowerCase()).join(", ");
-  return `⏰ ${d} às ${s.time}`;
+  const slots = scheduleSlots(s), dates = (s && s.dates) || [];
+  if (!s || !s.on || (!slots.length && !dates.length)) return "Botão";
+  const parts = [];
+  if (slots.length) {
+    const byDay = {};
+    for (const x of slots) (byDay[x.d] ||= []).push(x.t);
+    const groups = {};
+    for (const [d, ts] of Object.entries(byDay)) { const k = ts.sort().join(", "); (groups[k] ||= []).push(Number(d)); }
+    for (const [ts, ds] of Object.entries(groups)) {
+      const dd = ds.length === 7 ? "todo dia" : ds.sort().map((i) => DAY_SHORT[i].toLowerCase()).join(", ");
+      parts.push(`${dd} ${ts}`);
+    }
+  }
+  if (dates.length) {
+    const sorted = [...dates].sort();
+    parts.push(`📅 ${whenLabel(parseWhen(sorted[0]))}${sorted.length > 1 ? ` +${sorted.length - 1}` : ""}`);
+  }
+  return `⏰ ${parts.join(" · ")}`;
 }
 
 // Generic confirm popup → Promise<boolean>
@@ -1324,6 +1368,7 @@ function renderChamados() {
         <span class="tile-emoji">${esc(t.emoji || "🔔")}</span>
         <span class="manage-text"><b>${esc(t.title)}</b>
           <span class="muted small">${esc(scheduleText(t.schedule))} · ${esc(recipientsText(t.recipients))}</span>
+          ${scheduled && nextFire(t.schedule) ? `<span class="next-fire small">próximo: ${esc(whenLabel(nextFire(t.schedule)))}${t.keep === false ? " · some depois" : ""}</span>` : ""}
           ${muted.length ? `<span class="muted-by small">🔕 ${muted.map(esc).join(", ")} silenciou</span>` : ""}
         </span>
       </button>
@@ -1735,16 +1780,11 @@ for (const id of ["ed-type", "ed-visibility", "ed-when"]) {
     const c = e.target.closest(".chip");
     if (!c) return;
     segSelect(id, c.dataset.v);
-    syncEditorVisibility();
+    syncEditor();
   });
 }
 
-function syncEditorVisibility() {
-  const type = segValue("ed-type");
-  show("ed-options", type === "options");
-  show("ed-answer-opts", type !== "none");
-  show("ed-schedule", segValue("ed-when") === "schedule");
-}
+function syncEditorVisibility() { syncEditor(); }
 
 function renderRecipients() {
   const wrap = $("ed-recipients");
@@ -1775,23 +1815,152 @@ function renderRecipients() {
     .forEach(([u, p]) => mk(p.name, u));
 }
 
-function renderEdDays() {
-  const wrap = $("ed-days");
-  wrap.innerHTML = "";
-  DAY_SHORT.forEach((label, i) => {
-    const l = document.createElement("label");
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = (ed.schedule.days || []).includes(i);
-    cb.onchange = () => {
-      const set = new Set(ed.schedule.days || []);
-      cb.checked ? set.add(i) : set.delete(i);
-      ed.schedule.days = [...set].sort();
-    };
-    l.append(label, cb);
-    wrap.appendChild(l);
-  });
+// ---- Agendar: every week (same time for all days, or per day) + one-off dates ----
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // seg → dom
+function timeChips(list, onChange) {
+  const row = document.createElement("div");
+  row.className = "time-row";
+  for (const t of [...list].sort()) {
+    const c = document.createElement("span");
+    c.className = "chip selected time-chip";
+    c.innerHTML = `${t} <button type="button" aria-label="Tirar ${t}">✕</button>`;
+    c.querySelector("button").onclick = () => onChange(list.filter((x) => x !== t));
+    row.appendChild(c);
+  }
+  const add = document.createElement("select");
+  add.className = "add-time";
+  add.setAttribute("aria-label", "Adicionar horário");
+  add.innerHTML = `<option value="">＋ horário</option>` + TIMES_15.filter((t) => !list.includes(t)).map((t) => `<option>${t}</option>`).join("");
+  add.onchange = () => { if (add.value) onChange([...list, add.value]); };
+  row.appendChild(add);
+  return row;
 }
+function renderSchedule() {
+  // Day pills
+  const days = $("ed-days");
+  days.innerHTML = "";
+  for (const i of WEEK_ORDER) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "day-pill" + (ed.days.has(i) ? " on" : "");
+    b.textContent = DAY_SHORT[i].slice(0, 1);
+    b.title = DAY_SHORT[i];
+    b.setAttribute("aria-label", DAY_SHORT[i]);
+    b.setAttribute("aria-pressed", String(ed.days.has(i)));
+    b.onclick = () => {
+      if (ed.days.has(i)) ed.days.delete(i);
+      else { ed.days.add(i); if (!ed.dayTimes[i] || !ed.dayTimes[i].length) ed.dayTimes[i] = [...(ed.times.length ? ed.times : ["08:00"])]; }
+      renderSchedule(); syncEditor();
+    };
+    days.appendChild(b);
+  }
+  $("ed-perday").textContent = ed.perDay ? "mesmo horário pra todos" : "horário por dia";
+  show("ed-perday", ed.days.size > 1 || ed.perDay);
+  const box = $("ed-slot-times");
+  box.innerHTML = "";
+  if (!ed.days.size) {
+    box.innerHTML = `<p class="muted small sched-empty">Escolhe os dias pra repetir toda semana.</p>`;
+  } else if (!ed.perDay) {
+    box.appendChild(timeChips(ed.times, (l) => { ed.times = l; renderSchedule(); syncEditor(); }));
+  } else {
+    for (const i of WEEK_ORDER.filter((d) => ed.days.has(d))) {
+      const line = document.createElement("div");
+      line.className = "day-line";
+      line.innerHTML = `<span class="day-name">${DAY_SHORT[i]}</span>`;
+      line.appendChild(timeChips(ed.dayTimes[i] || [], (l) => { ed.dayTimes[i] = l; renderSchedule(); syncEditor(); }));
+      box.appendChild(line);
+    }
+  }
+  // Dates
+  const dl = $("ed-dates");
+  dl.innerHTML = "";
+  for (const x of [...ed.dates].sort()) {
+    const c = document.createElement("span");
+    c.className = "chip selected time-chip";
+    c.innerHTML = `${esc(whenLabel(parseWhen(x)))} <button type="button" aria-label="Tirar">✕</button>`;
+    c.querySelector("button").onclick = () => { ed.dates = ed.dates.filter((y) => y !== x); renderSchedule(); syncEditor(); };
+    dl.appendChild(c);
+  }
+  const q = $("ed-date-quick");
+  q.innerHTML = "";
+  const now = new Date();
+  const inHour = new Date(Math.ceil((now.getTime() + 3600000) / 900000) * 900000);
+  const at = (dayOffset, h) => { const d = new Date(); d.setDate(d.getDate() + dayOffset); d.setHours(h, 0, 0, 0); return d; };
+  const picks = [["daqui 1 h", inHour], ["hoje 18:00", at(0, 18)], ["hoje 20:00", at(0, 20)], ["amanhã 08:00", at(1, 8)]]
+    .filter(([, d]) => d.getTime() > now.getTime() + 5 * 60000);
+  for (const [label, d] of picks) {
+    const key = `${dateKeyOf(d)} ${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
+    if (ed.dates.includes(key)) continue;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = `＋ ${label}`;
+    b.onclick = () => { ed.dates.push(key); renderSchedule(); syncEditor(); };
+    q.appendChild(b);
+  }
+}
+$("ed-perday").addEventListener("click", () => {
+  if (ed.perDay) {
+    const first = WEEK_ORDER.find((d) => ed.days.has(d));
+    ed.times = [...((first !== undefined && ed.dayTimes[first]) || ed.times)];
+  } else {
+    for (const d of ed.days) ed.dayTimes[d] = [...ed.times];
+  }
+  ed.perDay = !ed.perDay;
+  renderSchedule();
+  syncEditor();
+});
+$("ed-date-add").addEventListener("click", () => {
+  const day = $("ed-date-day").value, t = $("ed-date-time").value;
+  if (!day || !t) return toast("Escolhe o dia e o horário.");
+  const key = `${day} ${t}`;
+  if (parseWhen(key).getTime() <= Date.now()) return toast("Essa data já passou. ⏳");
+  if (!ed.dates.includes(key)) ed.dates.push(key);
+  renderSchedule();
+  syncEditor();
+});
+function edSlots() {
+  const out = [];
+  for (const d of ed.days) for (const t of (ed.perDay ? ed.dayTimes[d] || [] : ed.times)) out.push({ d, t });
+  return out;
+}
+
+// Everything that depends on other choices: what shows, what's forced, the button text.
+function syncEditor() {
+  const type = segValue("ed-type");
+  show("ed-options", type === "options");
+  show("ed-answer-opts", type !== "none");
+  let when = segValue("ed-when");
+  const keepBox = $("ed-keep");
+  // "Só no botão" only makes sense for something you keep.
+  show("ed-when-button", keepBox.checked || !!edId);
+  if (when === "button" && !keepBox.checked && !edId) { when = "now"; segSelect("ed-when", "now"); }
+  show("ed-schedule", when === "schedule");
+  const weekly = when === "schedule" && edSlots().length > 0;
+  // Repeating every week always stays saved.
+  keepBox.disabled = weekly;
+  if (weekly) keepBox.checked = true;
+  show("ed-keep-wrap", !edId || ed.keep === false);
+  const hint = weekly ? "Repetir toda semana fica salvo nos recados."
+    : when === "schedule" && !keepBox.checked ? "Some dos recados depois da última data." : "";
+  $("ed-keep-hint").textContent = hint;
+  show("ed-keep-hint", !!hint);
+  // Mute only matters for something that comes back.
+  show("ed-mute-wrap", keepBox.checked || weekly);
+  // Summary of the folded options
+  const nag = Number($("ed-nag").value), dur = Number($("ed-duration").value);
+  const sum = [
+    type !== "none" ? (segValue("ed-visibility") === "owner" ? "só eu vejo" : "todo mundo vê") : null,
+    type !== "none" ? (nag ? `insiste a cada ${nag >= 60 ? nag / 60 + " h" : nag + " min"}` : "não insiste") : null,
+    `fica ${dur >= 24 ? dur / 24 + (dur === 24 ? " dia" : " dias") : dur + " h"}`,
+  ].filter(Boolean).join(" · ");
+  $("ed-more-sum").textContent = sum;
+  const v = T.verb;
+  $("ed-save").textContent = when === "now" ? (keepBox.checked ? `Salvar e ${v.toLowerCase()}` : v)
+    : when === "schedule" ? "Agendar" : "Salvar";
+}
+["ed-nag", "ed-duration"].forEach((id) => $(id).addEventListener("change", syncEditor));
+$("ed-keep").addEventListener("change", syncEditor);
 
 function loadEditor(t) {
   ed = JSON.parse(JSON.stringify({ ...BLANK, ...t, schedule: { ...BLANK.schedule, ...(t.schedule || {}) } }));
@@ -1801,60 +1970,55 @@ function loadEditor(t) {
   $("ed-options").value = (ed.options || []).join(", ");
   segSelect("ed-type", ed.answerType);
   segSelect("ed-visibility", ed.visibility);
-  segSelect("ed-when", ed.schedule.on ? "schedule" : "button");
-  $("ed-nag").value = String(ed.nagEveryMin || 0);
-  $("ed-duration").value = String(ed.durationHours || 12);
-  // Only quarter hours: the server checks schedules every 15 minutes.
-  const snap = (hm) => { const [h, m] = String(hm || "12:00").split(":").map(Number); const q = Math.round(m / 15) * 15; return `${String((h + (q === 60 ? 1 : 0)) % 24).padStart(2, "0")}:${String(q % 60).padStart(2, "0")}`; };
-  fillTimeSelect($("ed-time"), TIMES_15, snap(ed.schedule.time));
+  $("ed-nag").value = String(ed.nagEveryMin ?? 15);
+  $("ed-duration").value = String(ed.durationHours || 2);
   $("ed-mute").checked = ed.allowMute !== false;
+  // Schedule → editable state (quarter hours only: the server checks every 15 minutes)
+  const snap = (hm) => { const [h, m] = String(hm || "08:00").split(":").map(Number); const q = Math.round(m / 15) * 15; return `${pad2s((h + (q === 60 ? 1 : 0)) % 24)}:${pad2s(q % 60)}`; };
+  const slots = scheduleSlots(ed.schedule).map((x) => ({ d: x.d, t: snap(x.t) }));
+  ed.days = new Set(slots.map((x) => x.d));
+  ed.dayTimes = {};
+  for (const x of slots) (ed.dayTimes[x.d] ||= []).includes(x.t) || ed.dayTimes[x.d].push(x.t);
+  const sets = Object.values(ed.dayTimes).map((l) => l.sort().join(","));
+  ed.perDay = new Set(sets).size > 1;
+  ed.times = sets.length ? sets[0].split(",") : ["08:00"];
+  ed.dates = (ed.schedule.dates || []).filter((x) => parseWhen(x).getTime() > Date.now());
+  const nextHour = new Date(Math.ceil((Date.now() + 1) / 3600000) * 3600000);
+  $("ed-date-day").value = dateKeyOf(nextHour);
+  $("ed-date-day").min = dateKeyOf(new Date());
+  fillTimeSelect($("ed-date-time"), TIMES_15, `${pad2s(nextHour.getHours())}:00`);
   renderRecipients();
-  renderEdDays();
-  syncEditorVisibility();
+  renderSchedule();
 }
 
-let edQuick = false; // opened from the feed's ＋: sends now, saving is optional
-
-function syncQuickMode() {
-  const keep = $("ed-keep").checked;
-  show("ed-keep-wrap", edQuick);
-  // A schedule (and muting future ones) only makes sense for a saved recado.
-  show("ed-when-wrap", !edQuick || keep);
-  show("ed-mute-wrap", !edQuick || keep);
-  if (edQuick && !keep) segSelect("ed-when", "button");
-  syncEditorVisibility();
-  $("ed-save").textContent = edQuick ? (keep && segValue("ed-when") === "schedule" ? `Salvar e ${T.verb.toLowerCase()} agora` : T.verb) : "Salvar";
-}
-$("ed-keep").addEventListener("change", syncQuickMode);
-$("ed-when").addEventListener("click", () => setTimeout(syncQuickMode, 0));
-
+let edQuick = false; // opened from the feed's ＋ (same form; starts as "send now, don't keep")
 function openEditor(t, opts = {}) {
   edQuick = !!opts.quick;
   edId = t ? t.id : null;
   $("editor-title").textContent = edQuick ? `${T.verb} agora` : t ? `Editar ${T.one}` : `${T.novo} ${T.one}`;
-  $("ed-keep").checked = false;
   $("ed-keep-label").textContent = `Salvar nos meus ${T.many}`;
   show("ed-delete", !!t);
-  show("starter-wrap", !t);
-  const chips = $("starter-chips");
-  chips.innerHTML = "";
-  for (const st of STARTERS) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    b.textContent = `${st.emoji} ${st.label}`;
-    b.onclick = () => {
-      loadEditor(st);
-      syncQuickMode();
-      chips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("selected", c === b));
-      if (Array.isArray(st.recipients) && !st.recipients.length) toast("Agora escolhe pra quem. 👇");
-    };
-    chips.appendChild(b);
-  }
+  show("ed-random", !t);
   loadEditor(t || BLANK);
-  syncQuickMode();
+  $("ed-keep").checked = t ? t.keep !== false : !edQuick;
+  segSelect("ed-when", t ? (t.schedule && t.schedule.on ? "schedule" : "button") : edQuick ? "now" : "button");
+  $("ed-more").open = false;
+  syncEditor();
   $("dlg-editor").showModal();
 }
+let lastStarter = -1;
+$("ed-random").addEventListener("click", () => {
+  let i;
+  do { i = Math.floor(Math.random() * STARTERS.length); } while (i === lastStarter && STARTERS.length > 1);
+  lastStarter = i;
+  const st = STARTERS[i];
+  $("ed-emoji").value = st.emoji;
+  $("ed-title").value = st.title;
+  $("ed-body").value = st.body;
+  $("ed-options").value = st.options.join(", ");
+  segSelect("ed-type", st.answerType);
+  syncEditor();
+});
 
 $("ed-cancel").addEventListener("click", () => $("dlg-editor").close());
 $("ed-delete").addEventListener("click", async () => {
@@ -1866,8 +2030,11 @@ $("ed-delete").addEventListener("click", async () => {
 $("editor-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const type = segValue("ed-type") || "none";
-  const scheduleOn = segValue("ed-when") === "schedule";
+  const when = segValue("ed-when") || "now";
+  const keep = $("ed-keep").checked || (!!edId && ed.keep !== false);
   const options = $("ed-options").value.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 6);
+  const slots = when === "schedule" ? edSlots() : [];
+  const dates = when === "schedule" ? ed.dates.filter((x) => parseWhen(x).getTime() > Date.now()).sort() : [];
   const data = {
     emoji: firstGrapheme($("ed-emoji").value.trim()) || "🔔",
     title: $("ed-title").value.trim(),
@@ -1876,45 +2043,55 @@ $("editor-form").addEventListener("submit", async (e) => {
     options: type === "options" ? options : [],
     recipients: ed.recipients === "all" ? "all" : (ed.recipients || []),
     visibility: segValue("ed-visibility") || "all",
-    allowMute: $("ed-mute").checked,
+    allowMute: keep && $("ed-mute").checked,
     nagEveryMin: type === "none" ? 0 : Number($("ed-nag").value),
     durationHours: Number($("ed-duration").value),
-    schedule: { on: scheduleOn, days: ed.schedule.days || [], time: $("ed-time").value },
+    schedule: { on: slots.length > 0 || dates.length > 0, slots, dates },
+    keep,
     updatedAt: serverTimestamp(),
   };
   if (!data.title) return toast("Dá um título, vai.");
   if (data.recipients !== "all" && !data.recipients.length) return toast("Pra quem? Escolhe alguém.");
   if (type === "options" && options.length < 2) return toast("Coloca pelo menos 2 opções.");
-  if (scheduleOn && !data.schedule.days.length) return toast("Escolhe pelo menos um dia.");
+  if (when === "schedule") {
+    if (ed.days.size && !slots.length) return toast("Escolhe um horário pros dias marcados.");
+    if (!data.schedule.on) return toast("Escolhe dias da semana ou uma data. 📅");
+  }
 
-  if (edQuick) {
-    // Send now; optionally also save it as a recado.
-    const keep = $("ed-keep").checked;
-    const res = await withBusy($("ed-save"), async () => {
-      if (keep) {
-        const ref = await addDoc(collection(db, "templates"), { ...data, ownerUid: auth.currentUser.uid, createdAt: serverTimestamp() });
-        return api.fireTemplate({ templateId: ref.id });
-      }
-      const { updatedAt, schedule, allowMute, ...once } = data;
-      return api.sendOnce(once);
-    });
+  // Send now, without keeping it
+  if (when === "now" && !keep) {
+    const { updatedAt, schedule, allowMute, keep: _k, ...once } = data;
+    const res = await withBusy($("ed-save"), () => api.sendOnce(once));
     if (!res) return;
     $("dlg-editor").close();
     setTab("feed");
     highlightRound = res.data.id;
     renderRounds();
-    toast(`${T.done(res.data.recipients)}${keep ? ` E ficou salv${T.o}. ✨` : ""}`, 4000);
+    toast(T.done(res.data.recipients), 4000);
     return;
   }
 
-  const ok = await withBusy($("ed-save"), async () => {
-    if (edId) await updateDoc(doc(db, "templates", edId), data);
-    else await addDoc(collection(db, "templates"), { ...data, ownerUid: auth.currentUser.uid, createdAt: serverTimestamp() });
-    return true;
-  }, "Salvando…");
-  if (!ok) return;
+  // Save (new or edited); "Agora" also sends right away.
+  const res = await withBusy($("ed-save"), async () => {
+    let id = edId;
+    if (id) await updateDoc(doc(db, "templates", id), data);
+    else id = (await addDoc(collection(db, "templates"), { ...data, ownerUid: auth.currentUser.uid, createdAt: serverTimestamp() })).id;
+    if (when === "now") return api.fireTemplate({ templateId: id });
+    return { data: null };
+  }, when === "schedule" ? "Agendando…" : "Salvando…");
+  if (!res) return;
   $("dlg-editor").close();
-  toast(scheduleOn ? `Agendado: ${scheduleText(data.schedule)}. ⏰` : `Salv${T.o}! Tá lá nos ${T.seus} ${T.many}. ✨`);
+  if (when === "now" && res.data) {
+    setTab("feed");
+    highlightRound = res.data.id;
+    renderRounds();
+    toast(`${T.done(res.data.recipients)} E ficou salv${T.o}. ✨`, 4000);
+  } else if (when === "schedule") {
+    const nx = nextFire(data.schedule);
+    toast(`Agendado${nx ? `: próximo ${whenLabel(nx)}` : ""}. ⏰${keep ? "" : " Some depois da última data."}`, 4500);
+  } else {
+    toast(`Salv${T.o}! Tá lá nos ${T.seus} ${T.many}. ✨`);
+  }
 });
 
 // =====================================================================

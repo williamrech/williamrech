@@ -1126,3 +1126,36 @@ input[type="checkbox"] { padding: 0; min-height: 0; margin: 0; }
 .adm-lock { position: absolute; top: 6px; right: 8px; font-size: 0.8rem; line-height: 1; }
 /* The footer (version) is drawn above <main>; let taps pass through so the whole ＋ works */
 footer { pointer-events: none; }
+
+/* ---------- Editor: compact, with Agendar (weekly + dates) and folded options ---------- */
+.ed-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ed-top h2 { margin: 0; }
+.ed-sched { display: grid; gap: 12px; margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: rgba(0, 0, 0, 0.15); }
+.sched-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.8rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+.sched-head .link { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 0.82rem; padding: 0; }
+.day-pills { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.day-pill { padding: 7px 0; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg); font-weight: 700; min-height: 0; font-size: 0.85rem; }
+.day-pill.on { background: var(--caramel); color: var(--on-accent); border-color: transparent; }
+.time-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.time-chip { display: inline-flex; align-items: center; gap: 2px; padding: 4px 4px 4px 10px; font-variant-numeric: tabular-nums; }
+.time-chip button { border: 0; background: transparent; color: inherit; padding: 0 5px; min-height: 0; font-size: 0.75rem; opacity: .8; }
+select.add-time { width: auto; padding: 5px 10px; min-height: 0; font-size: 0.85rem; border-radius: 999px; }
+.day-line { display: flex; align-items: flex-start; gap: 8px; }
+.day-line .time-row { margin-top: 4px; flex: 1; }
+.day-name { flex: none; width: 34px; padding-top: 10px; font-size: 0.8rem; color: var(--muted); }
+.sched-empty { margin: 6px 0 0; }
+#ed-dates:empty { display: none; }
+.date-add { display: flex; gap: 6px; margin-top: 8px; }
+.date-add input { flex: 1; min-width: 0; margin: 0; }
+.date-add select { width: auto; margin: 0; }
+.date-add .small-btn { flex: none; }
+.chips.quick { margin-top: 6px; }
+.chips.quick .chip { font-size: 0.8rem; padding: 4px 10px; }
+#ed-keep-hint { margin: 4px 2px 0; }
+.ed-more { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+.ed-more summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; list-style: none; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; padding: 4px 0; }
+.ed-more summary::-webkit-details-marker { display: none; }
+.ed-more summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+.ed-more[open] summary::after { content: "▴"; }
+.next-fire { display: block; color: var(--crema); }
+select.add-time { -webkit-appearance: none; appearance: none; background-image: none; padding-right: 10px; text-align: center; }
