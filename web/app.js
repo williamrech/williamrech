@@ -1262,7 +1262,8 @@ function relTime(ts) {
 
 function recipientsText(r) {
   if (r === "all") return "Todo mundo";
-  const names = (r || []).map(nameOf);
+  const self = typeof auth !== "undefined" && auth.currentUser && auth.currentUser.uid;
+  const names = (r || []).map((u) => (u === self ? "você" : nameOf(u)));
   return names.length ? names.join(", ") : "ninguém";
 }
 function scheduleText(s) {
@@ -1768,6 +1769,7 @@ function renderRecipients() {
     wrap.appendChild(b);
   };
   mk("Todo mundo", "all");
+  mk("Eu", uid); // send only to yourself (a reminder, a test) — or add yourself to a list
   Object.entries(family).filter(([u, p]) => u !== uid && p.name)
     .sort((a, b) => a[1].name.localeCompare(b[1].name))
     .forEach(([u, p]) => mk(p.name, u));
