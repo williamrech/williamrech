@@ -1128,3 +1128,4 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .log-line.bad .log-status { color: #f29a90; font-weight: 600; }
 .log-line.meh .log-status { color: #f0cc7a; }
 .log-line { padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.list-sub { list-style: none; margin-top: 10px; }

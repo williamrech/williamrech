@@ -205,7 +205,7 @@ function applyTerms() {
   const set = (sel, text) => { const el = document.querySelector(sel); if (el) el.textContent = text; };
   set('.tab[data-tab="chamados"]', T.Many);
   set("#chamados-new .tile-title", `${T.novo} ${T.one}`);
-  set("#stab-btn-muted", "Silenciados");
+  set("#stab-btn-muted", "Silenciados e ocultos");
   if (typeof renderChamados === "function" && typeof auth !== "undefined" && auth.currentUser) renderChamados();
 }
 
@@ -992,9 +992,10 @@ function renderSettings() {
 
   const list = $("muted-list");
   const mutes = Object.entries((me && me.mutes) || {});
-  // The "Silenciados" tab only exists while something is silenced.
-  show("stab-btn-muted", mutes.length > 0);
-  if (!mutes.length && !$("stab-muted").hidden) setSettingsTab("general");
+  const hiddenOnes = Object.entries((me && me.hidden) || {}).filter(([, v]) => v);
+  // The tab only exists while something is silenced or hidden.
+  show("stab-btn-muted", mutes.length + hiddenOnes.length > 0);
+  if (!mutes.length && !hiddenOnes.length && !$("stab-muted").hidden) setSettingsTab("general");
   list.innerHTML = "";
   for (const [tid, m] of mutes) {
     const li = document.createElement("li");
@@ -1005,6 +1006,26 @@ function renderSettings() {
     b.onclick = async () => {
       const res = await withBusy(b, () => api.muteTemplate({ templateId: tid, mute: false }), "…");
       if (res) toast(`Reativado. Bem-vind${g(me, "o", "a")} de volta ao caos. 🔔`);
+    };
+    li.appendChild(b);
+    list.appendChild(li);
+  }
+  // Hidden from my feed ("Ocultar do meu feed"): show them again.
+  if (hiddenOnes.length) list.insertAdjacentHTML("beforeend", `<li class="muted small list-sub">Ocultos do seu feed</li>`);
+  for (const [rid, v] of hiddenOnes) {
+    const r = rounds.find((x) => x.id === rid);
+    const title = (v && v.title) || (r && r.title) || "Pergunta antiga";
+    const emoji = (v && v.emoji) || (r && r.emoji) || "🙈";
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${esc(emoji)} ${esc(title)}</span>`;
+    const b = document.createElement("button");
+    b.className = "link small";
+    b.textContent = "mostrar de novo";
+    b.onclick = async () => {
+      try {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [rid]: deleteField() }, updatedAt: serverTimestamp() }, { merge: true });
+        toast("Voltou pro seu feed. 👀");
+      } catch (err) { toast(friendlyError(err)); }
     };
     li.appendChild(b);
     list.appendChild(li);
@@ -1795,7 +1816,7 @@ function buildRound(r, ask) {
     } else {
       menu.push({ label: "🙈 Ocultar do meu feed", run: async () => {
         try {
-          await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [r.id]: true }, updatedAt: serverTimestamp() }, { merge: true });
+          await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [r.id]: { title: r.title, emoji: r.emoji || "🔔", at: Date.now() } }, updatedAt: serverTimestamp() }, { merge: true });
           toast("Ocultado do seu feed. 🙈");
         } catch (err) { toast(friendlyError(err)); }
       } });
