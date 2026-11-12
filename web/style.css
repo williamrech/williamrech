@@ -1124,3 +1124,5 @@ input[type="checkbox"] { padding: 0; min-height: 0; margin: 0; }
 #adm-palettes .adm-row-text .muted { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 #adm-palettes .adm-row-text { padding-right: 18px; }
 .adm-lock { position: absolute; top: 6px; right: 8px; font-size: 0.8rem; line-height: 1; }
+/* The footer (version) is drawn above <main>; let taps pass through so the whole ＋ works */
+footer { pointer-events: none; }
