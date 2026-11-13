@@ -1849,11 +1849,9 @@ async function fire(t, btn) {
 
 // Home: live feed of rounds, in three groups from MY point of view:
 //  "Pra você"       — waiting for my answer (big buttons, on top)
-//  "Em andamento"   — I answered or sent it, someone's still missing; avisos still open
-//  "Resolvidos"     — everyone answered, or it's closed. One line each; today's shown, older behind a tap.
-// A question with a deadline stays until the deadline / the sender closes it; "resolvido" only moves it down.
-const allAnswered = (r) => r.answerType !== "none" && r.recipients.length > 0 && r.recipients.every((u) => r.answers && r.answers[u]);
-const isDone = (r) => !r.open || allAnswered(r);
+//  "Em andamento"   — still running (until its deadline or the sender closes it), even if everyone answered
+//  "Resolvidos"     — ended. Folded to one line each; today's shown, older behind a tap.
+const isDone = (r) => !r.open;
 let showOlderDone = false;
 function renderRounds() {
   const list = $("rounds");
@@ -1916,7 +1914,7 @@ function buildRound(r, ask) {
   const uid = auth.currentUser.uid;
   const li = document.createElement("li");
   const done = isDone(r);
-  const collapsed = !r.open && !expandedRounds.has(r.id) && r.id !== highlightRound; // only ended rounds start folded
+  const collapsed = done && !expandedRounds.has(r.id) && r.id !== highlightRound;
   li.className = "round" + (ask ? " ask" : "") + (done ? " closed" : "") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
   const mine = r.ownerUid === uid;
   const isRecipient = r.recipients.includes(uid);
@@ -1960,7 +1958,7 @@ function buildRound(r, ask) {
     <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
       <div class="round-text"><div class="round-title">${esc(r.title)}</div>
       ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
-      ${collapsed ? `<div class="closed-summary small">${esc(doneSummary)} <span class="chev">▾</span></div>` : ""}</div>
+      ${done ? `<div class="closed-summary small">${collapsed ? esc(doneSummary) + " " : ""}<span class="chev">${collapsed ? "▾" : "▴ recolher"}</span></div>` : ""}</div>
       <div class="round-corner"></div></div>
     ${peopleHtml}
     <div class="my-answer"></div>
@@ -1988,11 +1986,11 @@ function buildRound(r, ask) {
   // Status icons: tap for the details.
   li.querySelectorAll(".st").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); toast(b.dataset.detail || "Sem detalhes.", 4500); }));
 
-  if (collapsed) {
-    // Tap the header of an ended round to unfold it (no folding back).
+  if (done) {
+    // Tap the header of an ended round to expand / collapse it.
     li.querySelector(".round-head").addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
-      expandedRounds.add(r.id);
+      expandedRounds.has(r.id) ? expandedRounds.delete(r.id) : expandedRounds.add(r.id);
       if (highlightRound === r.id) highlightRound = null;
       renderRounds();
     });
