@@ -1182,3 +1182,16 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .style-preview { position: relative; cursor: pointer; padding-right: 44px; padding-left: 44px; }
 .style-preview:active { transform: scale(.99); }
 .style-preview .edit-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 1.05rem; opacity: .8; }
+
+/* ---------- Curses ---------- */
+.curse-banner { margin: 6px auto 0; max-width: 520px; padding: 8px 12px; border-radius: 12px; font-size: 0.85rem; text-align: center; cursor: pointer;
+  background: color-mix(in srgb, var(--caramel) 16%, transparent); border: 1px dashed color-mix(in srgb, var(--caramel) 55%, transparent); color: var(--fg); }
+.curse-banner[hidden] { display: none; }
+.cursed .uname, .cursed { background: linear-gradient(100deg, var(--crema) 0%, var(--caramel) 30%, var(--fg) 50%, var(--caramel) 70%, var(--crema) 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: curse-shimmer 3.2s linear infinite; }
+@keyframes curse-shimmer { to { background-position: -250% 0; } }
+@media (prefers-reduced-motion: reduce) { .cursed .uname, .cursed { animation: none; } }
+.curses { display: grid; gap: 6px; margin-bottom: 10px; }
+.curse-row { display: grid; grid-template-columns: minmax(70px, 34%) 1fr 40px; gap: 6px; align-items: center; }
+.curse-who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.curse-row input { margin: 0; min-width: 0; }

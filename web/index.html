@@ -57,6 +57,7 @@
     <div class="me-row">
       <button id="me-chip" class="me-chip" aria-label="Personalizar seu nome"></button>
     </div>
+    <div id="curse-banner" class="curse-banner" role="status" hidden></div>
   </header>
 
   <main>
@@ -370,6 +371,8 @@
         <label class="field">Paleta<select id="occ-palette"></select></label>
         <label class="field">Efeito<select id="occ-effect"><option value="">Nenhum</option></select></label>
       </div>
+      <p class="muted small pick-label">🧙 Maldições (nome que a pessoa ganha nesse dia)</p>
+      <div id="occ-curses" class="curses"></div>
       <label class="field">Desenhos (decor)<input id="occ-decor" maxlength="300" placeholder="pumpkin.svg ghost.svg 🦇"></label>
       <div class="chips mini-picker" id="occ-decor-picker"></div>
       <div class="pick-row">
@@ -476,6 +479,7 @@
     <!-- Tab: name & style (everyone sees it in the feed) -->
     <div id="stab-name" role="tabpanel" hidden>
       <div id="style-preview" class="style-preview" role="button" tabindex="0" aria-label="Trocar apelido" title="Trocar apelido"></div>
+      <p class="muted small center" id="curse-note" hidden></p>
       <p class="muted small pick-label">Cor</p>
       <div class="chips" id="style-colors"></div>
       <p class="muted small pick-label">Letra</p>

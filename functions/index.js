@@ -79,9 +79,61 @@ function isQuiet(user, now = spParts()) {
 // ---------------------------------------------------------------------------
 // Push helpers
 // ---------------------------------------------------------------------------
+// ---------- Curses: an active occasion can replace someone's name (admin → Ocasiões → Maldições) ----------
+// Same date rules as the app (12-25, 2026-11-10, fri-13, 2sun-05, lastfri-11, easter-47, ranges).
+const WDAY = { sun: 0, dom: 0, mon: 1, seg: 1, tue: 2, ter: 2, wed: 3, qua: 3, thu: 4, qui: 4, fri: 5, sex: 5, sat: 6, sab: 6 };
+const p2 = (n) => String(n).padStart(2, "0");
+function easterUTC(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return Date.UTC(y, month - 1, day);
+}
+function matchesPattern(pat, t) {
+  pat = String(pat).trim().toLowerCase();
+  if (!pat) return false;
+  let m;
+  if ((m = pat.match(/^(\d\d-\d\d)\.\.(\d\d-\d\d)$/))) { const [a, b] = [m[1], m[2]]; return a <= b ? t.md >= a && t.md <= b : t.md >= a || t.md <= b; }
+  if ((m = pat.match(/^(\d{4}-\d\d-\d\d)\.\.(\d{4}-\d\d-\d\d)$/))) return t.key >= m[1] && t.key <= m[2];
+  if ((m = pat.match(/^easter([+-]\d+)?\.\.easter([+-]\d+)?$/))) {
+    const diff = Math.round((Date.UTC(t.y, t.m - 1, t.d) - easterUTC(t.y)) / 86400000);
+    return diff >= Number(m[1] || 0) && diff <= Number(m[2] || 0);
+  }
+  if (/^\d{4}-\d\d-\d\d$/.test(pat)) return pat === t.key;
+  if (/^\d\d-\d\d$/.test(pat)) return pat === t.md;
+  if ((m = pat.match(/^([a-z]{3})-(\d\d?)$/)) && m[1] in WDAY) return t.weekday === WDAY[m[1]] && t.d === Number(m[2]);
+  if ((m = pat.match(/^(\d|last)([a-z]{3})-(\d\d)$/)) && m[2] in WDAY) {
+    if (t.m !== Number(m[3]) || t.weekday !== WDAY[m[2]]) return false;
+    if (m[1] === "last") return t.d + 7 > new Date(Date.UTC(t.y, t.m, 0)).getUTCDate();
+    return Math.ceil(t.d / 7) === Number(m[1]);
+  }
+  if ((m = pat.match(/^easter([+-]\d+)?$/))) {
+    const tg = new Date(easterUTC(t.y) + Number(m[1] || 0) * 86400000);
+    return `${tg.getUTCFullYear()}-${p2(tg.getUTCMonth() + 1)}-${p2(tg.getUTCDate())}` === t.key;
+  }
+  return false;
+}
+let curseCache = { at: 0, map: {} };
+async function activeCurses() {
+  if (Date.now() - curseCache.at < 60000) return curseCache.map;
+  const fun = (await db.doc("config/fun").get()).data() || {};
+  const sp = spParts();
+  const [y, m, d] = sp.key.split("-").map(Number);
+  const t = { y, m, d, key: sp.key, md: sp.key.slice(5), weekday: sp.weekday };
+  const list = Object.values(fun.occasions || {})
+    .filter((o) => o && typeof o === "object" && o.enabled !== false && String(o.when || "").split(",").some((x) => matchesPattern(x, t)))
+    .sort((a, b) => (Number(a.priority) || 0) - (Number(b.priority) || 0));
+  const map = {};
+  for (const o of list) for (const [uid, n] of Object.entries(o.curses || {})) if (typeof n === "string" && n.trim()) map[uid] = n.trim().slice(0, 30);
+  curseCache = { at: Date.now(), map };
+  return map;
+}
+const cursed = (uid, data, curses) => (curses[uid] ? { ...data, name: curses[uid], realName: data.name } : data);
+
 async function loadUsers() {
-  const snap = await db.collection("users").get();
-  return Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]));
+  const [snap, curses] = await Promise.all([db.collection("users").get(), activeCurses()]);
+  return Object.fromEntries(snap.docs.map((d) => [d.id, cursed(d.id, d.data(), curses)]));
 }
 
 // ---------------------------------------------------------------------------
@@ -240,8 +292,8 @@ async function sendToUids(uids, msg, path, meta = {}, ctx = {}) {
 }
 
 async function profile(auth) {
-  const snap = await db.doc(`users/${auth.uid}`).get();
-  const data = snap.exists ? snap.data() : {};
+  const [snap, curses] = await Promise.all([db.doc(`users/${auth.uid}`).get(), activeCurses()]);
+  const data = cursed(auth.uid, snap.exists ? snap.data() : {}, curses);
   return { ...data, name: data.name || (auth.token.email || "Alguém").split("@")[0], gender: data.gender || "m" };
 }
 
@@ -780,7 +832,7 @@ exports.quick = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB", c
     if (!snap.exists) return out(200, { ok: false, msg: "Essa pergunta não existe mais." });
     const value = (snap.get("options") || [])[i];
     const uSnap = await db.doc(`users/${uid}`).get();
-    const u = uSnap.exists ? uSnap.data() : {};
+    const u = cursed(uid, uSnap.exists ? uSnap.data() : {}, await activeCurses());
     const r = await applyAnswer(uid, { name: u.name || "Alguém", gender: u.gender || "m" }, roundId, value, "notificação");
     return out(200, { ok: true, value: r.value });
   } catch (e) {

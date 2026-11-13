@@ -95,6 +95,8 @@ function todaysOccasion() {
   list.sort((a, b) => (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
   const merged = {};
   for (const [id, o] of list) { Object.assign(merged, o); merged.id = id; }
+  // Curses from every active occasion add up (higher priority wins per person).
+  merged.curses = Object.assign({}, ...list.map(([, o]) => (o.curses && typeof o.curses === "object" ? o.curses : {})));
   return list.length ? merged : null;
 }
 
@@ -117,6 +119,7 @@ let todayOcc = null;
 // Chooses the look: an occasion forces its palette on everyone; otherwise the user's choice.
 function applyLook() {
   todayOcc = todaysOccasion();
+  if (typeof renderMeChip === "function" && auth.currentUser) setTimeout(() => { renderMeChip(); renderRounds(); }, 0);
   applyTerms();
   let userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
   const chosen = getPalette(userPal);
@@ -1307,8 +1310,16 @@ function styledName(name, style) {
     `<span class="uname f-${st.font} x-${st.effect}" style="--uc:${st.color}">${esc(name)}</span></span>`;
 }
 
+// Curse: today's occasion can replace someone's name (shimmering in the theme's colors).
+function curseOf(uid) {
+  const c = todayOcc && todayOcc.curses && todayOcc.curses[uid];
+  return typeof c === "string" && c.trim() ? c.trim() : null;
+}
+const displayName = (uid, fallback) => curseOf(uid) || (family[uid] && family[uid].name) || fallback || "?";
 function nameHtml(uid, fallback) {
   const p = family[uid];
+  const c = curseOf(uid);
+  if (c) return `<span class="cursed">${styledName(c, p && p.style)}</span>`;
   return styledName((p && p.name) || fallback || "?", p && p.style);
 }
 
@@ -1316,13 +1327,27 @@ function renderMeChip() {
   const chip = $("me-chip");
   if (!chip || !auth.currentUser) return;
   const p = family[auth.currentUser.uid] || me || {};
-  chip.innerHTML = p.name ? styledName(p.name, p.style) : "…";
+  chip.innerHTML = p.name || curseOf(auth.currentUser.uid) ? nameHtml(auth.currentUser.uid, p.name) : "…";
+  renderCurseBanner();
+}
+// The cursed person gets a small banner (tap: who did it).
+function renderCurseBanner() {
+  const el = $("curse-banner");
+  if (!el || !auth.currentUser) return;
+  const c = curseOf(auth.currentUser.uid);
+  show("curse-banner", !!c);
+  if (!c) return;
+  const f = ((family[auth.currentUser.uid] || me || {}).gender) === "f";
+  el.innerHTML = `🧙 Você foi amaldiçoad${f ? "a" : "o"}! Enquanto durar a ocasião, todo mundo te vê como <b>${esc(c)}</b>.`;
 }
 
 let draftStyle = null;
 function renderStyleEditor() {
   const p = me || {};
   $("style-preview").innerHTML = `${styledName(p.name || "Você", draftStyle)}<span class="edit-icon" aria-hidden="true">✏️</span>`;
+  const curse = auth.currentUser && curseOf(auth.currentUser.uid);
+  show("curse-note", !!curse);
+  if (curse) $("curse-note").innerHTML = `Hoje a maldição fala mais alto: você aparece como <b>${esc(curse)}</b>.`;
   const mk = (wrapId, entries, key, render) => {
     const wrap = $(wrapId);
     wrap.innerHTML = "";
@@ -1415,7 +1440,7 @@ const BLANK = { emoji: "", title: "", body: "", answerType: "yesno", options: []
   nagEveryMin: 15, durationHours: 2, schedule: { on: false, slots: [], dates: [] }, allowMute: true, keep: true };
 
 const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
-const nameOf = (uid) => (family[uid] && family[uid].name) || "?";
+const nameOf = (uid) => displayName(uid);
 
 // Deadline, both ways: "até 18:00" + "faltam 2 h 15 min" (urgent in the last hour).
 function deadlineParts(ts) {
@@ -1772,6 +1797,8 @@ function setTab(name) {
   if (!restoreAdminTab) { try { localStorage.setItem("tab", name); } catch {} }
 }
 document.querySelectorAll(".tab[data-tab]").forEach((b) => b.addEventListener("click", () => { restoreAdminTab = false; setTab(b.dataset.tab); }));
+$("curse-banner").addEventListener("click", () => toast("Coisa do Admin. Reclama com ele. 😈", 3500));
+
 // Swipe sideways to change tab. No live sliding: a short, slow or mostly-vertical swipe is
 // ignored; a clear sideways swipe (≥ 90 px or a quarter of the screen, at least twice as wide
 // as it is tall) goes to the next / previous tab. Ignored on sliders, text fields, sideways
@@ -1920,7 +1947,7 @@ function buildRound(r, ask) {
     const answered = Object.entries(r.answers || {});
     if (r.answerType === "none") doneSummary = "aviso";
     else if (!canSeeAll) doneSummary = myAnswer ? `você: ${myAnswer.value}` : "sem resposta sua";
-    else doneSummary = answered.map(([u, a]) => `${u === uid ? "você" : (family[u] && family[u].name) || a.name}: ${a.value}`).join(" · ") || "ninguém respondeu";
+    else doneSummary = answered.map(([u, a]) => `${u === uid ? "você" : displayName(u, a.name)}: ${a.value}`).join(" · ") || "ninguém respondeu";
   }
 
   // Footer: who sent it on the left, the time left on the right (exact time on long-press/hover).
@@ -2769,7 +2796,11 @@ $("adm-add-form").addEventListener("submit", async (e) => {
 // that happened: who it went to and whether it arrived / was opened, reminders, answers, views.
 // Neutral by default; red / amber only for problems.
 const NOISY_KINDS = ["resposta", "mudou de ideia", "silenciou", "reativou"]; // telling others about an answer
-function personName(uid, fallback) { return (uid && family[uid] && family[uid].name) || fallback || "?"; }
+function personName(uid, fallback) {
+  const real = (uid && family[uid] && family[uid].name) || fallback || "?";
+  const c = curseOf(uid);
+  return c ? `${c} (${real})` : real; // admins always see who's under the curse
+}
 const hm = (ms) => { const d = new Date(ms); return `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`; };
 
 function logGroups(entries) {
@@ -3339,6 +3370,9 @@ function readOccForm() {
   put("palette", $("occ-palette").value);
   put("decor", $("occ-decor").value.trim());
   put("effect", $("occ-effect").value);
+  const curses = {};
+  document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, 30); });
+  if (Object.keys(curses).length) o.curses = curses;
   const pr = $("occ-priority").value.trim();
   if (pr !== "") o.priority = Number(pr) || 0;
   if (!$("occ-enabled").checked) o.enabled = false;
@@ -3349,6 +3383,28 @@ function renderWhenInfo() {
   if (!when) { $("occ-when-info").textContent = "Sem data: só aparece na prévia."; return; }
   const next = nextDates(when, 3);
   $("occ-when-info").textContent = next.length ? `${next[0].i === 0 ? "✓ Hoje é dia! · " : ""}Próximas: ${next.map(fmtDate).join(", ")}` : "⚠ Não cai em nenhum dia dos próximos 2 anos.";
+}
+// Maldições: a name per person (empty = no curse), with 🎲 themed suggestions.
+const CURSE_IDEAS = ["Conde Drácula", "Múmia Desenrolada", "Bruxa do 71", "Fantasma Chorão", "Lobisomem de Pijama", "Zumbi Sonolento",
+  "Abóbora Podre", "Morcego Fofoqueiro", "Caveira Risonha", "Gato Preto", "Vampira Dentuça", "Frankenstein Cansado",
+  "Duende Encrenqueiro", "Saci Sem Gorro", "Mula Sem Cabeça", "Cuca Mal-Humorada", "Papai Noel Falso", "Rena Atrapalhada"];
+function renderCurseFields(curses) {
+  const box = $("occ-curses");
+  box.innerHTML = "";
+  Object.entries(family).filter(([, p]) => p && p.name).sort((a, b) => a[1].name.localeCompare(b[1].name)).forEach(([uid, p]) => {
+    const row = document.createElement("div");
+    row.className = "curse-row";
+    row.innerHTML = `<span class="curse-who"></span><input data-uid="${esc(uid)}" maxlength="30" placeholder="sem maldição"><button type="button" class="icon-btn" aria-label="Sugerir nome">🎲</button>`;
+    row.querySelector(".curse-who").textContent = p.name;
+    const inp = row.querySelector("input");
+    inp.value = curses[uid] || "";
+    row.querySelector("button").onclick = () => {
+      let n;
+      do { n = CURSE_IDEAS[Math.floor(Math.random() * CURSE_IDEAS.length)]; } while (n === inp.value && CURSE_IDEAS.length > 1);
+      inp.value = n;
+    };
+    box.appendChild(row);
+  });
 }
 function openOccasionEditor(id) {
   occEditing = id;
@@ -3364,6 +3420,7 @@ function openOccasionEditor(id) {
   $("occ-effect").value = o.effect || "";
   $("occ-priority").value = o.priority ?? "";
   $("occ-enabled").checked = o.enabled !== false;
+  renderCurseFields(o.curses || {});
   const sel = $("occ-palette");
   sel.innerHTML = `<option value="">(a de cada um)</option>`;
   Object.entries(allPalettes()).forEach(([pid, p]) => sel.add(new Option((p && p.name) || pid, pid)));
