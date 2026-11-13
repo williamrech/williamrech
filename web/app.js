@@ -652,10 +652,22 @@ addEventListener("scroll", () => {
 
 // Assombrado: tapping the empty background slowly opens an eye there (sometimes a pair): it stares,
 // its pupil tightens, it drifts a little, blinks, and closes. Random size, time and pupil.
+// Any tap opens it, unless the tap does something: a control, anything marked tappable (pointer
+// cursor), or a tap that's just closing something (a ⋯ popover, the keyboard, a popup).
 let eyeSeq = 0;
+let tapWasClosing = false;
+document.addEventListener("pointerdown", () => { // runs before the popover's own outside-tap handler
+  const f = document.activeElement;
+  tapWasClosing = !!popMenu || !!document.querySelector("dialog[open]") || !!(f && f.matches && f.matches("input, textarea, select, [contenteditable]"));
+}, true);
+function tapDoesSomething(el) {
+  if (el.closest("button, a, input, textarea, select, label, summary, dialog, [role=button], [role=menuitem], [contenteditable], .chip, .tab, .pop-menu")) return true;
+  for (let n = el; n && n !== document.body && n.nodeType === 1; n = n.parentElement) if (getComputedStyle(n).cursor === "pointer") return true;
+  return false;
+}
 document.addEventListener("click", (e) => {
   if (effectKey !== "haunted" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  if (e.target.closest("button, a, input, textarea, select, label, summary, details, dialog, header, nav, .round, .chip, .tab, .pop-menu, li, [role=button]")) return;
+  if (tapWasClosing || !(e.target instanceof Element) || tapDoesSomething(e.target)) return;
   if (document.querySelector("dialog[open]")) return;
   const w = Math.round(34 + Math.random() * 90);
   const ms = Math.round(2000 + Math.random() * 2000);
