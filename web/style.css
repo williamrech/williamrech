@@ -1184,8 +1184,8 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .style-preview .edit-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 1.05rem; opacity: .8; }
 
 /* ---------- Curses ---------- */
-.curse-banner { margin: 6px auto 0; max-width: 520px; padding: 8px 12px; border-radius: 12px; font-size: 0.85rem; text-align: center; cursor: pointer;
-  background: color-mix(in srgb, var(--caramel) 16%, transparent); border: 1px dashed color-mix(in srgb, var(--caramel) 55%, transparent); color: var(--fg); }
+.curse-banner { font-family: var(--sans); font-style: normal; font-size: 0.8rem; line-height: 1.35; color: var(--fg); opacity: .92; cursor: pointer; }
+#banner:not([hidden]) + .curse-banner { margin-top: 8px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--caramel) 45%, transparent); }
 .curse-banner[hidden] { display: none; }
 /* Cursed name: oozing ectoplasm — sickly green glow, wisps rising off it, a queasy wobble */
 .cursed { position: relative; display: inline-block; isolation: isolate; }

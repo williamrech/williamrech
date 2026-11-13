@@ -246,7 +246,10 @@ function renderBanner() {
   el.textContent = text;
   if (text && (PREVIEW_OCCASION || previewOcc)) el.insertAdjacentHTML("beforeend", ` <span class="preview-tag">prévia</span>`);
   el.hidden = !text;
+  syncOccCard();
 }
+// The occasion's phrase and the curse share one card (phrase on top, curse below).
+function syncOccCard() { show("occ-card", !$("banner").hidden || !$("curse-banner").hidden); }
 
 // Background decor. A "decor" spec is a space-separated mix of drawings from web/decor
 // ("latte.svg") and emoji ("🎃🦇"). Occasion decor beats palette decor beats the coffee default.
@@ -1365,6 +1368,7 @@ function renderCurseBanner() {
   if (!el || !auth.currentUser) return;
   const c = curseOf(auth.currentUser.uid);
   show("curse-banner", !!c);
+  syncOccCard();
   if (!c) return;
   const cfg = curseCfg(auth.currentUser.uid);
   el.innerHTML = `${cfg.icon ? esc(cfg.icon) + " " : ""}${cfg.banner ? esc(cfg.banner) + " " : ""}Enquanto durar a ocasião, todo mundo te vê como <b>${esc(c)}</b>.`;
