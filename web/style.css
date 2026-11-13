@@ -1214,3 +1214,13 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .curse-row { display: grid; grid-template-columns: minmax(70px, 34%) 1fr 40px; gap: 6px; align-items: center; }
 .curse-who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .curse-row input { margin: 0; min-width: 0; }
+/* Cursed badge: the emoji becomes a green silhouette that oozes along with the name */
+.cursed .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 6px var(--ecto), 0 0 14px color-mix(in srgb, var(--ecto) 70%, transparent);
+  animation: ecto-pulse-badge 2.8s ease-in-out infinite, ecto-wobble 5.5s ease-in-out infinite; }
+@keyframes ecto-pulse-badge {
+  0%, 100% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 6px var(--ecto), 0 0 14px color-mix(in srgb, var(--ecto) 70%, transparent); }
+  45% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 9px var(--ecto), 0 0 22px color-mix(in srgb, var(--ecto) 85%, transparent); }
+  60% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 4px var(--ecto), 0 0 10px color-mix(in srgb, var(--ecto) 55%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .cursed .ubadge { animation: none; } }
