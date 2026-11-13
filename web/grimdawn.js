@@ -95,14 +95,13 @@ const SCENE_CSS = `
   radial-gradient(80% 45% at 55% 55%, color-mix(in srgb, var(--fire) 20%, transparent), transparent 80%); opacity: .9; }
 .gd-scene .breathe { animation: gd-breathe 5s ease-in-out infinite; will-change: opacity; }
 @keyframes gd-breathe { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
-.gd-scene .fire { filter: blur(3px); transform-origin: 50% 54%; will-change: transform, opacity; animation: gd-flicker 2.4s ease-in-out infinite alternate; }
-.gd-scene .fire.b { filter: blur(2.2px); animation-duration: 1.8s; animation-delay: -.7s; transform-origin: 50% 60%; }
-.gd-scene .fire .o { fill: var(--fire); opacity: .5; }
-.gd-scene .fire .i { fill: color-mix(in srgb, var(--fire) 40%, #fff); opacity: .55; }
-@keyframes gd-flicker {
-  0% { transform: scaleY(1); opacity: .8; } 35% { transform: scaleY(1.05) skewX(-1deg); opacity: 1; }
-  70% { transform: scaleY(.97) skewX(.8deg); opacity: .75; } 100% { transform: scaleY(1.03); opacity: .95; }
-}
+.gd-scene .fire { filter: blur(14px); will-change: opacity; animation: gd-glow 4.6s ease-in-out infinite alternate; }
+.gd-scene .fire.b { filter: blur(9px); animation-duration: 3.4s; animation-delay: -1.7s; }
+.gd-scene .fire .o { fill: var(--fire); opacity: .55; }
+.gd-scene .fire .i { fill: color-mix(in srgb, var(--fire) 45%, #fff); opacity: .5; }
+.gd-scene .ember-glow { will-change: opacity; animation: gd-glow 5.5s ease-in-out infinite alternate; }
+.gd-scene .ember-glow.b { animation-duration: 3.9s; animation-delay: -2s; }
+@keyframes gd-glow { 0% { opacity: .55; } 40% { opacity: .9; } 70% { opacity: .7; } 100% { opacity: 1; } }
 .gd-scene .smoke { filter: blur(10px); will-change: transform; animation: gd-smoke 14s ease-in-out infinite alternate; }
 .gd-scene .smoke.b { animation-duration: 19s; animation-delay: -6s; }
 .gd-scene .smoke ellipse { fill: color-mix(in srgb, color-mix(in srgb, var(--fire) 12%, var(--bg)) 85%, #000); }
@@ -124,7 +123,7 @@ function wall(side, seed) {
   const R = seeded(seed), edge = side < 0 ? 0 : SW, out = [];
   const xAt = (i) => VX + (edge - VX) / (1 + i * 0.62);
   for (let i = 0; i < 9; i++) {
-    const xa = xAt(i), xb = xAt(i + 1), t = 1 - Math.abs(xa - VX) / Math.abs(edge - VX); // distance of the near edge
+    const xa = xAt(i) + side * 1.5, xb = xAt(i + 1) - side * 1.5, t = 1 - Math.abs(xa - VX) / Math.abs(edge - VX); // distance of the near edge
     if (i >= 2 && R() < 0.22) continue; // a gap where a building collapsed: the fire shows through
     const ground = (x) => VY + (SH + 40 - VY) * (Math.abs(x - VX) / Math.abs(edge - VX));
     const hf = side < 0 ? 0.75 + R() * 0.55 : 0.4 + R() * 0.45; // left side tall, right side lower: a diagonal, not a tunnel
@@ -227,9 +226,9 @@ export function startScene(layer) {
   let fireMid = "";
   for (const w of walls.filter((w) => w.band === 1 || w.band === 2)) if (R() < 0.55) fireMid += fireBand(R, [w.roofMid[0] - 30 * w.k, w.roofMid[1] + 14 * w.k], [w.roofMid[0] + 30 * w.k, w.roofMid[1] + 10 * w.k], 70 * w.k, 9);
   // Street: dark ground with cobble lines converging to the vanishing point, rubble at the walls.
-  let street = `<path d="M-40 ${SH}L${VX} ${VY}L${SW + 40} ${SH}Z" style="fill:${tint(0.15)}"/>`;
-  for (const ex of [-80, 40, 160, 280, 400, 520]) street += `<path d="M${VX} ${VY}L${ex} ${SH}" stroke="${tint(0.35)}" stroke-width=".8" fill="none" opacity=".6"/>`;
-  for (let k = 1; k < 9; k++) { const y = VY + (SH - VY) * (1 - 1 / (1 + k * k * 0.06)); street += `<path d="M${f1(VX - (y - VY) * 1.0)} ${f1(y)}H${f1(VX + (y - VY) * 0.62)}" stroke="${tint(0.3)}" stroke-width=".6" opacity=".5"/>`; }
+  // The street fades into the fog toward the vanishing point (no hard tip).
+  let street = `<defs><linearGradient id="gd-street" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${tint(0.15)}" stop-opacity="0"/><stop offset=".45" style="stop-color:${tint(0.15)}"/></linearGradient></defs>`
+    + `<path d="M-40 ${SH}L${VX} ${VY - 10}L${SW + 40} ${SH}Z" fill="url(#gd-street)"/>`;
   let rubble = "";
   for (let k = 0; k < 14; k++) {
     const t = R(), side = R() < 0.5 ? -1 : 1, x = VX + side * (side < 0 ? VX : SW - VX) * (1 - t) * (0.8 + R() * 0.15), y = VY + (SH - VY) * (1 - t);
@@ -252,14 +251,16 @@ export function startScene(layer) {
   const smoke = (cx, cy, s) => Array.from({ length: 6 }, (_, k) => `<ellipse cx="${f1(cx + k * 6 * s - 10)}" cy="${f1(cy - k * 26 * s)}" rx="${f1((22 + k * 8) * s)}" ry="${f1((14 + k * 5) * s)}" opacity="${f1(0.55 - k * 0.07)}"/>`).join("");
   layer.insertAdjacentHTML("beforeend", `<div class="gd-scene">
 <div class="sky breathe"></div>
-${svg("depth d0", `<path d="${palace(seeded(5))}" style="fill:${tint(0.97)}"/>`, "filter:blur(.7px)")}
+<div class="ember-glow" style="background:radial-gradient(45% 16% at 62% 54%, color-mix(in srgb, var(--fire) 55%, transparent), transparent 72%)"></div>
+${svg("depth d0", `<path d="${palace(seeded(5))}" style="fill:${tint(0.97)}"/>`, "filter:blur(3px)")}
 ${svg("fire", fireFar)}
 ${svg("smoke", smoke(150, VY - 40, 1.3) + smoke(300, VY - 70, 1))}
-${svg("depth d1 rim", band(1))}
+${svg("depth d1", band(1), "filter:blur(1.8px) drop-shadow(0 -1px 3px color-mix(in srgb, var(--fire) 50%, transparent))")}
+<div class="ember-glow b" style="background:radial-gradient(30% 14% at 30% 47%, color-mix(in srgb, var(--fire) 40%, transparent), transparent 70%), radial-gradient(26% 12% at 78% 52%, color-mix(in srgb, var(--fire) 35%, transparent), transparent 70%)"></div>
 ${svg("fire b", fireMid)}
 ${svg("smoke b", smoke(70, VY - 10, 1.6))}
-${svg("depth d2 rim", street + rubble + band(2))}
-${svg("depth d3", band(3) + lamps + `<g style="fill:${tint(0.02)};color:${tint(0.02)}">${fence}${carriage(150, SH - 18, 1.05)}${branches(-6, 120, 1.25, 1, 3)}${branches(SW + 6, 70, 1.05, -1, 9)}</g>`)}
+${svg("depth d2", street + rubble + band(2), "filter:blur(.9px) drop-shadow(0 -1px 2px color-mix(in srgb, var(--fire) 40%, transparent))")}
+${svg("depth d3", band(3) + lamps + `<g style="fill:${tint(0.02)};color:${tint(0.02)}">${fence}${carriage(150, SH - 18, 1.05)}${branches(-6, 120, 1.25, 1, 3)}${branches(SW + 6, 70, 1.05, -1, 9)}</g>`, "filter:blur(.5px)")}
 </div>`);
   const box = layer.lastElementChild;
   // Tiny parallax: near bands move a bit more than far ones as you scroll (a few px at most).
