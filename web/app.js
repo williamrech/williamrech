@@ -1916,7 +1916,7 @@ function buildRound(r, ask) {
   const uid = auth.currentUser.uid;
   const li = document.createElement("li");
   const done = isDone(r);
-  const collapsed = done && !expandedRounds.has(r.id) && r.id !== highlightRound;
+  const collapsed = !r.open && !expandedRounds.has(r.id) && r.id !== highlightRound; // only ended rounds start folded
   li.className = "round" + (ask ? " ask" : "") + (done ? " closed" : "") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
   const mine = r.ownerUid === uid;
   const isRecipient = r.recipients.includes(uid);
@@ -1960,7 +1960,7 @@ function buildRound(r, ask) {
     <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>
       <div class="round-text"><div class="round-title">${esc(r.title)}</div>
       ${r.body ? `<p class="round-body">${esc(r.body)}</p>` : ""}
-      ${done ? `<div class="closed-summary small">${collapsed ? esc(doneSummary) + " " : ""}<span class="chev">${collapsed ? "▾" : "▴ recolher"}</span></div>` : ""}</div>
+      ${collapsed ? `<div class="closed-summary small">${esc(doneSummary)} <span class="chev">▾</span></div>` : ""}</div>
       <div class="round-corner"></div></div>
     ${peopleHtml}
     <div class="my-answer"></div>
@@ -1988,11 +1988,11 @@ function buildRound(r, ask) {
   // Status icons: tap for the details.
   li.querySelectorAll(".st").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); toast(b.dataset.detail || "Sem detalhes.", 4500); }));
 
-  if (done) {
-    // Tap the header of a resolved round to expand / collapse it.
+  if (collapsed) {
+    // Tap the header of an ended round to unfold it (no folding back).
     li.querySelector(".round-head").addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
-      expandedRounds.has(r.id) ? expandedRounds.delete(r.id) : expandedRounds.add(r.id);
+      expandedRounds.add(r.id);
       if (highlightRound === r.id) highlightRound = null;
       renderRounds();
     });
