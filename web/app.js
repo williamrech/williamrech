@@ -82,7 +82,10 @@ function matchesPattern(pat, t) {
   }
   return false;
 }
-const CURSE_LOOKS = { "": "Nenhum", ecto: "Ectoplasma" }; // name looks for the occasion's Troca de nome
+// Name looks for a swapped name. Each effect brings its own; an occasion can pin any of them.
+const NAME_LOOKS = { ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações" };
+const EFFECT_LOOK = { haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
+const autoLook = (effect) => EFFECT_LOOK[effect] || "glitter"; // no effect → glitter
 // "when" can hold several patterns separated by commas (any one matches).
 const occasionMatches = (occ, t) => String(occ.when || "").split(",").some((p) => matchesPattern(p, t));
 
@@ -320,7 +323,7 @@ function placeDecor(spec, force = false) {
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 // One list of names, used in the palette studio, the occasion editor and Configurações.
-const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado" };
+const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando" };
 // Assombrado: corner web, a spider on its thread, fog along the bottom, and an eye where you tap the background.
 const WEB_SVG = `<svg viewBox="0 0 160 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round">
 <g stroke-width="1.3">${[0, 15, 30, 45, 60, 75, 90].map((a) => { const r = (a * Math.PI) / 180; return `<path d="M0 0 L${(160 * Math.cos(r)).toFixed(1)} ${(160 * Math.sin(r)).toFixed(1)}"/>`; }).join("")}</g>
@@ -349,6 +352,7 @@ function eyeSvg(id, slit) {
 <path d="M0 0 H100 V25 Q50 -12 0 25Z" fill="#000" opacity=".0"/><path d="M2 25 Q50 -12 98 25 Q50 4 2 25Z" fill="#000" opacity=".45"/></g>
 <path d="M2 25 Q50 -12 98 25" fill="none" stroke="#000" stroke-opacity=".6" stroke-width="2.5"/></svg>`;
 }
+const HEART_SVG = `<svg viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21.5 C5 16 0 12 0 6.6 C0 3 2.8 0 6.4 0 C8.8 0 10.8 1.3 12 3.3 C13.2 1.3 15.2 0 17.6 0 C21.2 0 24 3 24 6.6 C24 12 19 16 12 21.5Z" fill="currentColor"/></svg>`;
 const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor"/></svg>`;
 function fillEffectSelect(sel) {
   const keep = sel.value;
@@ -505,6 +509,15 @@ function spawnEffect(layer, kind, scale = 1) {
     for (let i = 0; i < Math.round(9 * scale); i++) {
       const size = rnd(6, 13) * Math.max(scale, 0.6);
       add("bubble", `left:${rnd(0, 100)}%;width:${size}px;height:${size}px;opacity:${rnd(0.25, 0.5)};animation-delay:${rnd(-14, 0) * Math.max(scale, 0.5)}s;animation-duration:${rnd(7, 13) * Math.max(scale, 0.5)}s;--wob:${rnd(3, 9) * scale}px`);
+    }
+  }
+  else if (kind === "hearts") {
+    // Hearts drifting up and swaying, in pinks and the theme's accent.
+    const tints = ["#ff5c8a", "#ff8fb1", "#ffc2d4"].concat(["--caramel"].map((v) => css.getPropertyValue(v).trim()).filter(Boolean));
+    for (let i = 0; i < Math.max(5, Math.round(16 * scale)); i++) {
+      const size = rnd(10, 22) * Math.max(scale, 0.6);
+      const el = add("heart", `left:${rnd(2, 94)}%;width:${size}px;height:${size}px;color:${tints[Math.floor(Math.random() * tints.length)]};opacity:${rnd(0.3, 0.65).toFixed(2)};animation-delay:${rnd(-16, 0)}s;animation-duration:${rnd(9, 16) * Math.max(scale, 0.5)}s;--wob:${rnd(8, 22) * scale}px`);
+      el.innerHTML = HEART_SVG;
     }
   }
   else if (kind === "sparkles") {
@@ -1318,7 +1331,8 @@ function styledName(name, style) {
 function curseCfgOf(o) {
   const c = (o && o.nameSwap && typeof o.nameSwap === "object") ? o.nameSwap : {};
   const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
-  return { icon: str(c.icon, 8), title: str(c.title, 30), banner: str(c.banner, 120), look: c.look in CURSE_LOOKS ? c.look : "",
+  const pinned = c.look in NAME_LOOKS ? c.look : "";
+  return { icon: str(c.icon, 8), title: str(c.title, 30), banner: str(c.banner, 120), pinned, look: pinned || autoLook(o && o.effect),
     ideas: Array.isArray(c.ideas) ? c.ideas.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 30)) : [] };
 }
 const curseCfg = (uid) => (todayOcc && todayOcc.curseCfg && todayOcc.curseCfg[uid]) || curseCfgOf(null);
@@ -1330,7 +1344,7 @@ const displayName = (uid, fallback) => curseOf(uid) || (family[uid] && family[ui
 function nameHtml(uid, fallback) {
   const p = family[uid];
   const c = curseOf(uid);
-  if (c) { const k = curseCfg(uid).look; return `<span class="cursed${k ? " l-" + k : ""}">${styledName(c, p && p.style)}</span>`; }
+  if (c) { const k = curseCfg(uid).look; return `<span class="cursed l-${k}${k === "ecto" ? "" : " lk"}">${styledName(c, p && p.style)}</span>`; }
   return styledName((p && p.name) || fallback || "?", p && p.style);
 }
 
@@ -3383,7 +3397,7 @@ function readOccForm() {
   document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, 30); });
   if (Object.keys(curses).length) o.curses = curses;
   const ns = { icon: $("occ-ns-icon").value.trim(), title: $("occ-ns-title").value.trim(), banner: $("occ-ns-banner").value.trim(),
-    look: $("occ-ns-look").value, ideas: $("occ-ns-ideas").value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 60) };
+    look: $("occ-ns-look").value in NAME_LOOKS ? $("occ-ns-look").value : "", ideas: $("occ-ns-ideas").value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 60) };
   Object.keys(ns).forEach((k) => { if (!ns[k] || (Array.isArray(ns[k]) && !ns[k].length)) delete ns[k]; });
   if (Object.keys(ns).length) o.nameSwap = ns;
   const pr = $("occ-priority").value.trim();
@@ -3442,7 +3456,7 @@ function openOccasionEditor(id) {
   $("occ-enabled").checked = o.enabled !== false;
   const ns = curseCfgOf(o);
   $("occ-ns-icon").value = ns.icon; $("occ-ns-title").value = ns.title; $("occ-ns-banner").value = ns.banner;
-  $("occ-ns-look").value = ns.look; $("occ-ns-ideas").value = ns.ideas.join("\n");
+  fillLookSelect(ns.pinned); $("occ-ns-ideas").value = ns.ideas.join("\n");
   renderCurseFields(o.curses || {});
   renderCurseHead();
   const sel = $("occ-palette");
@@ -3902,5 +3916,14 @@ window.addEventListener("pageshow", (e) => { if (e.persisted) { hiddenAt = hidde
 })();
 
 // Troca de nome form: the look list, and a live header/placeholder/🎲 as you type.
-for (const [k, l] of Object.entries(CURSE_LOOKS)) $("occ-ns-look").add(new Option(l, k));
+// "Automático" follows the occasion's effect (and says which look that is).
+function fillLookSelect(keep) {
+  const sel = $("occ-ns-look");
+  keep = keep === undefined ? sel.value : keep;
+  sel.innerHTML = "";
+  sel.add(new Option(`Automático (${NAME_LOOKS[autoLook($("occ-effect").value)].replace(/^\S+ /, "")})`, ""));
+  for (const [k, l] of Object.entries(NAME_LOOKS)) sel.add(new Option(l, k));
+  sel.value = keep in NAME_LOOKS ? keep : "";
+}
+$("occ-effect").addEventListener("change", () => fillLookSelect());
 ["occ-ns-icon", "occ-ns-title", "occ-ns-ideas"].forEach((id) => $(id).addEventListener("input", renderCurseHead));
