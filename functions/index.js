@@ -122,7 +122,7 @@ async function activeCurses() {
   const [y, m, d] = sp.key.split("-").map(Number);
   const t = { y, m, d, key: sp.key, md: sp.key.slice(5), weekday: sp.weekday };
   const list = Object.values(fun.occasions || {})
-    .filter((o) => o && typeof o === "object" && o.enabled !== false && String(o.when || "").split(",").some((x) => matchesPattern(x, t)))
+    .filter((o) => o && typeof o === "object" && o.enabled !== false && !o.adminOnly && String(o.when || "").split(",").some((x) => matchesPattern(x, t)))
     .sort((a, b) => (Number(a.priority) || 0) - (Number(b.priority) || 0));
   const map = {};
   for (const o of list) for (const [uid, n] of Object.entries(o.curses || {})) if (typeof n === "string" && n.trim()) map[uid] = n.trim().slice(0, 22);

@@ -95,10 +95,12 @@ const occasionMatches = (occ, t) => String(occ.when || "").split(",").some((p) =
 function todaysOccasion() {
   const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
   const t = spToday();
-  let list = Object.entries(all).filter(([, o]) => o && typeof o === "object" && o.enabled !== false && occasionMatches(o, t));
+  // "Só admin" occasions run only on admin phones (a live test the family doesn't see); they win over normal ones.
+  const admin = typeof me !== "undefined" && me && me.admin === true;
+  let list = Object.entries(all).filter(([, o]) => o && typeof o === "object" && o.enabled !== false && (!o.adminOnly || admin) && occasionMatches(o, t));
   if (previewOcc) list = [[previewOcc.id, previewOcc]];
   else if (PREVIEW_OCCASION && all[PREVIEW_OCCASION]) list = [[PREVIEW_OCCASION, all[PREVIEW_OCCASION]]];
-  list.sort((a, b) => (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
+  list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (b[1].adminOnly ? 1 : 0) || (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
   const merged = {};
   for (const [id, o] of list) { Object.assign(merged, o); merged.id = id; }
   // Curses from every active occasion add up (higher priority wins per person); each keeps its own occasion's look.
@@ -3431,7 +3433,7 @@ function renderAdminOccasions() {
       const pal = getPalette(o.palette);
       const li = document.createElement("li");
       li.innerHTML = `<button class="adm-row"><span class="dots">${pal ? paletteDots(pal) : ""}</span>
-        <span class="adm-row-text"><b>${esc(id)}${o.enabled === false ? ` <span class="badge off">desativada</span>` : ""}${next && next.i === 0 ? ` <span class="badge">hoje</span>` : ""}</b>
+        <span class="adm-row-text"><b>${esc(id)}${o.adminOnly ? ` <span class="badge" title="Só admin">👑 só admin</span>` : ""}${o.enabled === false ? ` <span class="badge off">desativada</span>` : ""}${next && next.i === 0 ? ` <span class="badge">hoje</span>` : ""}</b>
         <span class="muted small">${esc(describeWhen(o.when))}</span>
         <span class="muted small">${next ? "Próxima: " + fmtDate(next) : "Nunca"}</span></span></button>`;
       li.querySelector("button").onclick = () => openOccasionEditor(id);
@@ -3458,6 +3460,7 @@ function readOccForm() {
   const pr = $("occ-priority").value.trim();
   if (pr !== "") o.priority = Number(pr) || 0;
   if (!$("occ-enabled").checked) o.enabled = false;
+  if ($("occ-admin-only").checked) o.adminOnly = true;
   return o;
 }
 function renderWhenInfo() {
@@ -3509,6 +3512,7 @@ function openOccasionEditor(id) {
   $("occ-effect").value = o.effect || "";
   $("occ-priority").value = o.priority ?? "";
   $("occ-enabled").checked = o.enabled !== false;
+  $("occ-admin-only").checked = o.adminOnly === true;
   const ns = curseCfgOf(o);
   $("occ-ns-icon").value = ns.icon; $("occ-ns-title").value = ns.title; $("occ-ns-banner").value = ns.banner;
   fillLookSelect(ns.pinned); $("occ-ns-ideas").value = ns.ideas.join("\n");
