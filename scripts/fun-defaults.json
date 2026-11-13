@@ -175,6 +175,16 @@
       "highlight": "#b25cff",
       "decor": "lantern.svg crow.svg crow.svg lantern.svg crow.svg",
       "onlyOccasions": true
+    },
+    "malmouth": {
+      "name": "Malmouth",
+      "bg": "#0c1210",
+      "surface": "#17211d",
+      "text": "#dfeae3",
+      "muted": "#8ea69a",
+      "accent": "#2f9e6a",
+      "highlight": "#8ff0c0",
+      "onlyOccasions": true
     }
   },
   "occasions": {
@@ -261,9 +271,9 @@
     "grim-dawn": {
       "when": "",
       "adminOnly": true,
-      "palette": "cinzas",
+      "palette": "malmouth",
       "effect": "grimdawn",
-      "decor": "lantern.svg crow.svg crow.svg lantern.svg crow.svg",
+      "decor": "",
       "banner": "⚔️ Cairn nunca dorme. Toque no vazio e veja o que cai.",
       "version": "1.1.9.8",
       "priority": 5,
@@ -291,7 +301,7 @@
     }
   },
   "decorVersion": 2,
-  "configVersion": 11,
+  "configVersion": 12,
   "terms": {
     "recado": {
       "weight": 70,

@@ -20,8 +20,8 @@ const CSS = `
   75% { transform: translate(var(--sway), 81vh) rotate(290deg); }
   100% { transform: translate(0, 108vh) rotate(380deg); }
 }
-.gd-ember { position: absolute; bottom: -8px; border-radius: 50%; background: #ffb257; pointer-events: none;
-  box-shadow: 0 0 4px 1px #ff6a1a, 0 0 10px 2px rgba(255, 80, 20, .35); animation: gd-ember-rise ease-out infinite; will-change: transform, opacity; }
+.gd-ember { position: absolute; bottom: -8px; border-radius: 50%; background: #c8ffe0; pointer-events: none;
+  box-shadow: 0 0 4px 1px #46ff9a, 0 0 10px 2px rgba(70, 255, 154, .35); animation: gd-ember-rise ease-out infinite; will-change: transform, opacity; }
 @keyframes gd-ember-rise {
   0% { transform: translate(0, 0); opacity: 0; }
   10% { opacity: 1; } 30% { opacity: .55; } 45% { opacity: .95; } 70% { opacity: .5; }
@@ -35,7 +35,7 @@ const CSS = `
 .gd-rim { position: absolute; border-radius: 50%; }
 .gd-mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; }
 .gd-salt { position: absolute; overflow: visible; }
-.gd-item { position: absolute; width: 36px; height: 36px; margin: -18px 0 0 -18px; filter: drop-shadow(0 3px 2px rgba(0,0,0,.7)); }
+.gd-item { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; filter: grayscale(1) brightness(.95) contrast(1.15) drop-shadow(0 2px 2px rgba(0,0,0,.6)); }
 .gd-item svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .gd-bit { position: absolute; width: 6px; height: 5px; margin: -3px 0 0 -3px; background: linear-gradient(135deg, #c9c9c4, #6d6d6a);
   border-radius: 30% 60% 40% 50%; box-shadow: 0 1px 1px rgba(0,0,0,.7); }
@@ -68,7 +68,7 @@ export function startAsh(layer, scale = 1) {
       + `animation-duration:${rnd(11, 20) / Math.max(scale, 0.6)}s;animation-delay:${rnd(-20, 0)}s`;
     layer.appendChild(a);
   }
-  for (let i = 0; i < Math.round(7 * scale) + 1; i++) {
+  for (let i = 0; i < Math.round(14 * scale) + 1; i++) {
     const e = document.createElement("i");
     e.className = "gd-ember";
     const w = rnd(1.6, 3.2) * k;
@@ -78,135 +78,192 @@ export function startAsh(layer, scale = 1) {
   }
 }
 
-// ---------- The city burning on the horizon (behind the feed) ----------
-// Inspired by the Malmouth key art: a huge pale domed palace far away, aether flames licking up between
-// the layers, Victorian rooftops (mansards, chimney pots, smokestacks) getting darker as they come closer,
-// and a black foreground of lamp posts, an iron fence and bare branches. Buildings never move; only the
-// flames flicker and the glow breathes. Bottom 30% of the screen; scrolling shifts layers a few px (depth).
+// ---------- The burning city (behind the feed) ----------
+// A ruined Victorian street seen in perspective: wrecked facades on both sides recede toward a vanishing
+// point, where a pale domed palace looms through smoke and aether fire. Every building is tinted by its
+// distance (near = black, far = foggy green), windows are holes lit by the fire behind, roofs are broken.
+// Foreground: a wrecked carriage, an iron fence, lamp posts, bare branches. Buildings never move; the fire
+// flickers, the glow breathes, smoke drifts slowly. Scrolling shifts the depth bands a few px apart.
 const SCENE_CSS = `
-.gd-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 30vh; pointer-events: none; --fire: #46ff9a; }
+.gd-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 72vh; pointer-events: none; --fire: #46ff9a;
+  --fog: color-mix(in srgb, var(--fire) 38%, var(--bg)); --near: color-mix(in srgb, var(--bg) 40%, black);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%); mask-image: linear-gradient(to bottom, transparent 0, #000 22%); }
 .gd-scene > * { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; }
-.gd-scene svg { display: block; }
-.gd-scene .sky { height: 150%; background:
-  radial-gradient(55% 45% at 55% 72%, color-mix(in srgb, var(--fire) 55%, transparent), transparent 70%),
-  radial-gradient(90% 60% at 50% 100%, color-mix(in srgb, var(--fire) 22%, transparent), transparent 80%); }
-.gd-scene .pulse { height: 140%; background: radial-gradient(40% 35% at 55% 78%, color-mix(in srgb, var(--fire) 45%, #fff), transparent 70%);
-  opacity: .25; animation: gd-breathe 5s ease-in-out infinite; will-change: opacity; }
-@keyframes gd-breathe { 0%, 100% { opacity: .18; } 50% { opacity: .38; } }
-.gd-scene .l1 { color: color-mix(in srgb, var(--fire) 42%, var(--bg)); opacity: .85; filter: blur(.8px); }
-.gd-scene .l2 { color: color-mix(in srgb, var(--fire) 16%, var(--bg)); filter: drop-shadow(0 -1px 2px color-mix(in srgb, var(--fire) 55%, transparent)); }
-.gd-scene .l3 { color: color-mix(in srgb, color-mix(in srgb, var(--fire) 8%, var(--bg)) 70%, black); filter: drop-shadow(0 -1px 1.5px color-mix(in srgb, var(--fire) 35%, transparent)); }
-.gd-scene .l4 { color: color-mix(in srgb, var(--bg) 35%, black); }
-.gd-scene .lamp { fill: color-mix(in srgb, var(--fire) 60%, #fff); }
-.gd-scene .fog { background: linear-gradient(to top, color-mix(in srgb, var(--fire) 18%, transparent), transparent); }
-.gd-scene .flames { transform-origin: 50% 100%; will-change: transform, opacity; filter: blur(1.2px) drop-shadow(0 0 6px var(--fire));
-  animation: gd-flicker 2.2s ease-in-out infinite alternate; }
-.gd-scene .flames path.o { fill: var(--fire); opacity: .55; }
-.gd-scene .flames path.i { fill: color-mix(in srgb, var(--fire) 45%, #fff); opacity: .7; }
+.gd-scene svg { display: block; overflow: visible; }
+.gd-scene .sky { background:
+  radial-gradient(38% 30% at 60% 50%, color-mix(in srgb, var(--fire) 60%, #fff) 0, color-mix(in srgb, var(--fire) 35%, transparent) 40%, transparent 75%),
+  radial-gradient(80% 45% at 55% 55%, color-mix(in srgb, var(--fire) 20%, transparent), transparent 80%); opacity: .9; }
+.gd-scene .breathe { animation: gd-breathe 5s ease-in-out infinite; will-change: opacity; }
+@keyframes gd-breathe { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
+.gd-scene .fire { filter: blur(3px); transform-origin: 50% 54%; will-change: transform, opacity; animation: gd-flicker 2.4s ease-in-out infinite alternate; }
+.gd-scene .fire.b { filter: blur(2.2px); animation-duration: 1.8s; animation-delay: -.7s; transform-origin: 50% 60%; }
+.gd-scene .fire .o { fill: var(--fire); opacity: .5; }
+.gd-scene .fire .i { fill: color-mix(in srgb, var(--fire) 40%, #fff); opacity: .55; }
 @keyframes gd-flicker {
-  0% { transform: scale(1, 1) skewX(0deg); opacity: .85; }
-  30% { transform: scale(1.01, 1.08) skewX(-2deg); opacity: 1; }
-  60% { transform: scale(.99, .94) skewX(1.5deg); opacity: .8; }
-  100% { transform: scale(1, 1.05) skewX(-1deg); opacity: .95; }
+  0% { transform: scaleY(1); opacity: .8; } 35% { transform: scaleY(1.05) skewX(-1deg); opacity: 1; }
+  70% { transform: scaleY(.97) skewX(.8deg); opacity: .75; } 100% { transform: scaleY(1.03); opacity: .95; }
 }
-@media (prefers-reduced-motion: reduce) { .gd-scene .flames, .gd-scene .pulse { animation: none; } }
+.gd-scene .smoke { filter: blur(10px); will-change: transform; animation: gd-smoke 14s ease-in-out infinite alternate; }
+.gd-scene .smoke.b { animation-duration: 19s; animation-delay: -6s; }
+.gd-scene .smoke ellipse { fill: color-mix(in srgb, color-mix(in srgb, var(--fire) 12%, var(--bg)) 85%, #000); }
+@keyframes gd-smoke { from { transform: translate(0, 0); } to { transform: translate(-6px, -14px); } }
+.gd-scene .lamp { fill: color-mix(in srgb, var(--fire) 55%, #fff); filter: drop-shadow(0 0 4px var(--fire)); }
+.gd-scene .rim { filter: drop-shadow(0 -1px 1.5px color-mix(in srgb, var(--fire) 60%, transparent)); }
+@media (prefers-reduced-motion: reduce) { .gd-scene .fire, .gd-scene .breathe, .gd-scene .smoke { animation: none; } }
 `;
 function seeded(seed) { let r = seed; return () => ((r = (r * 9301 + 49297) % 233280) / 233280); }
-const W = 700, H = 400; // drawn for a phone (about 390×250 px); wider screens crop the sides
-const rect = (x, y, w, h) => `M${x} ${y}h${w}v${h}h${-w}Z`;
-// A Victorian townhouse: body, mansard roof with dormers, chimney stacks with pots; sometimes broken.
-function townhouse(R, x, base, w, h) {
-  const top = base - h, d = [rect(x, top, w, h)];
-  const mh = 14 + R() * 14;
-  d.push(`M${x - 2} ${top}L${x + 6} ${top - mh}H${x + w - 6}L${x + w + 2} ${top}Z`);
-  for (let k = x + 10; k < x + w - 14; k += 16 + R() * 10) if (R() < 0.6) d.push(rect(k, top - mh * 0.7, 6, mh * 0.6));
-  const stacks = 1 + Math.floor(R() * 2);
-  for (let i = 0; i < stacks; i++) {
-    const cx = x + (i + 0.5) * (w / stacks) + R() * 8 - 4, sh = 22 + R() * 26, sw = 12 + R() * 8;
-    d.push(rect(cx - sw / 2, top - mh - sh, sw, sh + mh), rect(cx - sw / 2 - 2, top - mh - sh, sw + 4, 4));
-    for (let p = 0; p < 2 + Math.floor(R() * 2); p++) d.push(rect(cx - sw / 2 + 1 + p * 5, top - mh - sh - 7, 3.2, 7));
+const SW = 400, SH = 600, VX = 262, VY = 318; // portrait drawing; vanishing point a bit right of center
+const f1 = (n) => n.toFixed(1);
+const quad = (a, b, c, d) => `M${f1(a[0])} ${f1(a[1])}L${f1(b[0])} ${f1(b[1])}L${f1(c[0])} ${f1(c[1])}L${f1(d[0])} ${f1(d[1])}Z`;
+const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+// Depth tint: 0 = right in front (black), 1 = at the vanishing point (fog).
+const tint = (t) => `color-mix(in srgb, var(--fog) ${Math.round(2 + 82 * Math.pow(t, 1.6))}%, var(--near))`;
+
+// One wall of the street. side = -1 (left) or 1 (right). Returns buildings grouped by distance band.
+function wall(side, seed) {
+  const R = seeded(seed), edge = side < 0 ? 0 : SW, out = [];
+  const xAt = (i) => VX + (edge - VX) / (1 + i * 0.62);
+  for (let i = 0; i < 9; i++) {
+    const xa = xAt(i), xb = xAt(i + 1), t = 1 - Math.abs(xa - VX) / Math.abs(edge - VX); // distance of the near edge
+    if (i >= 2 && R() < 0.22) continue; // a gap where a building collapsed: the fire shows through
+    const ground = (x) => VY + (SH + 40 - VY) * (Math.abs(x - VX) / Math.abs(edge - VX));
+    const hf = side < 0 ? 0.75 + R() * 0.55 : 0.4 + R() * 0.45; // left side tall, right side lower: a diagonal, not a tunnel
+    const roof = (x) => VY - (VY + 60) * hf * (Math.abs(x - VX) / Math.abs(edge - VX));
+    const A = [xa, ground(xa)], B = [xa, roof(xa)], C = [xb, roof(xb)], D = [xb, ground(xb)];
+    const k = Math.abs(xa - xb) / 60; // local scale
+    // Broken roofline: jagged, sometimes a big bite out of it.
+    let top = "";
+    const steps = 6 + Math.floor(R() * 5), bite = R() < 0.55 ? Math.floor(R() * steps) : -1;
+    for (let s = 1; s < steps; s++) {
+      const p = lerp(B, C, s / steps), drop = (s === bite || s === bite + 1) ? (40 + R() * 70) * k : R() * 10 * k;
+      top += `L${f1(p[0])} ${f1(p[1] + drop)}`;
+    }
+    let d = `M${f1(A[0])} ${f1(A[1])}L${f1(B[0])} ${f1(B[1])}${top}L${f1(C[0])} ${f1(C[1])}L${f1(D[0])} ${f1(D[1])}Z`;
+    // Chimney stacks of different sizes (some missing, some snapped).
+    const stacks = Math.floor(R() * 3);
+    for (let s = 0; s < stacks; s++) {
+      const u = 0.2 + R() * 0.6, p = lerp(B, C, u), w = (8 + R() * 10) * k, h = (14 + R() * 30) * k * (R() < 0.25 ? 0.4 : 1);
+      d += quad([p[0] - w / 2, p[1] + 4], [p[0] - w / 2, p[1] - h], [p[0] + w / 2, p[1] - h], [p[0] + w / 2, p[1] + 4]);
+      for (let q = 0; q < 1 + Math.floor(R() * 3); q++) d += quad([p[0] - w / 2 + q * w / 3 + 0.5, p[1] - h], [p[0] - w / 2 + q * w / 3 + 0.5, p[1] - h - 6 * k], [p[0] - w / 2 + q * w / 3 + 0.5 + w / 5, p[1] - h - 6 * k], [p[0] - w / 2 + q * w / 3 + 0.5 + w / 5, p[1] - h]);
+    }
+    // Window holes (the fire shows through), in perspective; some blown out bigger.
+    // Each facade its own way: tall narrow windows, wide ones, mostly blind, or gutted (big holes).
+    const style = R(), cols = style < 0.25 ? 3 : 2 + Math.floor(R() * 2), rows = 2 + Math.floor(hf * 3 + R() * 2);
+    const narrow = style < 0.5 ? 0.18 : 0.3, keep = style > 0.85 ? 0.25 : 0.72, gutted = style > 0.92;
+    const P = (u, v) => lerp(lerp(A, B, v), lerp(D, C, v), u);
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
+      if (R() > keep) continue;
+      const mid = (c + 0.5) / cols, half = gutted ? 0.36 / cols : narrow / cols;
+      const v0 = 0.1 + (r / rows) * 0.8, v1 = v0 + (0.8 / rows) * (gutted ? 0.85 : 0.45 + R() * 0.15);
+      d += quad(P(mid - half, v0), P(mid - half, v1), P(mid + half, v1), P(mid + half, v0));
+    }
+    out.push({ d, t, band: i === 0 ? 3 : i <= 2 ? 2 : 1, roofMid: lerp(B, C, 0.5), k });
   }
-  if (R() < 0.3) d.push(`M${x + w * 0.55} ${top}L${x + w * 0.7} ${top - 10}L${x + w * 0.8} ${top + 6}Z`);
-  return d.join("");
+  return out;
 }
-const smokestack = (x, base, h, w) => `M${x} ${base}L${x + 2} ${base - h}H${x + w - 2}L${x + w} ${base}Z` + rect(x - 1, base - h - 4, w + 2, 5);
-// The palace far away: a stacked city on a hill, a domed hall in the middle, gothic spires around it.
+// The palace at the end of the street: a hill of buildings, a domed hall, spires.
 function palace(R) {
-  const d = [`M-20 ${H}V320Q150 300 300 268Q380 255 460 268Q600 296 720 318V${H}Z`];
-  for (let x = -10; x < W; x += 14 + R() * 18) {
-    const hill = 320 - 62 * Math.exp(-(((x - 380) / 170) ** 2));
-    const h = 16 + R() * 40;
-    d.push(rect(x, hill - h, 12 + R() * 16, h + 30));
-    if (R() < 0.3) { const sx = x + 6; d.push(`M${sx - 4} ${hill - h}L${sx} ${hill - h - 30 - R() * 40}L${sx + 4} ${hill - h}Z`); }
+  const d = [`M60 ${VY + 10}Q150 ${VY - 30} 236 ${VY - 46}Q330 ${VY - 30} 400 ${VY + 4}V${VY + 40}H60Z`];
+  for (let x = 70; x < 400; x += 9 + R() * 12) {
+    const hill = VY - 48 * Math.exp(-(((x - 250) / 110) ** 2)) - 4, h = 10 + R() * 26;
+    d.push(`M${f1(x)} ${f1(hill + 20)}V${f1(hill - h)}H${f1(x + 8 + R() * 10)}V${f1(hill + 20)}Z`);
+    if (R() < 0.25) d.push(`M${f1(x + 1)} ${f1(hill - h)}L${f1(x + 5)} ${f1(hill - h - 18 - R() * 26)}L${f1(x + 9)} ${f1(hill - h)}Z`);
   }
-  d.push(rect(300, 190, 160, 90), `M308 190L380 160L452 190Z`, rect(334, 140, 92, 52), `M334 142Q334 72 380 62Q426 72 426 142Z`,
-    rect(373, 42, 14, 22), `M375 44L380 14L385 44Z`);
-  for (const [x, top, w] of [[262, 150, 26], [478, 168, 24], [222, 200, 18], [522, 206, 18], [600, 226, 14], [160, 236, 14]]) {
-    d.push(rect(x, top, w, 160), `M${x - 3} ${top}L${x + w / 2} ${top - 46 - R() * 30}L${x + w + 3} ${top}Z`);
-  }
+  // Hall + dome + lantern, two flanking towers with spires.
+  d.push(`M196 ${VY - 40}V${VY - 112}H304V${VY - 40}Z`, `M200 ${VY - 112}L250 ${VY - 134}L300 ${VY - 112}Z`,
+    `M220 ${VY - 132}V${VY - 168}H280V${VY - 132}Z`, `M220 ${VY - 166}Q220 ${VY - 222} 250 ${VY - 230}Q280 ${VY - 222} 280 ${VY - 166}Z`,
+    `M245 ${VY - 228}V${VY - 248}H255V${VY - 228}Z`, `M247 ${VY - 246}L250 ${VY - 274}L253 ${VY - 246}Z`,
+    `M168 ${VY - 40}V${VY - 140}H186V${VY - 40}Z`, `M165 ${VY - 140}L177 ${VY - 196}L189 ${VY - 140}Z`,
+    `M316 ${VY - 40}V${VY - 128}H332V${VY - 40}Z`, `M313 ${VY - 128}L324 ${VY - 176}L335 ${VY - 128}Z`);
   return d.join("");
 }
-// Flame tongues along a line: an outer flame and a brighter core each.
-function flames(seed, base, x0, x1, minH, maxH, peak) {
-  const R = seeded(seed); let o = "", i = "";
-  for (let x = x0; x < x1; x += 12 + R() * 20) {
-    const near = peak == null ? 1 : Math.exp(-(((x - peak) / 160) ** 2)) * 0.7 + 0.3;
-    const h = (minH + R() * (maxH - minH)) * near, w = 16 + R() * 26, lean = R() * 16 - 8;
-    const tong = (hh, ww) => `M${x - ww / 2} ${base}C${x - ww / 2} ${base - hh * 0.45} ${x + lean - ww * 0.15} ${base - hh * 0.6} ${x + lean} ${base - hh}`
-      + `C${x + lean * 0.3 + ww * 0.25} ${base - hh * 0.55} ${x + ww / 2} ${base - hh * 0.4} ${x + ww / 2} ${base}Z`;
-    o += tong(h, w); i += tong(h * 0.6, w * 0.45);
+// Ragged fire along a line from p to q (heights shrink with distance). Blurred, it reads as light, not cartoon tongues.
+function fireBand(R, p, q, hNear, n) {
+  let o = "", i = "";
+  for (let s = 0; s < n; s++) {
+    const t = s / (n - 1), x = p[0] + (q[0] - p[0]) * t, y = p[1] + (q[1] - p[1]) * t, sc = 1 - t * 0.6;
+    const h = hNear * sc * (0.35 + R() * 0.9), w = (10 + R() * 18) * sc, lean = (R() * 2 - 1) * 6 * sc;
+    const tong = (hh, ww) => `M${f1(x - ww)} ${f1(y)}Q${f1(x - ww * 0.4)} ${f1(y - hh * 0.55)} ${f1(x + lean)} ${f1(y - hh)}Q${f1(x + ww * 0.5)} ${f1(y - hh * 0.5)} ${f1(x + ww)} ${f1(y)}Z`;
+    o += tong(h, w); if (R() < 0.7) i += tong(h * 0.55, w * 0.45);
   }
   return `<path class="o" d="${o}"/><path class="i" d="${i}"/>`;
 }
-function bareTree(x, base, s, dir) {
-  const R = seeded(Math.round(x * 13 + s * 7)); let d = `M${x} ${base}Q${x + dir * 8 * s} ${base - 60 * s} ${x + dir * 30 * s} ${base - 120 * s}`;
-  for (let k = 0; k < 7; k++) {
-    const t = 0.3 + R() * 0.65, bx = x + dir * 30 * s * t, by = base - 120 * s * t, len = (30 + R() * 50) * s, ang = (-90 + dir * (20 + R() * 60)) * Math.PI / 180;
-    d += `M${bx} ${by}l${(Math.cos(ang) * len).toFixed(1)} ${(Math.sin(ang) * len).toFixed(1)}l${(dir * 8 * s).toFixed(1)} ${(-6 * s).toFixed(1)}`;
-  }
-  return `<path d="${d}" fill="none" stroke="currentColor" stroke-width="${2.2 * s}" stroke-linecap="round"/>`;
+function carriage(x, y, s) {
+  // An overturned carriage body with a broken wheel lying in front and one upright.
+  const wheel = (cx, cy, r, broken) => {
+    let g = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="currentColor" stroke-width="${2.6 * s}"/>`;
+    for (let a = 0; a < 8; a++) if (!(broken && a % 3 === 0)) { const an = a * Math.PI / 4; g += `<path d="M${cx} ${cy}L${f1(cx + Math.cos(an) * r)} ${f1(cy + Math.sin(an) * r)}" stroke="currentColor" stroke-width="${1.4 * s}"/>`; }
+    return g;
+  };
+  return `<path d="M${x} ${y}L${x + 10 * s} ${y - 46 * s}L${x + 78 * s} ${y - 58 * s}L${x + 96 * s} ${y - 20 * s}L${x + 88 * s} ${y}Z M${x + 20 * s} ${y - 44 * s}L${x + 40 * s} ${y - 48 * s}L${x + 42 * s} ${y - 30 * s}L${x + 22 * s} ${y - 27 * s}Z" fill-rule="evenodd"/>`
+    + `<path d="M${x + 60 * s} ${y - 58 * s}L${x + 70 * s} ${y - 76 * s}L${x + 84 * s} ${y - 74 * s}" fill="none" stroke="currentColor" stroke-width="${2 * s}"/>`
+    + wheel(x + 108 * s, y - 16 * s, 17 * s, true) + `<g transform="rotate(-70 ${x + 30 * s} ${y + 4 * s})">${wheel(x + 30 * s, y + 4 * s, 15 * s, true)}</g>`;
 }
-function lampPost(x, base, h) {
-  return rect(x - 2, base - h, 4, h) + `M${x - 9} ${base - h}L${x - 6} ${base - h - 22}H${x + 6}L${x + 9} ${base - h}Z` + `M${x - 7} ${base - h - 22}L${x} ${base - h - 30}L${x + 7} ${base - h - 22}Z`;
+function lampPost(x, base, h, s) {
+  return `<path d="M${f1(x - 1.6 * s)} ${f1(base)}V${f1(base - h)}H${f1(x + 1.6 * s)}V${f1(base)}Z M${f1(x - 6 * s)} ${f1(base - h)}L${f1(x - 4 * s)} ${f1(base - h - 15 * s)}H${f1(x + 4 * s)}L${f1(x + 6 * s)} ${f1(base - h)}Z M${f1(x - 5 * s)} ${f1(base - h - 15 * s)}L${f1(x)} ${f1(base - h - 21 * s)}L${f1(x + 5 * s)} ${f1(base - h - 15 * s)}Z"/>`
+    + `<rect class="lamp" x="${f1(x - 3 * s)}" y="${f1(base - h - 13 * s)}" width="${f1(6 * s)}" height="${f1(10 * s)}"/>`;
+}
+function branches(x, y, s, dir, seed) {
+  const R = seeded(seed); let d = "";
+  const grow = (x0, y0, ang, len, depth) => {
+    const x1 = x0 + Math.cos(ang) * len, y1 = y0 + Math.sin(ang) * len;
+    d += `<path d="M${f1(x0)} ${f1(y0)}L${f1(x1)} ${f1(y1)}" stroke-width="${f1(Math.max(0.6, depth * 1.6 * s))}"/>`;
+    if (depth > 0) for (let b = 0; b < 2; b++) grow(x1, y1, ang + (R() * 0.9 - 0.45) + (b ? 0.35 : -0.35), len * (0.6 + R() * 0.2), depth - 1);
+  };
+  grow(x, y, dir > 0 ? -0.5 : Math.PI + 0.5, 60 * s, 4);
+  return `<g fill="none" stroke="currentColor" stroke-linecap="round">${d}</g>`;
 }
 export function startScene(layer) {
   if (!document.getElementById("gd-scene-css")) {
     const st = document.createElement("style"); st.id = "gd-scene-css"; st.textContent = SCENE_CSS; document.head.appendChild(st);
   }
-  const R = seeded(31);
-  const svg = (cls, inner) => `<svg class="${cls}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><g fill="currentColor">${inner}</g></svg>`;
-  // Middle: smokestacks on the left, townhouses, kept low in the center so the palace shows.
-  let mid = smokestack(36, 360, 210, 14) + smokestack(70, 360, 240, 16) + smokestack(112, 360, 185, 12);
-  for (let x = -10; x < W; ) {
-    const w = 46 + R() * 40, center = Math.abs(x + w / 2 - 380) < 130;
-    mid += townhouse(R, x, 362, w, center ? 34 + R() * 26 : 70 + R() * 70);
-    x += w + 2 + R() * 6;
+  const R = seeded(77);
+  const svg = (cls, inner, style = "") => `<svg class="${cls}" style="${style}" viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="xMidYMax slice" aria-hidden="true">${inner}</svg>`;
+  const walls = [...wall(-1, 13), ...wall(1, 41)];
+  const band = (b) => walls.filter((w) => w.band === b).sort((p, q) => q.t - p.t)
+    .map((w) => `<path d="${w.d}" fill-rule="evenodd" style="fill:${tint(w.t)}"/>`).join("");
+  // Fire: a big band around the palace's foot, and bursts on the broken roofs of the middle buildings.
+  const fireFar = fireBand(R, [60, VY + 14], [400, VY + 6], 150, 38);
+  let fireMid = "";
+  for (const w of walls.filter((w) => w.band === 1 || w.band === 2)) if (R() < 0.55) fireMid += fireBand(R, [w.roofMid[0] - 30 * w.k, w.roofMid[1] + 14 * w.k], [w.roofMid[0] + 30 * w.k, w.roofMid[1] + 10 * w.k], 70 * w.k, 9);
+  // Street: dark ground with cobble lines converging to the vanishing point, rubble at the walls.
+  let street = `<path d="M-40 ${SH}L${VX} ${VY}L${SW + 40} ${SH}Z" style="fill:${tint(0.15)}"/>`;
+  for (const ex of [-80, 40, 160, 280, 400, 520]) street += `<path d="M${VX} ${VY}L${ex} ${SH}" stroke="${tint(0.35)}" stroke-width=".8" fill="none" opacity=".6"/>`;
+  for (let k = 1; k < 9; k++) { const y = VY + (SH - VY) * (1 - 1 / (1 + k * k * 0.06)); street += `<path d="M${f1(VX - (y - VY) * 1.0)} ${f1(y)}H${f1(VX + (y - VY) * 0.62)}" stroke="${tint(0.3)}" stroke-width=".6" opacity=".5"/>`; }
+  let rubble = "";
+  for (let k = 0; k < 14; k++) {
+    const t = R(), side = R() < 0.5 ? -1 : 1, x = VX + side * (side < 0 ? VX : SW - VX) * (1 - t) * (0.8 + R() * 0.15), y = VY + (SH - VY) * (1 - t);
+    const s = (1 - t) * (6 + R() * 16);
+    rubble += `<path d="M${f1(x - s * 1.4)} ${f1(y + 2)}L${f1(x - s * 0.6)} ${f1(y - s * 0.7)}L${f1(x + s * 0.3)} ${f1(y - s)}L${f1(x + s * 1.3)} ${f1(y + 2)}Z" style="fill:${tint(t * 0.8)}"/>`;
   }
-  mid += `M-20 ${H}V360H720V${H}Z`;
-  // Near: tall houses framing both sides, rubble in the middle, two lamp posts.
-  const near = townhouse(R, -14, 386, 120, 170) + townhouse(R, 108, 386, 70, 110) + townhouse(R, 540, 386, 80, 130) + townhouse(R, 616, 386, 100, 185)
-    + `M180 386L200 372L230 378L262 366L300 376L340 368L380 378L420 370L460 377L500 368L540 386Z` + `M-20 ${H}V384H720V${H}Z`;
-  const lamps = lampPost(150, 388, 120) + lampPost(528, 388, 140);
-  const lampGlow = `<rect class="lamp" x="145" y="${388 - 120 - 20}" width="10" height="16" rx="2"/><rect class="lamp" x="523" y="${388 - 140 - 20}" width="10" height="16" rx="2"/>`;
-  // Foreground: an iron fence with spear tips, bare branches from both edges.
-  let fence = `M-20 ${H}V394H720V${H}Z` + rect(-20, 372, 740, 3) + rect(-20, 386, 740, 3);
-  for (let x = -4; x < W; x += 13) fence += rect(x, 366, 2.6, 30) + `M${x - 1.6} 367L${x + 1.3} 360L${x + 4.2} 367Z`;
+  // Lamp posts along the right sidewalk, shrinking into the distance.
+  let lamps = "";
+  for (const t of [0.05, 0.42, 0.66, 0.8]) {
+    const x = VX + (SW - 40 - VX) * (1 - t), base = VY + (SH - 10 - VY) * (1 - t), s = 1.25 * (1 - t) + 0.08;
+    lamps += `<g style="fill:${tint(t)}">${lampPost(x, base, 120 * s, s)}</g>`;
+  }
+  // Iron fence along the left foreground.
+  let fence = "";
+  for (let k = 0; k < 16; k++) {
+    const t = k / 16 * 0.55, x = 4 + (VX - 4) * t * 0.9, base = SH + 10 - (SH - VY) * t, h = 62 * (1 - t);
+    fence += `<path d="M${f1(x)} ${f1(base)}V${f1(base - h)}l${f1(1.6 * (1 - t))} ${f1(-7 * (1 - t))}l${f1(1.6 * (1 - t))} ${f1(7 * (1 - t))}V${f1(base)}Z"/>`;
+  }
+  fence += `<path d="M4 ${SH - 30}L${f1(VX * 0.5)} ${f1(SH - 30 - (SH - VY) * 0.55 * 0.7)}" stroke="currentColor" stroke-width="2.4"/><path d="M4 ${SH - 8}L${f1(VX * 0.5)} ${f1(SH - 8 - (SH - VY) * 0.55 * 0.8)}" stroke="currentColor" stroke-width="2.4"/>`;
+  const smoke = (cx, cy, s) => Array.from({ length: 6 }, (_, k) => `<ellipse cx="${f1(cx + k * 6 * s - 10)}" cy="${f1(cy - k * 26 * s)}" rx="${f1((22 + k * 8) * s)}" ry="${f1((14 + k * 5) * s)}" opacity="${f1(0.55 - k * 0.07)}"/>`).join("");
   layer.insertAdjacentHTML("beforeend", `<div class="gd-scene">
-<div class="sky"></div><div class="pulse"></div>
-${svg("l1 depth", `<path d="${palace(seeded(5))}"/>`)}
-${svg("flames f1", flames(17, 300, 120, 660, 40, 120, 380))}
-<div class="fog" style="height:22%"></div>
-${svg("l2 depth", `<path d="${mid}"/>`)}
-${svg("flames f2", flames(29, 362, 200, 540, 18, 50, 360))}
-${svg("l3 depth", `<path d="${near}"/><path d="${lamps}"/>${lampGlow}`)}
-${svg("l4 depth", `<path d="${fence}"/>${bareTree(-6, 400, 1.3, 1)}${bareTree(706, 400, 1.15, -1)}`)}
+<div class="sky breathe"></div>
+${svg("depth d0", `<path d="${palace(seeded(5))}" style="fill:${tint(0.97)}"/>`, "filter:blur(.7px)")}
+${svg("fire", fireFar)}
+${svg("smoke", smoke(150, VY - 40, 1.3) + smoke(300, VY - 70, 1))}
+${svg("depth d1 rim", band(1))}
+${svg("fire b", fireMid)}
+${svg("smoke b", smoke(70, VY - 10, 1.6))}
+${svg("depth d2 rim", street + rubble + band(2))}
+${svg("depth d3", band(3) + lamps + `<g style="fill:${tint(0.02)};color:${tint(0.02)}">${fence}${carriage(150, SH - 18, 1.05)}${branches(-6, 120, 1.25, 1, 3)}${branches(SW + 6, 70, 1.05, -1, 9)}</g>`)}
 </div>`);
   const box = layer.lastElementChild;
-  // Each flame band flickers at its own pace.
-  box.querySelector(".f2").style.animationDuration = "1.7s";
-  box.querySelector(".f2").style.animationDelay = "-.6s";
-  // Tiny parallax: near layers move a bit more than far ones as you scroll (a few px at most).
-  const layers = [...box.querySelectorAll(".depth")], k = [0.006, 0.014, 0.024, 0.034], max = [4, 9, 15, 20];
+  // Tiny parallax: near bands move a bit more than far ones as you scroll (a few px at most).
+  const layers = [...box.querySelectorAll(".depth")], k = [0.006, 0.014, 0.024, 0.036], max = [4, 9, 15, 22];
   let ticking = false;
   const apply = () => {
     ticking = false;
@@ -401,81 +458,68 @@ function loot(x, y, layer, forceLucky) {
       { duration: rnd(400, 700), easing: "ease-out", fill: "both" });
   }
 
-  // Landing spots: fanned out sideways, kept on screen.
+  // Layout like the game's ground labels: every name measured first, then packed into rows around the
+  // tap (no overlaps), and each item lands right under its own name.
   const W = layer.clientWidth || innerWidth, H = layer.clientHeight || innerHeight;
-  const spread = Math.min(155, 34 * (items.length + 1));
-  const spots = items.map((_, i) => {
-    const t = items.length === 1 ? 0 : i / (items.length - 1) - 0.5;
-    let dx = t * 2 * spread + rnd(-14, 14), dy = (i % 2 ? rnd(28, 70) : rnd(-24, 12));
-    dx = Math.max(24 - x, Math.min(W - 24 - x, dx));
-    dy = Math.max(60 - y, Math.min(H - 30 - y, dy));
-    return { dx, dy };
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
+  const entries = items.map((it) => ({ it }));
+  if (iron) entries.splice(Math.floor(Math.random() * (entries.length + 1)), 0, { it: { name: `${iron} Pedaços de Ferro`, col: COLOR.iron }, iron: true });
+  for (const e of entries) {
+    e.label = el(g, "gd-label", `color:${e.it.col};visibility:hidden`);
+    e.label.textContent = e.it.name;
+    if (e.it.beam === "legendary") e.label.style.borderColor = "rgba(178, 92, 255, .55)";
+    e.w = e.label.offsetWidth;
+  }
+  const maxRow = Math.min(W - 16, 300), rows = [[]];
+  let used = 0;
+  for (const e of entries) {
+    if (used && used + 6 + e.w > maxRow) { rows.push([]); used = 0; }
+    rows[rows.length - 1].push(e); used += (used ? 6 : 0) + e.w;
+  }
+  const ROW = 40, order = [0, 1, -1, 2, -2, 3];
+  rows.forEach((row, r) => {
+    const rw = row.reduce((n, e) => n + e.w, 0) + 6 * (row.length - 1);
+    let left = Math.max(8, Math.min(W - 8 - rw, x - rw / 2));
+    const rowY = Math.max(70, Math.min(H - 40, y + 14 + order[r] * ROW));
+    for (const e of row) { e.dx = left + e.w / 2 - x; e.dy = rowY - y; left += e.w + 6; }
   });
-  // Shuffle so the special one isn't always at the end.
-  for (let i = spots.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [spots[i], spots[j]] = [spots[j], spots[i]]; }
 
   const FLY = 760, life = items.some((it) => it.beam === "legendary") ? 5200 : items.some((it) => it.beam) ? 4300 : 3300;
-  const labels = [];
-  items.forEach((it, i) => {
-    const { dx, dy } = spots[i];
-    const node = el(g, "gd-item", it.beam ? `filter: drop-shadow(0 3px 2px rgba(0,0,0,.7)) drop-shadow(0 0 6px ${it.col})` : "", ART[it.art] || ART.cleaver);
-    const peak = -rnd(60, 110), rot = rnd(-200, 200), lie = rnd(-35, 35);
-    const delay = i * 40;
-    node.animate([
-      { transform: "translate(0px, 0px) rotate(0deg) scale(.5)", easing: "cubic-bezier(.3,.7,.6,1)" },
-      { transform: `translate(${dx * 0.5}px, ${peak}px) rotate(${rot}deg) scale(1)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
-      { transform: `translate(${dx}px, ${dy}px) rotate(${lie}deg) scale(1)`, offset: 0.84, easing: "ease-out" },
-      { transform: `translate(${dx}px, ${dy - 5}px) rotate(${lie * 0.9}deg) scale(1)`, offset: 0.92, easing: "ease-in" },
-      { transform: `translate(${dx}px, ${dy}px) rotate(${lie}deg) scale(1)` },
-    ], { duration: FLY, delay, fill: "both" });
-    if (it.broken) { // broken items crumble right after landing
-      node.animate([{ opacity: 1, filter: "grayscale(1)" }, { opacity: 0, filter: "grayscale(1) blur(2px)", transform: `translate(${dx}px, ${dy + 6}px) rotate(${lie}deg) scale(.7)` }],
-        { duration: 700, delay: delay + FLY + 700, fill: "forwards" });
+  entries.forEach((e, i) => {
+    const { it, dx, dy } = e, delay = i * 40;
+    if (e.iron) { // a little spray of nuggets under the label
+      for (let k = 0; k < Math.min(9, 3 + Math.round(iron / 10)); k++) {
+        const b = el(g, "gd-bit"), bx = dx + rnd(-12, 12), by = dy + rnd(-3, 4), pk = -rnd(30, 70);
+        b.animate([
+          { transform: "translate(0,0) rotate(0deg)", easing: "cubic-bezier(.3,.7,.6,1)" },
+          { transform: `translate(${bx * 0.5}px, ${pk}px) rotate(${rnd(-300, 300)}deg)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
+          { transform: `translate(${bx}px, ${by}px) rotate(${rnd(-90, 90)}deg)` },
+        ], { duration: FLY * 0.85, delay: rnd(0, 120), fill: "both" });
+        b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
+      }
     } else {
-      node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
+      const node = el(g, "gd-item", it.beam ? `filter: grayscale(1) brightness(.95) contrast(1.15) drop-shadow(0 2px 2px rgba(0,0,0,.6)) drop-shadow(0 0 5px ${it.col})` : "", ART[it.art] || ART.cleaver);
+      const peak = -rnd(60, 110), rot = rnd(-200, 200), lie = rnd(-35, 35);
+      node.animate([
+        { transform: "translate(0px, 0px) rotate(0deg) scale(.5)", easing: "cubic-bezier(.3,.7,.6,1)" },
+        { transform: `translate(${dx * 0.5}px, ${peak}px) rotate(${rot}deg) scale(1)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
+        { transform: `translate(${dx}px, ${dy}px) rotate(${lie}deg) scale(1)`, offset: 0.84, easing: "ease-out" },
+        { transform: `translate(${dx}px, ${dy - 4}px) rotate(${lie * 0.9}deg) scale(1)`, offset: 0.92, easing: "ease-in" },
+        { transform: `translate(${dx}px, ${dy}px) rotate(${lie}deg) scale(1)` },
+      ], { duration: FLY, delay, fill: "both" });
+      if (it.broken) { // broken items crumble right after landing
+        node.animate([{ opacity: 1 }, { opacity: 0, filter: "grayscale(1) blur(2px)", transform: `translate(${dx}px, ${dy + 5}px) rotate(${lie}deg) scale(.7)` }],
+          { duration: 700, delay: delay + FLY + 700, fill: "forwards" });
+      } else node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
+      if (it.beam) beam(g, dx, dy, it.beam, delay + FLY - 80, life);
     }
-    if (it.beam) beam(g, dx, dy, it.beam, delay + FLY - 80, life);
-    labels.push({ it, x: dx, y: dy - 30, delay: delay + FLY - 150, broken: it.broken });
-  });
-
-  // Iron bits: a little spray of nuggets with one label.
-  if (iron) {
-    const cx = Math.max(24 - x, Math.min(W - 24 - x, rnd(-30, 30))), cy = Math.max(60 - y, Math.min(H - 30 - y, rnd(8, 30)));
-    for (let i = 0; i < Math.min(9, 3 + Math.round(iron / 10)); i++) {
-      const b = el(g, "gd-bit");
-      const bx = cx + rnd(-12, 12), by = cy + rnd(-5, 5), pk = -rnd(30, 70);
-      b.animate([
-        { transform: "translate(0,0) rotate(0deg)", easing: "cubic-bezier(.3,.7,.6,1)" },
-        { transform: `translate(${bx * 0.5}px, ${pk}px) rotate(${rnd(-300, 300)}deg)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
-        { transform: `translate(${bx}px, ${by}px) rotate(${rnd(-90, 90)}deg)` },
-      ], { duration: FLY * 0.85, delay: rnd(0, 120), fill: "both" });
-      b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
-    }
-    labels.push({ it: { name: `${iron} Pedaços de Ferro`, col: COLOR.iron }, x: cx, y: cy - 16, delay: FLY - 100 });
-  }
-
-  // Labels: placed above their item, nudged up so they don't overlap (like the game stacking names).
-  const placed = [];
-  for (const L of labels) {
-    const t = el(g, "gd-label", `left:${L.x}px;top:${L.y}px;color:${L.it.col}`);
-    t.textContent = L.it.name;
-    if (L.it.beam === "legendary") t.style.borderColor = "rgba(178, 92, 255, .55)";
-    const w = t.offsetWidth, h = t.offsetHeight || 16;
-    const left = Math.max(w / 2 + 4 - x, Math.min(W - w / 2 - 4 - x, L.x)); // keep it on screen
-    let top = L.y;
-    for (let tries = 0; tries < 12; tries++) {
-      const hit = placed.find((p) => Math.abs(p.x - left) < (p.w + w) / 2 + 2 && Math.abs(p.y - top) < h + 1);
-      if (!hit) break;
-      top = hit.y - h - 2;
-    }
-    top = Math.max(8 - y, top);
-    t.style.left = `${left}px`; t.style.top = `${top}px`;
-    placed.push({ x: left, y: top, w });
-    const end = L.broken ? L.delay + 150 + 1300 : life;
-    t.animate([{ opacity: 0, transform: "translate(-50%, 3px)" }, { opacity: 1, transform: "translate(-50%, 0)" }],
-      { duration: 220, delay: L.delay, fill: "forwards" });
+    // The name sits just above where it landed.
+    const t = e.label;
+    t.style.left = `${dx}px`; t.style.top = `${dy - 27}px`; t.style.visibility = "";
+    const show = delay + FLY - 150, end = it.broken ? show + 1450 : life;
+    t.animate([{ opacity: 0, transform: "translate(-50%, 3px)" }, { opacity: 1, transform: "translate(-50%, 0)" }], { duration: 220, delay: show, fill: "forwards" });
     t.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, delay: end - 400, fill: "forwards" });
-  }
+  });
   setTimeout(() => g.remove(), life + 200);
 }
 
@@ -502,21 +546,21 @@ function beam(g, x, y, kind, delay, life) {
 }
 
 // ---------- Item drawings (32×32, dark outline, worn metal / wood / leather) ----------
-const O = `stroke="#120c08" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"`;
+const O = `stroke="rgba(0,0,0,.3)" stroke-width=".7" stroke-linejoin="round" stroke-linecap="round"`;
 const METAL = "#a9a9a2", METAL_D = "#6c6c66", WOOD = "#6b4527", WOOD_L = "#8a5e37", LEATHER = "#5a3a22", BRASS = "#b08a3c", BONE = "#d9cfb6";
 const ART = {
-  cleaver: `<svg viewBox="0 0 32 32"><path d="M4 6 L22 6 L23 18 Q14 21 5 17 Z" fill="${METAL}" ${O}/><path d="M6 8 L20 8" stroke="#d8d8d0" stroke-width="1"/><circle cx="18" cy="10" r="1.3" fill="#120c08"/><path d="M22 10 L29 9 L29.5 13 L22.5 14 Z" fill="${WOOD}" ${O}/><path d="M9 15 l2 -1 m3 1.5 l2 -1" stroke="#7a2a1c" stroke-width="1.1" opacity=".8"/></svg>`,
+  cleaver: `<svg viewBox="0 0 32 32"><path d="M4 6 L22 6 L23 18 Q14 21 5 17 Z" fill="${METAL}" ${O}/><path d="M6 8 L20 8" stroke="#d8d8d0" stroke-width="1"/><circle cx="18" cy="10" r="1.3" fill="#2a2724"/><path d="M22 10 L29 9 L29.5 13 L22.5 14 Z" fill="${WOOD}" ${O}/><path d="M9 15 l2 -1 m3 1.5 l2 -1" stroke="#7a2a1c" stroke-width="1.1" opacity=".8"/></svg>`,
   sword: `<svg viewBox="0 0 32 32"><g transform="rotate(45 16 16)"><path d="M16 1.5 L18 5 L18 20 L14 20 L14 5 Z" fill="${METAL}" ${O}/><path d="M16 4 L16 19" stroke="#e4e4dc" stroke-width=".9"/><path d="M10 20 L22 20 L22 22 L10 22 Z" fill="${BRASS}" ${O}/><path d="M14.8 22 L17.2 22 L17.2 28 L14.8 28 Z" fill="${LEATHER}" ${O}/><circle cx="16" cy="29.5" r="1.8" fill="${BRASS}" ${O}/></g></svg>`,
-  axe: `<svg viewBox="0 0 32 32"><path d="M8 29 L22 5" stroke="#120c08" stroke-width="4.2" stroke-linecap="round"/><path d="M8 29 L22 5" stroke="${WOOD_L}" stroke-width="2.4" stroke-linecap="round"/><path d="M17 7 Q25 3 29 10 Q26 16 21 15 Z" fill="${METAL}" ${O}/><path d="M25 6 Q28 9 27.5 12" stroke="#e4e4dc" stroke-width="1" fill="none"/></svg>`,
-  mace: `<svg viewBox="0 0 32 32"><path d="M7 28 L19 13" stroke="#120c08" stroke-width="4" stroke-linecap="round"/><path d="M7 28 L19 13" stroke="${WOOD}" stroke-width="2.2" stroke-linecap="round"/><path d="M21 4 L23 8 L28 7 L25 11 L29 14 L24 15 L24 20 L20 16 L16 18 L18 13 L14 10 L19 10 Z" fill="${METAL_D}" ${O}/><circle cx="21.5" cy="11.5" r="3.6" fill="${METAL}" ${O}/></svg>`,
+  axe: `<svg viewBox="0 0 32 32"><path d="M8 29 L22 5" stroke="rgba(0,0,0,.25)" stroke-width="4.2" stroke-linecap="round"/><path d="M8 29 L22 5" stroke="${WOOD_L}" stroke-width="2.4" stroke-linecap="round"/><path d="M17 7 Q25 3 29 10 Q26 16 21 15 Z" fill="${METAL}" ${O}/><path d="M25 6 Q28 9 27.5 12" stroke="#e4e4dc" stroke-width="1" fill="none"/></svg>`,
+  mace: `<svg viewBox="0 0 32 32"><path d="M7 28 L19 13" stroke="rgba(0,0,0,.25)" stroke-width="4" stroke-linecap="round"/><path d="M7 28 L19 13" stroke="${WOOD}" stroke-width="2.2" stroke-linecap="round"/><path d="M21 4 L23 8 L28 7 L25 11 L29 14 L24 15 L24 20 L20 16 L16 18 L18 13 L14 10 L19 10 Z" fill="${METAL_D}" ${O}/><circle cx="21.5" cy="11.5" r="3.6" fill="${METAL}" ${O}/></svg>`,
   pistol: `<svg viewBox="0 0 32 32"><path d="M3 11 L22 11 L22 15 L3 15 Z" fill="${METAL_D}" ${O}/><path d="M3 12.2 L21 12.2" stroke="#c9c9c2" stroke-width=".9"/><path d="M15 11 L28 10 Q30 13 27 15 L24 16 L27 26 Q25 28 21 27 L19 16 L15 15 Z" fill="${WOOD}" ${O}/><path d="M19 9 L21 6 L22.5 7 L21 10" fill="${METAL}" ${O}/><path d="M19.5 17 Q18 20 20.5 21" fill="none" ${O}/></svg>`,
   dagger: `<svg viewBox="0 0 32 32"><g transform="rotate(-40 16 16)"><path d="M16 3 Q19 9 18 18 L14 18 Q13 9 16 3 Z" fill="${METAL}" ${O}/><path d="M12 18 L20 18 L20 20 L12 20 Z" fill="${METAL_D}" ${O}/><path d="M14.8 20 L17.2 20 L17.2 27 L14.8 27 Z" fill="${BONE}" ${O}/></g></svg>`,
   shield: `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12.5" fill="${WOOD}" ${O}/><path d="M9 6.5 L9 25.5 M16 3.5 L16 28.5 M23 6.5 L23 25.5" stroke="#3e2714" stroke-width="1"/><circle cx="16" cy="16" r="12.5" fill="none" stroke="${METAL_D}" stroke-width="2.4"/><circle cx="16" cy="16" r="4" fill="${METAL}" ${O}/><circle cx="14.8" cy="14.8" r="1.1" fill="#e4e4dc"/></svg>`,
   helm: `<svg viewBox="0 0 32 32"><path d="M6 20 Q6 6 16 5 Q26 6 26 20 L26 25 L20 25 L20 18 L12 18 L12 25 L6 25 Z" fill="${METAL}" ${O}/><path d="M16 5 L16 18" stroke="${METAL_D}" stroke-width="1.6"/><path d="M8 12 Q10 8 13 7" stroke="#e4e4dc" stroke-width="1" fill="none"/><path d="M12 18 L20 18 L20 21 L12 21 Z" fill="#1d1712"/></svg>`,
   chest: `<svg viewBox="0 0 32 32"><path d="M9 4 L13 6 Q16 8 19 6 L23 4 L29 9 L26 14 L24 12 L24 28 L8 28 L8 12 L6 14 L3 9 Z" fill="${LEATHER}" ${O}/><path d="M16 8 L16 28" stroke="#2c1b0f" stroke-width="1.2"/><circle cx="14" cy="13" r=".9" fill="${BRASS}"/><circle cx="14" cy="18" r=".9" fill="${BRASS}"/><circle cx="14" cy="23" r=".9" fill="${BRASS}"/><path d="M8 20 L24 20" stroke="#2c1b0f" stroke-width="1.6"/></svg>`,
-  ring: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="#120c08" stroke-width="5"/><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="${BRASS}" stroke-width="2.8"/><path d="M12 11 L16 6 L20 11 L16 14 Z" fill="#8a1f2a" ${O}/><path d="M14 10 L16 7.5" stroke="#ff9aa4" stroke-width=".9"/></svg>`,
-  amulet: `<svg viewBox="0 0 32 32"><path d="M6 3 Q16 17 26 3" fill="none" stroke="#120c08" stroke-width="2.6"/><path d="M6 3 Q16 17 26 3" fill="none" stroke="${BRASS}" stroke-width="1.2" stroke-dasharray="1.6 1"/><path d="M16 12 L22 20 L16 29 L10 20 Z" fill="${BONE}" ${O}/><circle cx="16" cy="20" r="2.6" fill="#2b6b4a" ${O}/></svg>`,
-  scepter: `<svg viewBox="0 0 32 32"><path d="M8 29 L20 11" stroke="#120c08" stroke-width="3.6" stroke-linecap="round"/><path d="M8 29 L20 11" stroke="${BRASS}" stroke-width="1.8" stroke-linecap="round"/><path d="M19 4 L26 7 L25 13 L19 14 L16 9 Z" fill="${METAL_D}" ${O}/><circle cx="21" cy="9.5" r="2.4" fill="#5ad19a" ${O}/></svg>`,
+  ring: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="5"/><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="${BRASS}" stroke-width="2.8"/><path d="M12 11 L16 6 L20 11 L16 14 Z" fill="#8a1f2a" ${O}/><path d="M14 10 L16 7.5" stroke="#ff9aa4" stroke-width=".9"/></svg>`,
+  amulet: `<svg viewBox="0 0 32 32"><path d="M6 3 Q16 17 26 3" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2.6"/><path d="M6 3 Q16 17 26 3" fill="none" stroke="${BRASS}" stroke-width="1.2" stroke-dasharray="1.6 1"/><path d="M16 12 L22 20 L16 29 L10 20 Z" fill="${BONE}" ${O}/><circle cx="16" cy="20" r="2.6" fill="#2b6b4a" ${O}/></svg>`,
+  scepter: `<svg viewBox="0 0 32 32"><path d="M8 29 L20 11" stroke="rgba(0,0,0,.25)" stroke-width="3.6" stroke-linecap="round"/><path d="M8 29 L20 11" stroke="${BRASS}" stroke-width="1.8" stroke-linecap="round"/><path d="M19 4 L26 7 L25 13 L19 14 L16 9 Z" fill="${METAL_D}" ${O}/><circle cx="21" cy="9.5" r="2.4" fill="#5ad19a" ${O}/></svg>`,
   gloves: `<svg viewBox="0 0 32 32"><path d="M8 28 L8 17 L6 12 Q6 10 8 10.5 L10 14 L10 6 Q11 4.5 12.5 6 L13 13 L14 4.5 Q15.5 3 17 4.5 L16.6 13 L18.5 6 Q20 5 21 6.5 L19.5 15 L21.5 13 Q23.5 12.5 23 15 L19 22 L19 28 Z" fill="${LEATHER}" ${O}/><path d="M8 24 L19 24" stroke="${METAL_D}" stroke-width="2"/></svg>`,
   boots: `<svg viewBox="0 0 32 32"><path d="M10 3 L18 3 L18 19 Q26 19 28 24 L28 28 L8 28 L8 21 Q10 18 10 14 Z" fill="${LEATHER}" ${O}/><path d="M8 25 L28 25" stroke="#2c1b0f" stroke-width="2"/><path d="M10 9 L18 9" stroke="${BRASS}" stroke-width="1.4"/></svg>`,
   scroll: `<svg viewBox="0 0 32 32"><path d="M7 7 L25 7 L25 25 L7 25 Z" fill="#d9c49a" ${O}/><path d="M5 5.5 Q5 3.5 7 3.5 L25 3.5 Q27 3.5 27 5.5 Q27 7.5 25 7.5 L7 7.5 Q5 7.5 5 5.5 Z" fill="#c8b083" ${O}/><path d="M5 26.5 Q5 24.5 7 24.5 L25 24.5 Q27 24.5 27 26.5 Q27 28.5 25 28.5 L7 28.5 Q5 28.5 5 26.5 Z" fill="#c8b083" ${O}/><path d="M10 11 L22 11 M10 14 L20 14 M10 17 L18 17" stroke="#6b5636" stroke-width="1"/><circle cx="21" cy="20" r="2.8" fill="#8f1d1d" ${O}/></svg>`,

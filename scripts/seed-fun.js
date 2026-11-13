@@ -108,6 +108,15 @@ const ref = getFirestore().doc("config/fun");
     if (!(cur.occasions && cur.occasions["grim-dawn"])) update["occasions.grim-dawn"] = defaults.occasions["grim-dawn"];
     update.configVersion = 11;
   }
+  // configVersion 12: green "Malmouth" palette for the Grim Dawn occasion (its scene is green now). Only switches the
+  // occasion if it still has the shipped palette, and drops the shipped drawings (the scene replaces them).
+  if ((Number(cur.configVersion) || 0) < 12) {
+    if (!(cur.palettes && cur.palettes.malmouth)) update["palettes.malmouth"] = defaults.palettes.malmouth;
+    const gd = cur.occasions && cur.occasions["grim-dawn"];
+    if (gd && gd.palette === "cinzas") update["occasions.grim-dawn.palette"] = "malmouth";
+    if (gd && gd.decor === "lantern.svg crow.svg crow.svg lantern.svg crow.svg") update["occasions.grim-dawn.decor"] = "";
+    update.configVersion = 12;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;
