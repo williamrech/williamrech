@@ -313,7 +313,19 @@ function placeDecor(spec, force = false) {
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 // One list of names, used in the palette studio, the occasion editor and Configurações.
-const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos" };
+const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado" };
+// Assombrado: corner web, a spider on its thread, fog along the bottom, and an eye where you tap the background.
+const WEB_SVG = `<svg viewBox="0 0 160 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round">
+<g stroke-width="1.3">${[0, 15, 30, 45, 60, 75, 90].map((a) => { const r = (a * Math.PI) / 180; return `<path d="M0 0 L${(160 * Math.cos(r)).toFixed(1)} ${(160 * Math.sin(r)).toFixed(1)}"/>`; }).join("")}</g>
+<g stroke-width="1">${[28, 52, 78, 104, 132].map((R) => { let d = ""; for (let i = 0; i <= 6; i++) { const a = (i * 15 * Math.PI) / 180, x = R * Math.cos(a), y = R * Math.sin(a); if (!i) d += `M${x.toFixed(1)} ${y.toFixed(1)}`; else { const m = ((i - 0.5) * 15 * Math.PI) / 180, k = R * 0.9; d += ` Q${(k * Math.cos(m)).toFixed(1)} ${(k * Math.sin(m)).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`; } } return `<path d="${d}"/>`; }).join("")}</g></svg>`;
+const SPIDER_SVG = `<svg viewBox="0 0 40 40" aria-hidden="true"><g stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" class="legs">
+<path d="M16 18 Q8 12 4 16"/><path d="M16 21 Q7 19 3 23"/><path d="M16 24 Q8 26 5 32"/><path d="M17 26 Q12 31 10 37"/>
+<path d="M24 18 Q32 12 36 16"/><path d="M24 21 Q33 19 37 23"/><path d="M24 24 Q32 26 35 32"/><path d="M23 26 Q28 31 30 37"/></g>
+<ellipse cx="20" cy="15" rx="4" ry="3.5" fill="currentColor"/><ellipse cx="20" cy="24" rx="6" ry="7" fill="currentColor"/>
+<circle cx="18.3" cy="14.4" r="0.9" fill="var(--caramel, #e33)"/><circle cx="21.7" cy="14.4" r="0.9" fill="var(--caramel, #e33)"/></svg>`;
+const EYE_SVG = `<svg viewBox="0 0 100 50" aria-hidden="true"><path d="M2 25 Q50 -12 98 25 Q50 62 2 25Z" fill="color-mix(in srgb, var(--fg) 88%, #c9b)"/>
+<g class="iris"><circle cx="50" cy="25" r="15" fill="var(--caramel, #b33)"/><circle cx="50" cy="25" r="7" fill="#050505"/><circle cx="46" cy="20" r="2.4" fill="#fff" opacity=".85"/></g>
+<path d="M2 25 Q50 -12 98 25" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></svg>`;
 const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor"/></svg>`;
 function fillEffectSelect(sel) {
   const keep = sel.value;
@@ -339,7 +351,7 @@ function spawnEffect(layer, kind, scale = 1) {
   clearTimeout(layer._fxTimer);
   layer.innerHTML = "";
   layer.dataset.fx = kind || "";
-  if (!(kind in EFFECTS)) return;
+  if (!(kind in EFFECTS) && kind !== "haunted-bg") return;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (kind === "smoke") {
     // The cup stays put; steam only now and then (never with reduced motion).
@@ -368,6 +380,54 @@ function spawnEffect(layer, kind, scale = 1) {
       layer._fxTimer = setTimeout(puff, 2500 + Math.random() * 4500);
     };
     layer._fxTimer = setTimeout(puff, 700);
+    return;
+  }
+  // Assombrado, behind the feed: fog along the bottom + a web in the top-left corner.
+  // (In the small studio preview everything goes in one layer.)
+  if (kind === "haunted-bg" || (kind === "haunted" && scale < 1)) {
+    const web = document.createElement("div");
+    web.className = "haunt-web";
+    web.innerHTML = WEB_SVG;
+    layer.appendChild(web);
+    for (let i = 0; i < 3; i++) {
+      const f = document.createElement("i");
+      f.className = "haunt-fog";
+      f.style.cssText = `left:${-30 + i * 35}%;animation-duration:${(38 + i * 11) * Math.max(scale, 0.6)}s;animation-delay:${-i * 9}s;opacity:${0.5 + i * 0.15}`;
+      layer.appendChild(f);
+    }
+    if (kind === "haunted-bg") return;
+  }
+  if (kind === "haunted") {
+    // The spider hangs from the web; now and then it drops a random distance, swings, and climbs back.
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const rig = document.createElement("div");
+    rig.className = "spider-rig";
+    rig.innerHTML = `<i class="spider-thread"></i><button type="button" class="spider" aria-label="Aranha">${SPIDER_SVG}</button>`;
+    layer.appendChild(rig);
+    const rest = 48 * scale + 8;
+    const setLen = (px, secs) => { rig.style.setProperty("--t", `${secs}s`); rig.style.setProperty("--len", `${px}px`); };
+    setLen(rest, 0);
+    const room = () => (scale < 1 ? layer.clientHeight : innerHeight);
+    const cycle = () => {
+      if (!rig.isConnected) return;
+      if (!document.hidden && !still) {
+        rig.classList.add("moving");
+        setLen(rest + room() * rnd(0.18, 0.5), rnd(4, 6.5));
+        layer._spiderUp = setTimeout(() => {
+          rig.classList.remove("moving");
+          layer._spiderUp = setTimeout(() => { rig.classList.add("moving"); setLen(rest, rnd(5, 7)); setTimeout(() => rig.classList.remove("moving"), 7000); }, rnd(3000, 8000));
+        }, 6500);
+      }
+      layer._fxTimer = setTimeout(cycle, rnd(20000, 40000));
+    };
+    if (!still) layer._fxTimer = setTimeout(cycle, rnd(3000, 8000));
+    rig.querySelector(".spider").onclick = () => { // tap: scurries back up
+      clearTimeout(layer._spiderUp);
+      rig.classList.add("moving");
+      setLen(rest, 0.9);
+      setTimeout(() => rig.classList.remove("moving"), 1000);
+    };
+    layer.dataset.fx = kind;
     return;
   }
   if (still) return;
@@ -450,8 +510,22 @@ function runEffect(kind) {
   // The steaming cup lives behind the feed (like the drawings); the rest float above it.
   const behind = kind === "smoke";
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
-  spawnEffect(document.getElementById("fx-back"), behind ? kind : null);
+  spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : null);
 }
+// Assombrado: tapping the empty background opens an eye there for a moment (random size and time).
+document.addEventListener("click", (e) => {
+  if (effectKey !== "haunted" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (e.target.closest("button, a, input, textarea, select, label, summary, details, dialog, header, nav, .round, .chip, .tab, .pop-menu, li, [role=button]")) return;
+  if (document.querySelector("dialog[open]")) return;
+  const w = Math.round(28 + Math.random() * 90);
+  const ms = Math.round(1000 + Math.random() * 1500);
+  const eye = document.createElement("div");
+  eye.className = "haunt-eye";
+  eye.style.cssText = `left:${e.clientX - w / 2}px;top:${e.clientY - w / 4}px;width:${w}px;height:${w / 2}px;--dur:${ms}ms`;
+  eye.innerHTML = EYE_SVG;
+  document.getElementById("fx").appendChild(eye);
+  setTimeout(() => eye.remove(), ms + 100);
+});
 
 // ---------- Phone only ----------
 // Generous on purpose (real family phones must never be blocked): any Android/iPhone/iPod,

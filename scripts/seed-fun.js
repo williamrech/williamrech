@@ -79,6 +79,16 @@ const ref = getFirestore().doc("config/fun");
   }
   // configVersion 8: an occasion id was renamed (done).
   if ((Number(cur.configVersion) || 0) < 8) update.configVersion = 8;
+  // configVersion 9: Assombrado on Halloween (theme + occasion) and Friday the 13th — only where no effect was set.
+  if ((Number(cur.configVersion) || 0) < 9) {
+    for (const id of ["halloween", "sexta-13"]) {
+      const o = cur.occasions && cur.occasions[id];
+      if (o && !o.effect) update[`occasions.${id}.effect`] = "haunted";
+    }
+    const hp = cur.palettes && cur.palettes.halloween;
+    if (hp && !hp.effect) update["palettes.halloween.effect"] = "haunted";
+    update.configVersion = 9;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;
