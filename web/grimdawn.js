@@ -35,20 +35,40 @@ const CSS = `
 .gd-rim { position: absolute; border-radius: 50%; }
 .gd-mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; }
 .gd-salt { position: absolute; overflow: visible; }
-.gd-item { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; filter: grayscale(1) brightness(.95) contrast(1.15) drop-shadow(0 2px 2px rgba(0,0,0,.6)); }
-.gd-item svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.gd-item { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px; will-change: transform; }
+.gd-item svg { width: 100%; height: 100%; display: block; overflow: visible; filter: url(#gd-solid); }
+.gd-ground { position: absolute; width: 44px; height: 14px; border-radius: 50%; opacity: 0; }
+.gd-ground.pool { filter: blur(3px); mix-blend-mode: screen; }
+.gd-twinkle { position: absolute; width: 9px; height: 9px; margin: -4px 0 0 -4px; opacity: 0; filter: drop-shadow(0 0 3px currentColor); }
+.gd-twinkle svg { width: 100%; height: 100%; display: block; }
 .gd-bit { position: absolute; width: 6px; height: 5px; margin: -3px 0 0 -3px; background: linear-gradient(135deg, #c9c9c4, #6d6d6a);
   border-radius: 30% 60% 40% 50%; box-shadow: 0 1px 1px rgba(0,0,0,.7); }
-.gd-label { position: absolute; transform: translateX(-50%); white-space: nowrap; font: 600 11px/1.25 Georgia, "Times New Roman", serif;
-  padding: 1px 6px 2px; background: rgba(8, 6, 5, .78); border: 1px solid rgba(255,255,255,.08); border-radius: 2px; opacity: 0;
-  text-shadow: 0 1px 1px #000; letter-spacing: .01em; }
-.gd-beam { position: absolute; width: 16px; margin-left: -8px; transform-origin: 50% 100%;
+.gd-label { position: absolute; transform: translateX(-50%); white-space: nowrap; font: 400 13.5px/1.2 "GD Fell", Georgia, "Times New Roman", serif;
+  padding: 1px 7px 2px; color: var(--c); opacity: 0; letter-spacing: .02em; text-shadow: 0 1px 0 #000;
+  background: color-mix(in srgb, var(--c) 9%, rgba(0, 0, 0, .72)); border: 0; }
+.gd-label .dia { font-style: normal; font-size: 9px; margin-right: 6px; vertical-align: 1px; text-shadow: 0 0 4px var(--c); }
+.gd-beam { position: absolute; transform-origin: 50% 100%; mix-blend-mode: screen;
   -webkit-mask-image: linear-gradient(to top, #000 0, rgba(0,0,0,.6) 40%, transparent 100%); mask-image: linear-gradient(to top, #000 0, rgba(0,0,0,.6) 40%, transparent 100%); }
 .gd-glow { position: absolute; border-radius: 50%; }
 .gd-flash { position: absolute; border-radius: 50%; }
 `;
 function ensureCss() {
   if (document.getElementById("gd-css")) return;
+  // Makes flat item drawings read as solid objects: a bevel from the shape's edge, a hard highlight, grit.
+  document.body.insertAdjacentHTML("beforeend", `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="gd-solid" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="b"/>
+<feDiffuseLighting in="b" surfaceScale="5" diffuseConstant="1.15" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="42"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.3" k2=".1" k3="0" k4="0" result="lit"/>
+<feSpecularLighting in="b" surfaceScale="5" specularConstant=".45" specularExponent="30" lighting-color="#cfd8e2" result="s"><feDistantLight azimuth="225" elevation="50"/></feSpecularLighting>
+<feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="4" result="n"/>
+<feColorMatrix in="n" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.4 .9" result="grit"/>
+<feComposite in="lit" in2="grit" operator="in" result="worn"/>
+<feMerge result="m"><feMergeNode in="lit"/></feMerge>
+<feBlend in="worn" in2="lit" mode="multiply" result="base"/>
+<feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+<feComposite in="base" in2="s2" operator="arithmetic" k1="0" k2="1" k3=".8" k4="0" result="out"/>
+<feComposite in="out" in2="SourceAlpha" operator="in"/>
+</filter></svg>`);
   const s = document.createElement("style");
   s.id = "gd-css";
   s.textContent = CSS;
@@ -162,14 +182,125 @@ function ensureSkin() {
   if (document.getElementById("gd-skin-css")) return;
   const st = document.createElement("style"); st.id = "gd-skin-css"; st.textContent = SKIN_CSS(); document.head.appendChild(st);
 }
-export function startScene(layer) {
+// ---------- The bottom of the screen: what's left of Cairn ----------
+// Rolling smoke (the app's fog engine, tinted), then a mound of rubble with skulls, ribs, bones and blood, a
+// sword planted in it. A crow flies in and perches on a skull now and then (any tap scares it off), and
+// aether lightning flashes far away. Shapes get a stone/bone bevel + grit from an SVG lighting filter.
+const f1 = (n) => n.toFixed(1);
+function seeded(seed) { let r = seed; return () => ((r = (r * 9301 + 49297) % 233280) / 233280); }
+const BOTTOM_CSS = `
+.gd-storm { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(90% 55% at 62% 0, rgba(150, 255, 205, .55), transparent 70%); }
+.gd-rubble { position: absolute; left: 0; right: 0; bottom: 0; height: min(27vh, 220px); z-index: 5; pointer-events: none; }
+.gd-rubble svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.gd-rubble .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 38%; background: linear-gradient(to top, rgba(0,0,0,.75), transparent); }
+.gd-crow { transform-box: fill-box; }
+.gd-crow .wing { display: none; transform-box: fill-box; transform-origin: 50% 100%; }
+.gd-crow.flying .wing { display: inline; animation: gd-flap .28s ease-in-out infinite alternate; }
+.gd-crow.flying .perch { display: none; }
+.gd-crow.perched .perch { transform-box: fill-box; transform-origin: 45% 100%; animation: gd-peck 7s ease-in-out infinite; }
+@keyframes gd-flap { from { transform: scaleY(1); } to { transform: scaleY(-.55); } }
+@keyframes gd-peck { 0%, 62%, 74%, 100% { transform: rotate(0); } 66% { transform: rotate(16deg); } 70% { transform: rotate(-5deg); } }
+body.gd-skin .fog-strip { filter: blur(14px); }
+body.gd-skin .fog-strip path { fill: color-mix(in srgb, #3fe08c 20%, #0b0f0d); }
+body.gd-skin .haunt-fog { opacity: .25 !important; }
+`;
+const STONE_FILTER = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="gd-stone" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="1.3" result="b"/>
+<feDiffuseLighting in="b" surfaceScale="6" diffuseConstant="1.1" lighting-color="#e6fff2" result="d"><feDistantLight azimuth="255" elevation="38"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.5" k2=".1" k3="0" k4="0" result="lit"/>
+<feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" seed="7" result="n"/>
+<feColorMatrix in="n" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.05" result="grit"/>
+<feComposite in="lit" in2="grit" operator="in" result="worn"/>
+<feBlend in="worn" in2="lit" mode="multiply" result="base"/>
+<feComposite in="base" in2="SourceAlpha" operator="in"/>
+</filter></svg>`;
+function rubbleSvg() {
+  const R = seeded(19), F = `filter="url(#gd-stone)"`;
+  const rock = (cx, cy, r, fill) => {
+    const n = 5 + Math.floor(R() * 3); let d = "";
+    for (let k = 0; k < n; k++) { const a = (k / n) * 6.283 + R() * 0.5, rr = r * (0.72 + R() * 0.45); d += `${k ? "L" : "M"}${f1(cx + Math.cos(a) * rr)} ${f1(cy + Math.sin(a) * rr * 0.72)}`; }
+    return `<path ${F} d="${d}Z" fill="${fill}"/>`;
+  };
+  const skull = (x, y, sc, rot) => `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${sc})"><path ${F} d="M-10 0C-10 -15 10 -15 10 0C10 5 7 7 6.5 9L6 14H-6L-6.5 9C-7 7 -10 5 -10 0Z" fill="#a39a82"/>`
+    + `<ellipse cx="-4.2" cy="1" rx="2.9" ry="3.2" fill="#070706"/><ellipse cx="4.2" cy="1" rx="2.9" ry="3.2" fill="#070706"/><path d="M0 5L-1.6 9H1.6Z" fill="#070706"/>`
+    + `<path d="M-3.6 10.5V14M-1.2 10.5V14M1.2 10.5V14M3.6 10.5V14" stroke="#1a1814" stroke-width=".8"/></g>`;
+  const bone = (x, y, len, rot) => `<g transform="translate(${x} ${y}) rotate(${rot})" ${F}><rect x="0" y="-1.6" width="${len}" height="3.2" rx="1.4" fill="#948b74"/><circle cx="0" cy="-1.8" r="2.4" fill="#948b74"/><circle cx="0" cy="1.8" r="2.4" fill="#948b74"/><circle cx="${len}" cy="-1.8" r="2.4" fill="#948b74"/><circle cx="${len}" cy="1.8" r="2.4" fill="#948b74"/></g>`;
+  let o = "";
+  const greys = ["#2b2f2d", "#343937", "#242826", "#3a3f3c"], dark = ["#1b1e1d", "#222624", "#151817"];
+  for (let x = -12; x < 412; x += 15 + R() * 14) o += rock(x, 98 + R() * 12, 13 + R() * 11, pick2(R, greys)); // back row
+  // The sword, planted (its foot is buried by the front rocks).
+  o += `<g transform="rotate(10 215 104)"><path ${F} d="M212.6 38H217.4L217 108H213Z" fill="#7b8580"/><path d="M215 40V104" stroke="#2c312f" stroke-width=".7"/>`
+    + `<rect ${F} x="203.5" y="34" width="23" height="4.2" rx="1" fill="#5d5340"/><rect x="213.4" y="20" width="3.2" height="14" fill="#2e2219"/><circle ${F} cx="215" cy="18" r="3.3" fill="#5d5340"/>`
+    + `<path d="M213.2 60Q214.5 70 213.4 84L214.6 84Q215.6 70 214.4 60Z" fill="#5a0b0b" opacity=".9"/></g>`;
+  // Remains.
+  o += `<g ${F} fill="none" stroke="#8f8670" stroke-width="2.3" stroke-linecap="round"><path d="M262 104Q282 96 304 102"/>`
+    + [0, 1, 2, 3, 4].map((k) => `<path d="M${268 + k * 8} ${102 - k * 0.4}q${3 + k * 0.3} ${-19 + k * 1.5} ${11 - k * 0.6} ${-3 + k * 0.6}"/>`).join("") + `</g>`;
+  o += bone(132, 110, 26, -14) + bone(318, 112, 22, 22) + bone(64, 113, 18, 8);
+  o += skull(112, 100, 1.05, -16) + skull(176, 108, 0.82, 22) + skull(252, 104, 0.92, -6) + skull(346, 108, 0.75, 14);
+  // Blood, pooled dark between the stones and run down a few of them.
+  o += `<path d="M96 116Q120 108 150 114Q172 110 196 117Q170 126 140 123Q112 126 96 116Z" fill="#4d0808" opacity=".92"/><path d="M118 114Q134 111 150 115" stroke="#a02020" stroke-width="1" fill="none" opacity=".55"/>`
+    + `<path d="M238 116Q262 110 290 116Q268 123 238 116Z" fill="#430707" opacity=".9"/><path d="M110 108q1 6 -.5 10M256 110q1.2 5 0 8M180 114q.8 4 0 7" stroke="#5c0a0a" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+  for (let x = -16; x < 416; x += 20 + R() * 22) o += rock(x, 124 + R() * 8, 17 + R() * 14, pick2(R, dark)); // front row
+  for (let k = 0; k < 16; k++) o += rock(R() * 400, 112 + R() * 14, 2.5 + R() * 3.5, pick2(R, greys)); // debris
+  // The crow (starts hidden; perches on a skull).
+  o += `<g class="gd-crow" style="display:none" fill="#1a1f1d"><g transform="translate(110 87) scale(1.2)">`
+    + `<g class="perch"><path ${F} d="M-13 1L-23 6L-12 -3C-10 -9 -4 -13 3 -13C5 -17 8 -19 11.5 -18C13.5 -17.4 14.4 -16 14.8 -15L20.5 -13.4L14.6 -12.3C14 -9 12 -6 8 -3C4 0 -4 2 -9 1.4Z"/>`
+    + `<path d="M-2 0V4M3 -1V4" stroke="#1a1f1d" stroke-width="1.2"/><circle cx="11.6" cy="-15.4" r=".7" fill="#7dffb6"/></g>`
+    + `<g class="fly"><path class="wing" d="M-1 -9L-20 -24L-6 -8Z"/><path class="wing" d="M1 -9L20 -24L6 -8Z"/></g>`
+    + `</g></g>`;
+  return `<svg viewBox="0 -24 400 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">${o}</svg>`;
+}
+const pick2 = (R, arr) => arr[Math.floor(R() * arr.length)];
+let scareCrow = null;
+function startCrow(box) {
+  const crow = box.querySelector(".gd-crow");
+  if (!crow || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  // While flying it shows a small body with flapping wings; perched, the full bird.
+  crow.querySelector(".fly").insertAdjacentHTML("afterbegin", `<ellipse class="wing" style="animation:none" cx="0" cy="-8" rx="6.5" ry="3.2"/><path class="wing" style="animation:none" d="M5 -9L11 -7.5L5 -6.5Z"/>`);
+  let timer = 0, state = "away";
+  const later = (fn, ms) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
+  const leave = () => {
+    if (state !== "perched") return;
+    state = "leaving"; crow.setAttribute("class", "gd-crow flying");
+    crow.animate([{ transform: "translate(0px, 0px)" }, { transform: "translate(-240px, -190px)" }], { duration: 1700, easing: "cubic-bezier(.5,0,.8,.6)", fill: "forwards" })
+      .finished.then(() => { crow.style.display = "none"; state = "away"; later(arrive, rnd(25000, 60000)); }, () => {});
+  };
+  const arrive = () => {
+    if (!crow.isConnected) return;
+    if (document.hidden) return later(arrive, 8000);
+    state = "arriving"; crow.style.display = ""; crow.setAttribute("class", "gd-crow flying");
+    crow.animate([{ transform: "translate(210px, -170px)" }, { transform: "translate(0px, 0px)" }], { duration: 2400, easing: "cubic-bezier(.2,.6,.3,1)", fill: "forwards" })
+      .finished.then(() => { state = "perched"; crow.setAttribute("class", "gd-crow perched"); later(leave, rnd(18000, 45000)); }, () => {});
+  };
+  scareCrow = () => { if (crow.isConnected) leave(); };
+  later(arrive, rnd(3500, 8000));
+}
+export function startScene(layer, helpers = {}) {
   ensureSkin();
-  layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="glow"></div><div class="mist"></div><div class="grain"></div></div>`);
+  if (!document.getElementById("gd-bottom-css")) {
+    const st = document.createElement("style"); st.id = "gd-bottom-css"; st.textContent = BOTTOM_CSS; document.head.appendChild(st);
+    document.body.insertAdjacentHTML("beforeend", STONE_FILTER);
+  }
+  layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="glow"></div><div class="mist"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
+  const storm = layer.querySelector(".gd-storm");
+  if (helpers.fog) helpers.fog(); // rolling smoke strips (pushed by swipes, swelling on scroll)
+  layer.insertAdjacentHTML("beforeend", `<div class="gd-rubble">${rubbleSvg()}<div class="fade"></div></div>`);
+  startCrow(layer.lastElementChild);
+  // Aether lightning, far off: a double flash every so often.
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const strike = () => {
+      if (!storm.isConnected) return;
+      if (!document.hidden) storm.animate([{ opacity: 0 }, { opacity: 0.55, offset: 0.08 }, { opacity: 0.08, offset: 0.2 }, { opacity: 0.4, offset: 0.3 }, { opacity: 0 }], { duration: 900, easing: "ease-out" });
+      setTimeout(strike, rnd(9000, 24000));
+    };
+    setTimeout(strike, rnd(5000, 10000));
+  }
 }
 
 // ---------- Tap ----------
 export function grimTap(x, y, layer, force) { // force (tests only): "loot" | "rift" | "gate", lucky: 0..1
   ensureCss();
+  if (scareCrow) scareCrow();
   if (!force && layer.querySelectorAll(".gd-fx").length >= 4) return; // don't pile up
   let r = force ? { loot: 0, rift: 0.6, gate: 0.9 }[force.kind] : Math.random();
   if (r >= 0.55 && !force && layer.querySelector(".gd-portal")) r = 0; // only one portal at a time: loot instead
@@ -303,7 +434,7 @@ function flash(g, size, color, delay) {
 // ---------- Loot ----------
 // Rarity colors (names on the ground, like the game's labels).
 const COLOR = {
-  broken: "#8a8a86", common: "#ece8e0", magic: "#f3d64e", rare: "#45d64f", epic: "#4a90ff", legendary: "#b25cff",
+  broken: "#8a8a86", common: "#ece8e0", magic: "#f3d64e", rare: "#3fe35a", epic: "#52b4f2", legendary: "#b25cff",
   iron: "#a7a7a3", recipe: "#f3b878", component: "#ee8f35", rareComponent: "#efe4b4",
 };
 // Names from the game's Brazilian Portuguese translation (community localization), by tier:
@@ -349,111 +480,113 @@ function loot(x, y, layer, forceLucky) {
       { duration: rnd(400, 700), easing: "ease-out", fill: "both" });
   }
 
-  // Layout like the game's ground labels: every name measured first, then packed into rows around the
-  // tap (no overlaps), and each item lands right under its own name.
+  // Like a drop in the game: the items land in a pile around the tap, lying flat on the ground with a glow
+  // and sparkles in their rarity color; the names stack in a column of dark plates above the pile; epics and
+  // legendaries shoot a tall pillar of light.
   const W = layer.clientWidth || innerWidth, H = layer.clientHeight || innerHeight;
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
   const entries = items.map((it) => ({ it }));
-  if (iron) entries.splice(Math.floor(Math.random() * (entries.length + 1)), 0, { it: { name: `${iron} Pedaços de Ferro`, col: COLOR.iron }, iron: true });
-  for (const e of entries) {
-    e.label = el(g, "gd-label", `color:${e.it.col};visibility:hidden`);
-    e.label.textContent = e.it.name;
-    if (e.it.beam === "legendary") e.label.style.borderColor = "rgba(178, 92, 255, .55)";
-    e.w = e.label.offsetWidth;
-  }
-  const maxRow = Math.min(W - 16, 300), rows = [[]];
-  let used = 0;
-  for (const e of entries) {
-    if (used && used + 6 + e.w > maxRow) { rows.push([]); used = 0; }
-    rows[rows.length - 1].push(e); used += (used ? 6 : 0) + e.w;
-  }
-  const ROW = 40, order = [0, 1, -1, 2, -2, 3];
-  rows.forEach((row, r) => {
-    const rw = row.reduce((n, e) => n + e.w, 0) + 6 * (row.length - 1);
-    let left = Math.max(8, Math.min(W - 8 - rw, x - rw / 2));
-    const rowY = Math.max(70, Math.min(H - 40, y + 14 + order[r] * ROW));
-    for (const e of row) { e.dx = left + e.w / 2 - x; e.dy = rowY - y; left += e.w + 6; }
-  });
-
-  const FLY = 760, life = items.some((it) => it.beam === "legendary") ? 5200 : items.some((it) => it.beam) ? 4300 : 3300;
+  if (iron) entries.push({ it: { name: `${iron} Pedaços de Ferro`, col: COLOR.iron }, iron: true });
+  const ROW = 22, n2 = entries.length;
+  const baseY = Math.max(y - 34, 70 + (n2 - 1) * ROW); // bottom plate; the stack grows upward
+  const pileY = Math.min(H - 36, baseY + 56);
+  const FLY = 720, life = items.some((it) => it.beam === "legendary") ? 6000 : items.some((it) => it.beam) ? 5000 : 3800;
   entries.forEach((e, i) => {
-    const { it, dx, dy } = e, delay = i * 40;
-    if (e.iron) { // a little spray of nuggets under the label
+    const { it } = e, delay = i * 45;
+    // Where it lands (relative to the tap).
+    const dx = Math.max(26 - x, Math.min(W - 26 - x, rnd(-105, 105))), dy = pileY - y + rnd(-20, 20);
+    const glowCol = it.col && it.col !== COLOR.common && it.col !== COLOR.broken && it.col !== COLOR.iron ? it.col : null;
+    if (e.iron) {
       for (let k = 0; k < Math.min(9, 3 + Math.round(iron / 10)); k++) {
-        const b = el(g, "gd-bit"), bx = dx + rnd(-12, 12), by = dy + rnd(-3, 4), pk = -rnd(30, 70);
-        b.animate([
+        const b2 = el(g, "gd-bit"), bx = dx + rnd(-12, 12), by = dy + rnd(-4, 4), pk = -rnd(30, 70);
+        b2.animate([
           { transform: "translate(0,0) rotate(0deg)", easing: "cubic-bezier(.3,.7,.6,1)" },
           { transform: `translate(${bx * 0.5}px, ${pk}px) rotate(${rnd(-300, 300)}deg)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
           { transform: `translate(${bx}px, ${by}px) rotate(${rnd(-90, 90)}deg)` },
         ], { duration: FLY * 0.85, delay: rnd(0, 120), fill: "both" });
-        b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
+        b2.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
       }
     } else {
-      const node = el(g, "gd-item", it.beam ? `filter: grayscale(1) brightness(.95) contrast(1.15) drop-shadow(0 2px 2px rgba(0,0,0,.6)) drop-shadow(0 0 5px ${it.col})` : "", ART[it.art] || ART.cleaver);
-      const peak = -rnd(60, 110), rot = rnd(-200, 200), lie = rnd(-35, 35);
+      // Contact shadow + colored pool of light on the ground.
+      const sh = el(g, "gd-ground", `left:${dx - 30}px;top:${dy + 2}px;width:60px;height:18px;background:radial-gradient(closest-side, rgba(0,0,0,.75), transparent)`);
+      sh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, delay: delay + FLY * 0.8, fill: "both" });
+      sh.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, delay: life - 450, fill: "forwards" });
+      if (glowCol) {
+        const pool = el(g, "gd-ground pool", `left:${dx - 30}px;top:${dy - 10}px;width:60px;height:26px;background:radial-gradient(closest-side, ${glowCol}, transparent);`);
+        pool.animate([{ opacity: 0 }, { opacity: it.beam ? 0.6 : 0.3 }], { duration: 250, delay: delay + FLY * 0.85, fill: "both" });
+        pool.animate([{ opacity: it.beam ? 0.6 : 0.3 }, { opacity: 0 }], { duration: 400, delay: life - 450, fill: "forwards" });
+        for (let k = 0; k < (it.beam ? 6 : 3); k++) { // sparkles twinkling on the item
+          const sp = el(g, "gd-twinkle", `left:${dx + rnd(-16, 16)}px;top:${dy + rnd(-12, 8)}px;color:${glowCol}`, TWINKLE);
+          sp.animate([{ transform: "scale(0) rotate(0deg)", opacity: 0 }, { transform: "scale(1) rotate(40deg)", opacity: 1 }, { transform: "scale(0) rotate(90deg)", opacity: 0 }],
+            { duration: rnd(700, 1200), delay: delay + FLY + rnd(0, 900), iterations: Math.max(1, Math.floor((life - FLY - 1200) / 1000)), easing: "ease-in-out", fill: "both" });
+        }
+      }
+      const node = el(g, "gd-item", "", ART[it.art] || ART.cleaver);
+      const peak = -rnd(70, 120), rot = rnd(-260, 260), lie = rnd(-70, 70);
       node.animate([
-        { transform: "translate(0px, 0px) rotate(0deg) scale(.5)", easing: "cubic-bezier(.3,.7,.6,1)" },
+        { transform: "translate(0px, 0px) rotate(0deg) scale(.4)", easing: "cubic-bezier(.3,.7,.6,1)" },
         { transform: `translate(${dx * 0.5}px, ${peak}px) rotate(${rot}deg) scale(1)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
-        { transform: `translate(${dx}px, ${dy}px) rotate(${lie}deg) scale(1)`, offset: 0.84, easing: "ease-out" },
-        { transform: `translate(${dx}px, ${dy - 4}px) rotate(${lie * 0.9}deg) scale(1)`, offset: 0.92, easing: "ease-in" },
-        { transform: `translate(${dx}px, ${dy}px) rotate(${lie}deg) scale(1)` },
+        { transform: `translate(${dx}px, ${dy}px) scale(1, .78) rotate(${lie}deg)`, offset: 0.86, easing: "ease-out" },
+        { transform: `translate(${dx}px, ${dy - 3}px) scale(1, .78) rotate(${lie * 0.94}deg)`, offset: 0.93, easing: "ease-in" },
+        { transform: `translate(${dx}px, ${dy}px) scale(1, .78) rotate(${lie}deg)` },
       ], { duration: FLY, delay, fill: "both" });
-      if (it.broken) { // broken items crumble right after landing
-        node.animate([{ opacity: 1 }, { opacity: 0, filter: "grayscale(1) blur(2px)", transform: `translate(${dx}px, ${dy + 5}px) rotate(${lie}deg) scale(.7)` }],
-          { duration: 700, delay: delay + FLY + 700, fill: "forwards" });
-      } else node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
-      if (it.beam) beam(g, dx, dy, it.beam, delay + FLY - 80, life);
+      if (it.broken) node.animate([{ opacity: 1 }, { opacity: 0, filter: "blur(2px)" }], { duration: 700, delay: delay + FLY + 700, fill: "forwards" });
+      else node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
+      if (it.beam) beam(g, dx, dy, it.beam, delay + FLY - 80, life, y);
     }
-    // The name sits just above where it landed.
-    const t = e.label;
-    t.style.left = `${dx}px`; t.style.top = `${dy - 27}px`; t.style.visibility = "";
+    // Name plate in the stack.
+    const t = el(g, "gd-label", `--c:${it.col};visibility:hidden`);
+    if (it.col === COLOR.rare && Math.random() < 0.45) t.insertAdjacentHTML("beforeend", `<i class="dia">◆</i>`);
+    t.appendChild(document.createTextNode(it.name));
+    const w = t.offsetWidth;
+    const lx = Math.max(w / 2 + 6 - x, Math.min(W - w / 2 - 6 - x, rnd(-34, 34)));
+    t.style.left = `${lx}px`; t.style.top = `${baseY - i * ROW - y}px`; t.style.visibility = "";
     const show = delay + FLY - 150, end = it.broken ? show + 1450 : life;
-    t.animate([{ opacity: 0, transform: "translate(-50%, 3px)" }, { opacity: 1, transform: "translate(-50%, 0)" }], { duration: 220, delay: show, fill: "forwards" });
+    t.animate([{ opacity: 0, transform: "translate(-50%, 4px)" }, { opacity: 1, transform: "translate(-50%, 0)" }], { duration: 200, delay: show, fill: "forwards" });
     t.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, delay: end - 400, fill: "forwards" });
   });
   setTimeout(() => g.remove(), life + 200);
 }
+const TWINKLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C12.6 8.5 15.5 11.4 24 12C15.5 12.6 12.6 15.5 12 24C11.4 15.5 8.5 12.6 0 12C8.5 11.4 11.4 8.5 12 0Z" fill="currentColor"/></svg>`;
 
-// Light beam over an epic (blue) or legendary (purple, taller, with sparkles and a ground glow).
-function beam(g, x, y, kind, delay, life) {
+// A pillar of light over an epic (blue) or legendary (purple): thin bright core, wide soft halo, up past the top of the screen.
+function beam(g, x, y, kind, delay, life, tapY) {
   const leg = kind === "legendary";
-  const col = leg ? "178, 92, 255" : "74, 144, 255";
-  const H = leg ? 210 : 120;
-  const glow = el(g, "gd-glow", `left:${x - 30}px;top:${y - 9}px;width:60px;height:18px;background:radial-gradient(closest-side, rgba(${col}, .7), transparent);opacity:0`);
-  const b = el(g, "gd-beam", `left:${x}px;top:${y - H}px;height:${H}px;background:linear-gradient(90deg, transparent, rgba(${col}, .55) 30%, rgba(255,255,255,.85) 50%, rgba(${col}, .55) 70%, transparent);opacity:0`);
+  const col = leg ? "170, 80, 255" : "70, 130, 255";
+  const H = Math.max(260, tapY + y + 40);
   const end = life - delay;
-  b.animate([
-    { opacity: 0, transform: "scaleY(.1)" }, { opacity: 1, transform: "scaleY(1)", offset: 0.08 },
-    { opacity: 0.75, transform: "scaleY(1)", offset: 0.5 }, { opacity: 1, transform: "scaleY(1)", offset: 0.75 }, { opacity: 0, transform: "scaleY(1)" },
-  ], { duration: end, delay, fill: "both" });
-  glow.animate([{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 0.8, offset: 0.8 }, { opacity: 0 }], { duration: end, delay, fill: "both" });
-  if (leg) {
-    for (let i = 0; i < 12; i++) {
-      const s = el(g, "gd-mote", `left:${x + rnd(-10, 10)}px;top:${y}px;background:#f1dcff;box-shadow:0 0 5px 1px rgba(${col}, .9);opacity:0`);
-      s.animate([{ transform: "translate(0,0)", opacity: 0 }, { opacity: 1, offset: 0.2 }, { transform: `translate(${rnd(-14, 14)}px, ${-rnd(60, 180)}px)`, opacity: 0 }],
-        { duration: rnd(1200, 2000), delay: delay + rnd(0, end - 1800), easing: "ease-out", fill: "both" });
-    }
+  const mk = (w, bg, blur, op) => {
+    const b = el(g, "gd-beam", `left:${x}px;top:${y - H}px;height:${H}px;width:${w}px;margin-left:${-w / 2}px;background:${bg};filter:blur(${blur}px);opacity:0`);
+    b.animate([{ opacity: 0, transform: "scaleY(.05)" }, { opacity: op, transform: "scaleY(1)", offset: 0.07 }, { opacity: op * 0.8, offset: 0.5 }, { opacity: op, offset: 0.8 }, { opacity: 0, transform: "scaleY(1)" }],
+      { duration: end, delay, fill: "both" });
+  };
+  mk(leg ? 46 : 36, `linear-gradient(90deg, transparent, rgba(${col}, .5), transparent)`, 6, 0.55);
+  mk(leg ? 12 : 9, `linear-gradient(90deg, transparent, rgba(${col}, .95) 35%, rgba(235,240,255,.95) 50%, rgba(${col}, .95) 65%, transparent)`, 1.2, 0.9);
+  if (leg) for (let i = 0; i < 14; i++) {
+    const s2 = el(g, "gd-mote", `left:${x + rnd(-12, 12)}px;top:${y}px;background:#f1dcff;box-shadow:0 0 5px 1px rgba(${col}, .9);opacity:0`);
+    s2.animate([{ transform: "translate(0,0)", opacity: 0 }, { opacity: 1, offset: 0.2 }, { transform: `translate(${rnd(-16, 16)}px, ${-rnd(80, 240)}px)`, opacity: 0 }],
+      { duration: rnd(1200, 2200), delay: delay + rnd(0, Math.max(200, end - 2200)), easing: "ease-out", fill: "both" });
   }
 }
 
 // ---------- Item drawings (32×32, dark outline, worn metal / wood / leather) ----------
-const O = `stroke="rgba(0,0,0,.3)" stroke-width=".7" stroke-linejoin="round" stroke-linecap="round"`;
-const METAL = "#a9a9a2", METAL_D = "#6c6c66", WOOD = "#6b4527", WOOD_L = "#8a5e37", LEATHER = "#5a3a22", BRASS = "#b08a3c", BONE = "#d9cfb6";
+const O = `stroke="none"`;
+const METAL = "#6f777e", METAL_D = "#3d4349", WOOD = "#3a2a1d", WOOD_L = "#4a3625", LEATHER = "#3b2b20", BRASS = "#7d6638", BONE = "#9f967f";
 const ART = {
-  cleaver: `<svg viewBox="0 0 32 32"><path d="M4 6 L22 6 L23 18 Q14 21 5 17 Z" fill="${METAL}" ${O}/><path d="M6 8 L20 8" stroke="#d8d8d0" stroke-width="1"/><circle cx="18" cy="10" r="1.3" fill="#2a2724"/><path d="M22 10 L29 9 L29.5 13 L22.5 14 Z" fill="${WOOD}" ${O}/><path d="M9 15 l2 -1 m3 1.5 l2 -1" stroke="#7a2a1c" stroke-width="1.1" opacity=".8"/></svg>`,
-  sword: `<svg viewBox="0 0 32 32"><g transform="rotate(45 16 16)"><path d="M16 1.5 L18 5 L18 20 L14 20 L14 5 Z" fill="${METAL}" ${O}/><path d="M16 4 L16 19" stroke="#e4e4dc" stroke-width=".9"/><path d="M10 20 L22 20 L22 22 L10 22 Z" fill="${BRASS}" ${O}/><path d="M14.8 22 L17.2 22 L17.2 28 L14.8 28 Z" fill="${LEATHER}" ${O}/><circle cx="16" cy="29.5" r="1.8" fill="${BRASS}" ${O}/></g></svg>`,
-  axe: `<svg viewBox="0 0 32 32"><path d="M8 29 L22 5" stroke="rgba(0,0,0,.25)" stroke-width="4.2" stroke-linecap="round"/><path d="M8 29 L22 5" stroke="${WOOD_L}" stroke-width="2.4" stroke-linecap="round"/><path d="M17 7 Q25 3 29 10 Q26 16 21 15 Z" fill="${METAL}" ${O}/><path d="M25 6 Q28 9 27.5 12" stroke="#e4e4dc" stroke-width="1" fill="none"/></svg>`,
-  mace: `<svg viewBox="0 0 32 32"><path d="M7 28 L19 13" stroke="rgba(0,0,0,.25)" stroke-width="4" stroke-linecap="round"/><path d="M7 28 L19 13" stroke="${WOOD}" stroke-width="2.2" stroke-linecap="round"/><path d="M21 4 L23 8 L28 7 L25 11 L29 14 L24 15 L24 20 L20 16 L16 18 L18 13 L14 10 L19 10 Z" fill="${METAL_D}" ${O}/><circle cx="21.5" cy="11.5" r="3.6" fill="${METAL}" ${O}/></svg>`,
-  pistol: `<svg viewBox="0 0 32 32"><path d="M3 11 L22 11 L22 15 L3 15 Z" fill="${METAL_D}" ${O}/><path d="M3 12.2 L21 12.2" stroke="#c9c9c2" stroke-width=".9"/><path d="M15 11 L28 10 Q30 13 27 15 L24 16 L27 26 Q25 28 21 27 L19 16 L15 15 Z" fill="${WOOD}" ${O}/><path d="M19 9 L21 6 L22.5 7 L21 10" fill="${METAL}" ${O}/><path d="M19.5 17 Q18 20 20.5 21" fill="none" ${O}/></svg>`,
+  cleaver: `<svg viewBox="0 0 32 32"><path d="M4 6 L22 6 L23 18 Q14 21 5 17 Z" fill="${METAL}" ${O}/><path d="M6 8 L20 8" stroke="#aeb6bd" stroke-width="1"/><circle cx="18" cy="10" r="1.3" fill="#2a2724"/><path d="M22 10 L29 9 L29.5 13 L22.5 14 Z" fill="${WOOD}" ${O}/><path d="M9 15 l2 -1 m3 1.5 l2 -1" stroke="#7a2a1c" stroke-width="1.1" opacity=".8"/></svg>`,
+  sword: `<svg viewBox="0 0 32 32"><g transform="rotate(45 16 16)"><path d="M16 1.5 L18 5 L18 20 L14 20 L14 5 Z" fill="${METAL}" ${O}/><path d="M16 4 L16 19" stroke="#aeb6bd" stroke-width=".9"/><path d="M10 20 L22 20 L22 22 L10 22 Z" fill="${BRASS}" ${O}/><path d="M14.8 22 L17.2 22 L17.2 28 L14.8 28 Z" fill="${LEATHER}" ${O}/><circle cx="16" cy="29.5" r="1.8" fill="${BRASS}" ${O}/></g></svg>`,
+  axe: `<svg viewBox="0 0 32 32"><path d="M8 29 L22 5" stroke="#15181a" stroke-width="4.2" stroke-linecap="round"/><path d="M8 29 L22 5" stroke="${WOOD_L}" stroke-width="2.4" stroke-linecap="round"/><path d="M17 7 Q25 3 29 10 Q26 16 21 15 Z" fill="${METAL}" ${O}/><path d="M25 6 Q28 9 27.5 12" stroke="#aeb6bd" stroke-width="1" fill="none"/></svg>`,
+  mace: `<svg viewBox="0 0 32 32"><path d="M7 28 L19 13" stroke="#15181a" stroke-width="4" stroke-linecap="round"/><path d="M7 28 L19 13" stroke="${WOOD}" stroke-width="2.2" stroke-linecap="round"/><path d="M21 4 L23 8 L28 7 L25 11 L29 14 L24 15 L24 20 L20 16 L16 18 L18 13 L14 10 L19 10 Z" fill="${METAL_D}" ${O}/><circle cx="21.5" cy="11.5" r="3.6" fill="${METAL}" ${O}/></svg>`,
+  pistol: `<svg viewBox="0 0 32 32"><path d="M3 11 L22 11 L22 15 L3 15 Z" fill="${METAL_D}" ${O}/><path d="M3 12.2 L21 12.2" stroke="#aeb6bd" stroke-width=".9"/><path d="M15 11 L28 10 Q30 13 27 15 L24 16 L27 26 Q25 28 21 27 L19 16 L15 15 Z" fill="${WOOD}" ${O}/><path d="M19 9 L21 6 L22.5 7 L21 10" fill="${METAL}" ${O}/><path d="M19.5 17 Q18 20 20.5 21" fill="none" ${O}/></svg>`,
   dagger: `<svg viewBox="0 0 32 32"><g transform="rotate(-40 16 16)"><path d="M16 3 Q19 9 18 18 L14 18 Q13 9 16 3 Z" fill="${METAL}" ${O}/><path d="M12 18 L20 18 L20 20 L12 20 Z" fill="${METAL_D}" ${O}/><path d="M14.8 20 L17.2 20 L17.2 27 L14.8 27 Z" fill="${BONE}" ${O}/></g></svg>`,
   shield: `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12.5" fill="${WOOD}" ${O}/><path d="M9 6.5 L9 25.5 M16 3.5 L16 28.5 M23 6.5 L23 25.5" stroke="#3e2714" stroke-width="1"/><circle cx="16" cy="16" r="12.5" fill="none" stroke="${METAL_D}" stroke-width="2.4"/><circle cx="16" cy="16" r="4" fill="${METAL}" ${O}/><circle cx="14.8" cy="14.8" r="1.1" fill="#e4e4dc"/></svg>`,
-  helm: `<svg viewBox="0 0 32 32"><path d="M6 20 Q6 6 16 5 Q26 6 26 20 L26 25 L20 25 L20 18 L12 18 L12 25 L6 25 Z" fill="${METAL}" ${O}/><path d="M16 5 L16 18" stroke="${METAL_D}" stroke-width="1.6"/><path d="M8 12 Q10 8 13 7" stroke="#e4e4dc" stroke-width="1" fill="none"/><path d="M12 18 L20 18 L20 21 L12 21 Z" fill="#1d1712"/></svg>`,
+  helm: `<svg viewBox="0 0 32 32"><path d="M6 20 Q6 6 16 5 Q26 6 26 20 L26 25 L20 25 L20 18 L12 18 L12 25 L6 25 Z" fill="${METAL}" ${O}/><path d="M16 5 L16 18" stroke="${METAL_D}" stroke-width="1.6"/><path d="M8 12 Q10 8 13 7" stroke="#aeb6bd" stroke-width="1" fill="none"/><path d="M12 18 L20 18 L20 21 L12 21 Z" fill="#1d1712"/></svg>`,
   chest: `<svg viewBox="0 0 32 32"><path d="M9 4 L13 6 Q16 8 19 6 L23 4 L29 9 L26 14 L24 12 L24 28 L8 28 L8 12 L6 14 L3 9 Z" fill="${LEATHER}" ${O}/><path d="M16 8 L16 28" stroke="#2c1b0f" stroke-width="1.2"/><circle cx="14" cy="13" r=".9" fill="${BRASS}"/><circle cx="14" cy="18" r=".9" fill="${BRASS}"/><circle cx="14" cy="23" r=".9" fill="${BRASS}"/><path d="M8 20 L24 20" stroke="#2c1b0f" stroke-width="1.6"/></svg>`,
-  ring: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="5"/><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="${BRASS}" stroke-width="2.8"/><path d="M12 11 L16 6 L20 11 L16 14 Z" fill="#8a1f2a" ${O}/><path d="M14 10 L16 7.5" stroke="#ff9aa4" stroke-width=".9"/></svg>`,
-  amulet: `<svg viewBox="0 0 32 32"><path d="M6 3 Q16 17 26 3" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2.6"/><path d="M6 3 Q16 17 26 3" fill="none" stroke="${BRASS}" stroke-width="1.2" stroke-dasharray="1.6 1"/><path d="M16 12 L22 20 L16 29 L10 20 Z" fill="${BONE}" ${O}/><circle cx="16" cy="20" r="2.6" fill="#2b6b4a" ${O}/></svg>`,
-  scepter: `<svg viewBox="0 0 32 32"><path d="M8 29 L20 11" stroke="rgba(0,0,0,.25)" stroke-width="3.6" stroke-linecap="round"/><path d="M8 29 L20 11" stroke="${BRASS}" stroke-width="1.8" stroke-linecap="round"/><path d="M19 4 L26 7 L25 13 L19 14 L16 9 Z" fill="${METAL_D}" ${O}/><circle cx="21" cy="9.5" r="2.4" fill="#5ad19a" ${O}/></svg>`,
+  ring: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="#15181a" stroke-width="5"/><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="${BRASS}" stroke-width="2.8"/><path d="M12 11 L16 6 L20 11 L16 14 Z" fill="#6a1820" ${O}/><path d="M14 10 L16 7.5" stroke="#ff9aa4" stroke-width=".9"/></svg>`,
+  amulet: `<svg viewBox="0 0 32 32"><path d="M6 3 Q16 17 26 3" fill="none" stroke="#15181a" stroke-width="2.6"/><path d="M6 3 Q16 17 26 3" fill="none" stroke="${BRASS}" stroke-width="1.2" stroke-dasharray="1.6 1"/><path d="M16 12 L22 20 L16 29 L10 20 Z" fill="${BONE}" ${O}/><circle cx="16" cy="20" r="2.6" fill="#1f5038" ${O}/></svg>`,
+  scepter: `<svg viewBox="0 0 32 32"><path d="M8 29 L20 11" stroke="#15181a" stroke-width="3.6" stroke-linecap="round"/><path d="M8 29 L20 11" stroke="${BRASS}" stroke-width="1.8" stroke-linecap="round"/><path d="M19 4 L26 7 L25 13 L19 14 L16 9 Z" fill="${METAL_D}" ${O}/><circle cx="21" cy="9.5" r="2.4" fill="#2f8a66" ${O}/></svg>`,
   gloves: `<svg viewBox="0 0 32 32"><path d="M8 28 L8 17 L6 12 Q6 10 8 10.5 L10 14 L10 6 Q11 4.5 12.5 6 L13 13 L14 4.5 Q15.5 3 17 4.5 L16.6 13 L18.5 6 Q20 5 21 6.5 L19.5 15 L21.5 13 Q23.5 12.5 23 15 L19 22 L19 28 Z" fill="${LEATHER}" ${O}/><path d="M8 24 L19 24" stroke="${METAL_D}" stroke-width="2"/></svg>`,
   boots: `<svg viewBox="0 0 32 32"><path d="M10 3 L18 3 L18 19 Q26 19 28 24 L28 28 L8 28 L8 21 Q10 18 10 14 Z" fill="${LEATHER}" ${O}/><path d="M8 25 L28 25" stroke="#2c1b0f" stroke-width="2"/><path d="M10 9 L18 9" stroke="${BRASS}" stroke-width="1.4"/></svg>`,
-  scroll: `<svg viewBox="0 0 32 32"><path d="M7 7 L25 7 L25 25 L7 25 Z" fill="#d9c49a" ${O}/><path d="M5 5.5 Q5 3.5 7 3.5 L25 3.5 Q27 3.5 27 5.5 Q27 7.5 25 7.5 L7 7.5 Q5 7.5 5 5.5 Z" fill="#c8b083" ${O}/><path d="M5 26.5 Q5 24.5 7 24.5 L25 24.5 Q27 24.5 27 26.5 Q27 28.5 25 28.5 L7 28.5 Q5 28.5 5 26.5 Z" fill="#c8b083" ${O}/><path d="M10 11 L22 11 M10 14 L20 14 M10 17 L18 17" stroke="#6b5636" stroke-width="1"/><circle cx="21" cy="20" r="2.8" fill="#8f1d1d" ${O}/></svg>`,
-  crystal: `<svg viewBox="0 0 32 32"><path d="M16 3 L22 12 L19 28 L13 28 L10 12 Z" fill="#2ec27e" ${O}/><path d="M16 3 L16 28 M10 12 L22 12" stroke="#0e5a37" stroke-width="1"/><path d="M14 7 L12.5 12" stroke="#c8ffe2" stroke-width="1.1"/><path d="M7 22 L10 16 L12 27 Z" fill="#1f8f5c" ${O}/></svg>`,
+  scroll: `<svg viewBox="0 0 32 32"><path d="M7 7 L25 7 L25 25 L7 25 Z" fill="#8f8263" ${O}/><path d="M5 5.5 Q5 3.5 7 3.5 L25 3.5 Q27 3.5 27 5.5 Q27 7.5 25 7.5 L7 7.5 Q5 7.5 5 5.5 Z" fill="#7a6d51" ${O}/><path d="M5 26.5 Q5 24.5 7 24.5 L25 24.5 Q27 24.5 27 26.5 Q27 28.5 25 28.5 L7 28.5 Q5 28.5 5 26.5 Z" fill="#7a6d51" ${O}/><path d="M10 11 L22 11 M10 14 L20 14 M10 17 L18 17" stroke="#6b5636" stroke-width="1"/><circle cx="21" cy="20" r="2.8" fill="#6a1818" ${O}/></svg>`,
+  crystal: `<svg viewBox="0 0 32 32"><path d="M16 3 L22 12 L19 28 L13 28 L10 12 Z" fill="#1f7a55" ${O}/><path d="M16 3 L16 28 M10 12 L22 12" stroke="#0e5a37" stroke-width="1"/><path d="M14 7 L12.5 12" stroke="#c8ffe2" stroke-width="1.1"/><path d="M7 22 L10 16 L12 27 Z" fill="#17603f" ${O}/></svg>`,
 };

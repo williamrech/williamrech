@@ -435,7 +435,7 @@ function spawnEffect(layer, kind, scale = 1) {
     if (kind === "haunted-bg") return;
   }
   if (kind === "grimdawn-bg") { // ruins on the horizon, behind the feed (still, with a tiny scroll parallax)
-    loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn-bg") m.startScene(layer); }).catch((e) => console.warn("grimdawn", e));
+    loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn-bg") m.startScene(layer, { fog: () => startFog(layer, 1, still) }); }).catch((e) => console.warn("grimdawn", e));
     return;
   }
   if (kind === "grimdawn") { // ash + embers (taps are handled below, with the eye)
@@ -741,14 +741,14 @@ function startFog(layer, scale, still) {
 let fogTouchX = null;
 addEventListener("touchstart", (e) => { fogTouchX = e.touches[0] ? e.touches[0].clientX : null; }, { passive: true });
 addEventListener("touchmove", (e) => {
-  if (effectKey !== "haunted" || fogTouchX === null || !e.touches[0]) return;
+  if ((effectKey !== "haunted" && effectKey !== "grimdawn") || fogTouchX === null || !e.touches[0]) return;
   const x = e.touches[0].clientX;
   fogPush.vx = Math.max(-700, Math.min(700, fogPush.vx + (x - fogTouchX) * 9));
   fogTouchX = x;
 }, { passive: true });
 let fogLastY = scrollY;
 addEventListener("scroll", () => {
-  if (effectKey === "haunted") fogPush.swell = Math.min(0.8, fogPush.swell + Math.abs(scrollY - fogLastY) / 400);
+  if (effectKey === "haunted" || effectKey === "grimdawn") fogPush.swell = Math.min(0.8, fogPush.swell + Math.abs(scrollY - fogLastY) / 400);
   fogLastY = scrollY;
 }, { passive: true });
 
