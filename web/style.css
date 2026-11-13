@@ -1269,3 +1269,8 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
   background: radial-gradient(ellipse, var(--lk2), color-mix(in srgb, var(--lk2) 50%, transparent) 45%, transparent 72%); animation: lk-wisp 3.6s ease-out infinite; }
 @keyframes lk-wisp { 0% { transform: translateY(.2em) scale(.5, .4); opacity: 0; } 30% { opacity: .9; } 100% { transform: translate(-.3em, -1.6em) scale(1.3, 1.1) skewX(-14deg); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .cursed.lk .uname, .cursed.lk::before, .cursed.lk::after, .heart { animation: none; } .heart { display: none; } }
+/* A curse has no respect for limits: cursed names skip the clip (no "…", names are capped instead),
+   so the glow spills past the chip's border and the wisps fly out over the header. */
+.cursed .uname-wrap, .cursed .uname-wrap .uname { overflow: visible; text-overflow: clip; }
+.me-chip:has(.cursed), .me-chip:has(.cursed) .uname-wrap { overflow: visible; }
+.me-chip:has(.cursed) { position: relative; z-index: 3; }

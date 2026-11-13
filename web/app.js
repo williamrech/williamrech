@@ -85,6 +85,8 @@ function matchesPattern(pat, t) {
 // Name looks for a swapped name. Each effect brings its own; an occasion can pin any of them.
 const NAME_LOOKS = { ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações" };
 const EFFECT_LOOK = { haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
+// Swapped names are capped so they always fit the top chip without "…" (they skip the clipping).
+const CURSE_MAX = 22;
 const autoLook = (effect) => EFFECT_LOOK[effect] || "glitter"; // no effect → glitter
 // "when" can hold several patterns separated by commas (any one matches).
 const occasionMatches = (occ, t) => String(occ.when || "").split(",").some((p) => matchesPattern(p, t));
@@ -1333,12 +1335,12 @@ function curseCfgOf(o) {
   const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   const pinned = c.look in NAME_LOOKS ? c.look : "";
   return { icon: str(c.icon, 8), title: str(c.title, 30), banner: str(c.banner, 120), pinned, look: pinned || autoLook(o && o.effect),
-    ideas: Array.isArray(c.ideas) ? c.ideas.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 30)) : [] };
+    ideas: Array.isArray(c.ideas) ? c.ideas.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, CURSE_MAX)) : [] };
 }
 const curseCfg = (uid) => (todayOcc && todayOcc.curseCfg && todayOcc.curseCfg[uid]) || curseCfgOf(null);
 function curseOf(uid) {
   const c = todayOcc && todayOcc.curses && todayOcc.curses[uid];
-  return typeof c === "string" && c.trim() ? c.trim() : null;
+  return typeof c === "string" && c.trim() ? c.trim().slice(0, CURSE_MAX) : null;
 }
 const displayName = (uid, fallback) => curseOf(uid) || (family[uid] && family[uid].name) || fallback || "?";
 function nameHtml(uid, fallback) {
@@ -3394,7 +3396,7 @@ function readOccForm() {
   put("decor", $("occ-decor").value.trim());
   put("effect", $("occ-effect").value);
   const curses = {};
-  document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, 30); });
+  document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, CURSE_MAX); });
   if (Object.keys(curses).length) o.curses = curses;
   const ns = { icon: $("occ-ns-icon").value.trim(), title: $("occ-ns-title").value.trim(), banner: $("occ-ns-banner").value.trim(),
     look: $("occ-ns-look").value in NAME_LOOKS ? $("occ-ns-look").value : "", ideas: $("occ-ns-ideas").value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 60) };
@@ -3426,7 +3428,7 @@ function renderCurseFields(curses) {
   Object.entries(family).filter(([, p]) => p && p.name).sort((a, b) => a[1].name.localeCompare(b[1].name)).forEach(([uid, p]) => {
     const row = document.createElement("div");
     row.className = "curse-row";
-    row.innerHTML = `<span class="curse-who"></span><input data-uid="${esc(uid)}" maxlength="30"><button type="button" class="icon-btn curse-dice" aria-label="Sugerir nome">🎲</button>`;
+    row.innerHTML = `<span class="curse-who"></span><input data-uid="${esc(uid)}" maxlength="${CURSE_MAX}"><button type="button" class="icon-btn curse-dice" aria-label="Sugerir nome">🎲</button>`;
     row.querySelector(".curse-who").textContent = p.name;
     const inp = row.querySelector("input");
     inp.value = curses[uid] || "";

@@ -125,7 +125,7 @@ async function activeCurses() {
     .filter((o) => o && typeof o === "object" && o.enabled !== false && String(o.when || "").split(",").some((x) => matchesPattern(x, t)))
     .sort((a, b) => (Number(a.priority) || 0) - (Number(b.priority) || 0));
   const map = {};
-  for (const o of list) for (const [uid, n] of Object.entries(o.curses || {})) if (typeof n === "string" && n.trim()) map[uid] = n.trim().slice(0, 30);
+  for (const o of list) for (const [uid, n] of Object.entries(o.curses || {})) if (typeof n === "string" && n.trim()) map[uid] = n.trim().slice(0, 22);
   curseCache = { at: Date.now(), map };
   return map;
 }
