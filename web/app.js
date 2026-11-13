@@ -1023,7 +1023,6 @@ onAuthStateChanged(auth, async (user) => {
   unsubs.push(onSnapshot(doc(db, "users", user.uid), (snap) => {
     me = snap.exists() ? snap.data() : {};
     meLoaded = true;
-    $("settings-name").textContent = me.name || "(sem apelido)";
     setAdminVisible(me.admin === true);
     renderRounds(); // hidden rounds may have changed
     applyLook();
@@ -1259,7 +1258,10 @@ $("set-fx").addEventListener("change", async (e) => {
 
 $("open-settings").addEventListener("click", () => openSettings("general"));
 $("settings-close").addEventListener("click", () => $("dlg-settings").close());
-$("change-name").addEventListener("click", () => { $("dlg-settings").close(); openNamePicker(); });
+// The name chip itself opens the name picker (✏️ on its right).
+const openRename = () => { $("dlg-settings").close(); openNamePicker(); };
+$("style-preview").addEventListener("click", openRename);
+$("style-preview").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRename(); } });
 $("dlg-name").addEventListener("close", () => { if (me && me.name && me.gender) return; setTimeout(proceed, 50); });
 
 $("logout").addEventListener("click", async () => {
@@ -1320,7 +1322,7 @@ function renderMeChip() {
 let draftStyle = null;
 function renderStyleEditor() {
   const p = me || {};
-  $("style-preview").innerHTML = styledName(p.name || "Você", draftStyle);
+  $("style-preview").innerHTML = `${styledName(p.name || "Você", draftStyle)}<span class="edit-icon" aria-hidden="true">✏️</span>`;
   const mk = (wrapId, entries, key, render) => {
     const wrap = $(wrapId);
     wrap.innerHTML = "";
