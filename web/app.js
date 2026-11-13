@@ -575,9 +575,11 @@ function cloudStripPath(seed) {
   }
   return `${d} L600 200 Z`;
 }
+let fogFilterSeq = 0;
 function startFog(layer, scale, still) {
   const rnd = (a, b) => a + Math.random() * (b - a);
-  const W = () => layer.clientWidth || innerWidth, H = () => layer.clientHeight || innerHeight;
+  // Sizes are set only when the screen size changes; each frame just moves/stretches (cheap, no re-blur).
+  let w = layer.clientWidth || innerWidth, h = layer.clientHeight || innerHeight;
   // Faint haze so the bottom is never empty between peaks.
   const haze = Array.from({ length: 3 }, () => {
     const el = document.createElement("i");
@@ -597,14 +599,30 @@ function startFog(layer, scale, still) {
     const el = document.createElement("div");
     el.className = "fog-strip";
     const path = cloudStripPath(L.seed + Math.floor(Math.random() * 1000));
-    el.innerHTML = `<svg viewBox="0 0 1200 200" preserveAspectRatio="none" aria-hidden="true"><path d="${path}"/><path d="${path}" transform="translate(600 0)"/></svg>`;
+    // Blur + glow are baked into the drawing (drawn once), so moving/breathing it each frame costs almost nothing.
+    const fid = `fogf${++fogFilterSeq}`;
+    el.innerHTML = `<svg viewBox="0 0 1200 200" preserveAspectRatio="none" aria-hidden="true"><defs><filter id="${fid}" x="-5%" y="-80%" width="110%" height="190%">`
+      + `<feGaussianBlur in="SourceGraphic" stdDeviation="1"/><feDropShadow dx="0" dy="0" stdDeviation="1" style="flood-color: color-mix(in srgb, var(--crema) 55%, transparent)"/>`
+      + `</filter></defs><g filter="url(#${fid})"><path d="${path}"/><path d="${path}" transform="translate(600 0)"/></g></svg>`;
     el.style.setProperty("--mix", `${L.mix}%`);
-    el.style.setProperty("--glow", `${L.glow * Math.max(scale, 0.5)}px`);
     el.style.opacity = L.op;
     el.style.zIndex = String(i + 1);
     layer.appendChild(el);
-    return { el, L, x: Math.random(), phase: rnd(0, 6.3), period: rnd(8, 14) };
+    return { el, L, x: Math.random(), phase: rnd(0, 6.3), period: rnd(8, 14), glow: L.glow * Math.max(scale, 0.5), blurPx: scale < 1 ? 0.8 : 1.5 };
   });
+  const size = () => {
+    w = layer.clientWidth || innerWidth; h = layer.clientHeight || innerHeight;
+    for (const b of haze) { b.el.style.width = `${b.w * w}px`; b.el.style.height = `${Math.max(16, b.h * h)}px`; }
+    for (const st of strips) {
+      const ph = st.L.h * h, u = 200 / Math.max(ph, 1); // CSS px → drawing units
+      st.el.style.height = `${ph}px`; st.el.style.width = `${ph * 6}px`;
+      st.el.querySelector("feGaussianBlur").setAttribute("stdDeviation", (st.blurPx * u).toFixed(2));
+      const sh = st.el.querySelector("feDropShadow");
+      sh.setAttribute("stdDeviation", (st.glow * u).toFixed(2)); sh.setAttribute("dy", (-0.4 * st.glow * u).toFixed(2));
+    }
+  };
+  size();
+  if (window.ResizeObserver) new ResizeObserver(size).observe(layer);
   let last = performance.now();
   const frame = (now) => {
     if (!layer.isConnected || !strips[0].el.isConnected) return;
@@ -612,15 +630,13 @@ function startFog(layer, scale, still) {
     last = now;
     fogPush.vx *= Math.pow(0.25, dt); // momentum fades
     fogPush.swell *= Math.pow(0.3, dt);
-    const w = W(), h = H(), t = now / 1000;
+    const t = now / 1000;
     for (const b of haze) {
       const bw = b.w * w;
       b.x += ((b.speed + fogPush.vx * 0.2 * scale) * dt) / w;
       if (b.x * w > w + bw * 0.2) b.x = -b.w - 0.1;
       if (b.x * w < -bw * 1.3) b.x = 1;
-      b.el.style.width = `${bw}px`;
-      b.el.style.height = `${Math.max(16, b.h * h * (1 + b.amp * Math.sin(t * (6.28 / b.period) + b.phase)))}px`;
-      b.el.style.transform = `translateX(${b.x * w}px)`;
+      b.el.style.transform = `translateX(${(b.x * w).toFixed(1)}px) scaleY(${(1 + b.amp * Math.sin(t * (6.28 / b.period) + b.phase)).toFixed(3)})`;
     }
     for (const st of strips) {
       const ph = st.L.h * h; // strip height
@@ -628,9 +644,7 @@ function startFog(layer, scale, still) {
       st.x = (st.x + ((st.L.speed * Math.max(scale, 0.5) + fogPush.vx * st.L.depth * scale) * dt) / tile) % 1;
       if (st.x < 0) st.x += 1;
       const breathe = 1 + 0.08 * Math.sin(t * (6.28 / st.period) + st.phase) + fogPush.swell * st.L.depth;
-      st.el.style.height = `${ph}px`;
-      st.el.style.width = `${tile * 2}px`;
-      st.el.style.transform = `translateX(${-st.x * tile}px) scaleY(${breathe.toFixed(3)})`;
+      st.el.style.transform = `translateX(${(-st.x * tile).toFixed(1)}px) scaleY(${breathe.toFixed(3)})`;
     }
     if (!still) requestAnimationFrame(frame);
   };
@@ -1364,7 +1378,11 @@ const displayName = (uid, fallback) => curseOf(uid) || (family[uid] && family[ui
 function nameHtml(uid, fallback) {
   const p = family[uid];
   const c = curseOf(uid);
-  if (c) { const k = curseCfg(uid).look; return `<span class="cursed l-${k}${k === "ecto" ? "" : " lk"}">${styledName(c, p && p.style)}</span>`; }
+  if (c) {
+    // The pulsing glow is a copy that only fades in/out (cheap on phones), instead of re-drawing the glow every frame.
+    const k = curseCfg(uid).look, inner = styledName(c, p && p.style);
+    return `<span class="cursed l-${k}${k === "ecto" ? "" : " lk"}">${inner}<span class="cglow" aria-hidden="true">${inner}</span></span>`;
+  }
   return styledName((p && p.name) || fallback || "?", p && p.style);
 }
 
@@ -3990,3 +4008,16 @@ async function loadAdminRounds() {
 }
 $("adm-rounds-sec").addEventListener("toggle", () => { if ($("adm-rounds-sec").open) loadAdminRounds(); });
 $("adm-rounds-refresh").addEventListener("click", loadAdminRounds);
+
+// Cursed names only animate while they're on screen (dozens of glowing names off screen cost a lot on phones).
+const curseSeen = window.IntersectionObserver ? new IntersectionObserver((list) => {
+  for (const e of list) e.target.classList.toggle("live", e.isIntersecting);
+}, { rootMargin: "80px" }) : null;
+function watchCursed(root = document) {
+  root.querySelectorAll(".cursed:not([data-w])").forEach((el) => {
+    el.dataset.w = "1";
+    if (curseSeen) curseSeen.observe(el); else el.classList.add("live");
+  });
+}
+new MutationObserver(() => watchCursed()).observe(document.body, { childList: true, subtree: true });
+watchCursed();

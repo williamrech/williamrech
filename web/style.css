@@ -1138,7 +1138,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .haunt-web { position: absolute; top: 0; left: 0; width: 160px; height: 160px; color: var(--fg); opacity: .22; }
 .haunt-web svg { width: 100%; height: 100%; display: block; }
 .haunt-fog {
-  position: absolute; left: 0; bottom: -6vh; border-radius: 50%; font-style: normal; will-change: transform, height;
+  position: absolute; left: 0; bottom: -6vh; border-radius: 50%; font-style: normal; will-change: transform; transform-origin: 50% 100%;
   background: radial-gradient(ellipse at 50% 65%, color-mix(in srgb, var(--fg) 30%, transparent), transparent 70%);
   filter: blur(18px);
 }
@@ -1172,11 +1172,10 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .mini-fx .spider-rig { left: 26px; transform: scale(.55); transform-origin: 50% 0; }
 
 /* Assombrado cloud strips (parallax): soft cartoon clouds in theme colors with a glow on top */
-.fog-strip { position: absolute; left: 0; bottom: -2vh; transform-origin: 50% 100%; will-change: transform; pointer-events: none;
-  filter: blur(1.5px) drop-shadow(0 calc(var(--glow) * -0.4) var(--glow) color-mix(in srgb, var(--crema) 55%, transparent)); }
+.fog-strip { position: absolute; left: 0; bottom: -2vh; transform-origin: 50% 100%; will-change: transform; pointer-events: none; }
 .fog-strip svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .fog-strip path { fill: color-mix(in srgb, var(--fg) var(--mix), var(--bg)); }
-.mini-fx .fog-strip { bottom: -4%; filter: blur(.8px); }
+.mini-fx .fog-strip { bottom: -4%; }
 
 /* Seu nome: the name chip is the button to change it */
 .style-preview { position: relative; cursor: pointer; padding-right: 44px; padding-left: 44px; }
@@ -1192,7 +1191,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .cursed.l-ecto { --ecto: color-mix(in srgb, #8dff6a 72%, var(--caramel)); }
 .cursed.l-ecto .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 55%, #c9ffb0) !important; -webkit-text-fill-color: currentColor;
   text-shadow: 0 0 4px var(--ecto), 0 0 12px color-mix(in srgb, var(--ecto) 70%, transparent), 0 2px 18px color-mix(in srgb, var(--ecto) 45%, transparent);
-  animation: ecto-pulse 2.8s ease-in-out infinite, ecto-wobble 5.5s ease-in-out infinite; display: inline-block; }
+  animation: ecto-wobble 5.5s ease-in-out infinite; display: inline-block; }
 .cursed.l-ecto::before, .cursed.l-ecto::after {
   content: ""; position: absolute; left: 8%; right: 25%; bottom: 25%; height: 1.5em; z-index: -1; pointer-events: none; border-radius: 45% 55% 40% 60%;
   background: radial-gradient(ellipse at 50% 70%, var(--ecto), color-mix(in srgb, var(--ecto) 40%, transparent) 45%, transparent 72%);
@@ -1218,7 +1217,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 /* Cursed badge: the emoji becomes a green silhouette that oozes along with the name */
 .cursed.l-ecto .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
   text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 6px var(--ecto), 0 0 14px color-mix(in srgb, var(--ecto) 70%, transparent);
-  animation: ecto-pulse-badge 2.8s ease-in-out infinite, ecto-wobble 5.5s ease-in-out infinite; }
+  animation: ecto-wobble 5.5s ease-in-out infinite; }
 @keyframes ecto-pulse-badge {
   0%, 100% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 6px var(--ecto), 0 0 14px color-mix(in srgb, var(--ecto) 70%, transparent); }
   45% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 9px var(--ecto), 0 0 22px color-mix(in srgb, var(--ecto) 85%, transparent); }
@@ -1240,7 +1239,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .cursed.l-steam { --lk: #e9e2d6; --lk2: #ffffff; --pc: ""; }
 .cursed.l-hearts { --lk: #ff4f86; --lk2: #ffd6e3; --pc: "♥"; }
 .cursed.lk .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 40%, var(--lk2)) !important; -webkit-text-fill-color: currentColor; display: inline-block;
-  text-shadow: 0 0 4px var(--lk), 0 0 12px color-mix(in srgb, var(--lk) 60%, transparent); animation: lk-pulse 2.6s ease-in-out infinite; }
+  text-shadow: 0 0 4px var(--lk), 0 0 12px color-mix(in srgb, var(--lk) 60%, transparent); }
 .cursed.lk .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
   text-shadow: 0 0 0 var(--lk2), 0 0 6px var(--lk), 0 0 12px color-mix(in srgb, var(--lk) 60%, transparent); }
 @keyframes lk-pulse {
@@ -1283,3 +1282,17 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .adm-round-emoji { font-size: 1.2rem; text-align: center; }
 .adm-round-text { display: grid; min-width: 0; font-size: 0.9rem; }
 .adm-round-text .muted { overflow-wrap: anywhere; }
+/* Off-screen cursed names hold still (they start moving as soon as they scroll into view). */
+.cursed:not(.live) .uname, .cursed:not(.live) .ubadge, .cursed:not(.live)::before, .cursed:not(.live)::after { animation-play-state: paused !important; }
+/* The glow pulse: a glow-only copy of the name on top of the real one, fading in and out. */
+.cursed .cglow { position: absolute; inset: 0; z-index: -1; pointer-events: none; white-space: nowrap; opacity: 0; will-change: opacity;
+  animation: cglow-pulse 2.8s ease-in-out infinite; }
+.cursed .cglow .uname, .cursed .cglow .ubadge { color: transparent !important; -webkit-text-fill-color: transparent; }
+.cursed.l-ecto .cglow .uname { text-shadow: 0 0 7px var(--ecto), 0 0 20px color-mix(in srgb, var(--ecto) 85%, transparent), 0 4px 28px color-mix(in srgb, var(--ecto) 60%, transparent); }
+.cursed.l-ecto .cglow .ubadge { text-shadow: 0 0 9px var(--ecto), 0 0 22px color-mix(in srgb, var(--ecto) 85%, transparent); }
+.cursed.lk .cglow { animation-duration: 2.6s; }
+.cursed.lk .cglow .uname { text-shadow: 0 0 7px var(--lk), 0 0 20px color-mix(in srgb, var(--lk) 85%, transparent); animation: none; }
+.cursed.lk .cglow .ubadge { text-shadow: 0 0 9px var(--lk), 0 0 18px color-mix(in srgb, var(--lk) 80%, transparent); }
+@keyframes cglow-pulse { 0%, 100% { opacity: 0; } 45% { opacity: 1; } 60% { opacity: .15; } }
+.cursed:not(.live) .cglow { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) { .cursed .cglow { animation: none; opacity: .5; } }
