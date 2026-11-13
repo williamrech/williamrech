@@ -78,95 +78,135 @@ export function startAsh(layer, scale = 1) {
   }
 }
 
-// ---------- Ruins on the horizon (behind the feed) ----------
-// Four silhouette layers in the palette's colors: far ones pale and hazy, near ones dark, an ember glow
-// on the horizon and a few lit windows. Fixed to the bottom 30% of the screen; scrolling shifts the
-// layers a few pixels apart (near ones more), so it reads as depth without sliding.
+// ---------- The city burning on the horizon (behind the feed) ----------
+// Inspired by the Malmouth key art: a huge pale domed palace far away, aether flames licking up between
+// the layers, Victorian rooftops (mansards, chimney pots, smokestacks) getting darker as they come closer,
+// and a black foreground of lamp posts, an iron fence and bare branches. Buildings never move; only the
+// flames flicker and the glow breathes. Bottom 30% of the screen; scrolling shifts layers a few px (depth).
 const SCENE_CSS = `
-.gd-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 30vh; pointer-events: none; }
-.gd-scene .glow { position: absolute; inset: -60% -10% 0; background:
-  radial-gradient(75% 55% at 50% 88%, color-mix(in srgb, var(--caramel) 50%, transparent), transparent 75%),
-  radial-gradient(40% 35% at 60% 85%, color-mix(in srgb, var(--crema) 22%, transparent), transparent 70%); }
-.gd-scene svg { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; display: block; will-change: transform; }
-.gd-scene .l1 { color: color-mix(in srgb, color-mix(in srgb, var(--surface) 45%, var(--caramel)) 80%, var(--fg)); opacity: .38; }
-.gd-scene .l2 { color: color-mix(in srgb, color-mix(in srgb, var(--surface) 70%, var(--caramel)) 85%, var(--bg)); opacity: .8; }
-.gd-scene .l3 { color: color-mix(in srgb, var(--bg) 75%, var(--surface)); }
-.gd-scene .l4 { color: color-mix(in srgb, var(--bg) 50%, black); }
-.gd-scene .haze { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none;
-  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent), transparent); }
-.gd-scene .win { fill: color-mix(in srgb, var(--caramel) 70%, #ffd27a); }
+.gd-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 30vh; pointer-events: none; --fire: #46ff9a; }
+.gd-scene > * { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; }
+.gd-scene svg { display: block; }
+.gd-scene .sky { height: 150%; background:
+  radial-gradient(55% 45% at 55% 72%, color-mix(in srgb, var(--fire) 55%, transparent), transparent 70%),
+  radial-gradient(90% 60% at 50% 100%, color-mix(in srgb, var(--fire) 22%, transparent), transparent 80%); }
+.gd-scene .pulse { height: 140%; background: radial-gradient(40% 35% at 55% 78%, color-mix(in srgb, var(--fire) 45%, #fff), transparent 70%);
+  opacity: .25; animation: gd-breathe 5s ease-in-out infinite; will-change: opacity; }
+@keyframes gd-breathe { 0%, 100% { opacity: .18; } 50% { opacity: .38; } }
+.gd-scene .l1 { color: color-mix(in srgb, var(--fire) 42%, var(--bg)); opacity: .85; filter: blur(.8px); }
+.gd-scene .l2 { color: color-mix(in srgb, var(--fire) 16%, var(--bg)); filter: drop-shadow(0 -1px 2px color-mix(in srgb, var(--fire) 55%, transparent)); }
+.gd-scene .l3 { color: color-mix(in srgb, color-mix(in srgb, var(--fire) 8%, var(--bg)) 70%, black); filter: drop-shadow(0 -1px 1.5px color-mix(in srgb, var(--fire) 35%, transparent)); }
+.gd-scene .l4 { color: color-mix(in srgb, var(--bg) 35%, black); }
+.gd-scene .lamp { fill: color-mix(in srgb, var(--fire) 60%, #fff); }
+.gd-scene .fog { background: linear-gradient(to top, color-mix(in srgb, var(--fire) 18%, transparent), transparent); }
+.gd-scene .flames { transform-origin: 50% 100%; will-change: transform, opacity; filter: blur(1.2px) drop-shadow(0 0 6px var(--fire));
+  animation: gd-flicker 2.2s ease-in-out infinite alternate; }
+.gd-scene .flames path.o { fill: var(--fire); opacity: .55; }
+.gd-scene .flames path.i { fill: color-mix(in srgb, var(--fire) 45%, #fff); opacity: .7; }
+@keyframes gd-flicker {
+  0% { transform: scale(1, 1) skewX(0deg); opacity: .85; }
+  30% { transform: scale(1.01, 1.08) skewX(-2deg); opacity: 1; }
+  60% { transform: scale(.99, .94) skewX(1.5deg); opacity: .8; }
+  100% { transform: scale(1, 1.05) skewX(-1deg); opacity: .95; }
+}
+@media (prefers-reduced-motion: reduce) { .gd-scene .flames, .gd-scene .pulse { animation: none; } }
 `;
 function seeded(seed) { let r = seed; return () => ((r = (r * 9301 + 49297) % 233280) / 233280); }
 const W = 700, H = 400; // drawn for a phone (about 390×250 px); wider screens crop the sides
-// A row of buildings standing on y = base. kind: "far" | "mid" | "near"
-function skyline(seed, base, minH, maxH, opts = {}) {
-  const R = seeded(seed), d = [], wins = [];
-  let x = -20;
-  while (x < W + 20) {
-    const t = R();
-    if (t < (opts.towers ?? 0.25)) { // tower with a spire (sometimes broken)
-      const w = 18 + R() * 22, h = maxH * (0.7 + R() * 0.3), top = base - h;
-      d.push(`M${x} ${base}V${top}H${x + w}V${base}Z`);
-      if (R() < 0.7) d.push(`M${x - 3} ${top}L${x + w / 2} ${top - (40 + R() * 70)}L${x + w + 3} ${top}Z`);
-      else d.push(`M${x} ${top}L${x + w * 0.3} ${top - 14}L${x + w * 0.5} ${top - 4}L${x + w * 0.75} ${top - 20}L${x + w} ${top}Z`);
-      if (opts.windows && R() < 0.5) wins.push([x + w / 2 - 2, top + 14 + R() * 20, 4, 7]);
-      x += w + R() * 10;
-    } else if (t < 0.85) { // house: gable or broken roof, maybe a chimney
-      const w = 34 + R() * 60, h = minH + R() * (maxH * 0.55 - minH), top = base - h;
-      d.push(`M${x} ${base}V${top}H${x + w}V${base}Z`);
-      if (R() < 0.65) d.push(`M${x - 4} ${top}L${x + w / 2} ${top - w * (0.35 + R() * 0.25)}L${x + w + 4} ${top}Z`);
-      else d.push(`M${x} ${top}L${x + w * 0.2} ${top - 10}L${x + w * 0.45} ${top + 2}L${x + w * 0.7} ${top - 16}L${x + w} ${top}Z`);
-      if (R() < 0.5) { const cx = x + w * (0.2 + R() * 0.5); d.push(`M${cx} ${top}V${top - 26 - R() * 14}H${cx + 7}V${top}Z`); }
-      if (opts.windows) for (let k = 0; k < 2; k++) if (R() < 0.3) wins.push([x + 6 + R() * (w - 14), top + 8 + R() * (h - 20), 4, 6]);
-      x += w + R() * 6;
-    } else x += 10 + R() * 40; // a gap
+const rect = (x, y, w, h) => `M${x} ${y}h${w}v${h}h${-w}Z`;
+// A Victorian townhouse: body, mansard roof with dormers, chimney stacks with pots; sometimes broken.
+function townhouse(R, x, base, w, h) {
+  const top = base - h, d = [rect(x, top, w, h)];
+  const mh = 14 + R() * 14;
+  d.push(`M${x - 2} ${top}L${x + 6} ${top - mh}H${x + w - 6}L${x + w + 2} ${top}Z`);
+  for (let k = x + 10; k < x + w - 14; k += 16 + R() * 10) if (R() < 0.6) d.push(rect(k, top - mh * 0.7, 6, mh * 0.6));
+  const stacks = 1 + Math.floor(R() * 2);
+  for (let i = 0; i < stacks; i++) {
+    const cx = x + (i + 0.5) * (w / stacks) + R() * 8 - 4, sh = 22 + R() * 26, sw = 12 + R() * 8;
+    d.push(rect(cx - sw / 2, top - mh - sh, sw, sh + mh), rect(cx - sw / 2 - 2, top - mh - sh, sw + 4, 4));
+    for (let p = 0; p < 2 + Math.floor(R() * 2); p++) d.push(rect(cx - sw / 2 + 1 + p * 5, top - mh - sh - 7, 3.2, 7));
   }
-  d.push(`M-20 ${base}H${W + 20}V${H}H-20Z`);
-  return { d: d.join(""), wins };
+  if (R() < 0.3) d.push(`M${x + w * 0.55} ${top}L${x + w * 0.7} ${top - 10}L${x + w * 0.8} ${top + 6}Z`);
+  return d.join("");
 }
-// A cathedral shell: nave, two towers (one broken), a rose window you can see through.
-function cathedral(cx, base, s) {
-  const p = [];
-  p.push(`M${cx - 70 * s} ${base}V${base - 120 * s}L${cx} ${base - 170 * s}L${cx + 70 * s} ${base - 120 * s}V${base}Z`);
-  p.push(`M${cx - 110 * s} ${base}V${base - 210 * s}H${cx - 70 * s}V${base}Z M${cx - 116 * s} ${base - 210 * s}L${cx - 90 * s} ${base - 320 * s}L${cx - 64 * s} ${base - 210 * s}Z`);
-  p.push(`M${cx + 70 * s} ${base}V${base - 190 * s}L${cx + 80 * s} ${base - 214 * s}L${cx + 92 * s} ${base - 196 * s}L${cx + 104 * s} ${base - 226 * s}L${cx + 110 * s} ${base - 186 * s}V${base}Z`);
-  return p.join("");
-}
-function deadTree(x, base, s) {
-  return `<g fill="none" stroke="currentColor" stroke-linecap="round">
-<path d="M${x} ${base}C${x + 2} ${base - 40 * s} ${x - 6} ${base - 70 * s} ${x - 2} ${base - 110 * s}" stroke-width="${7 * s}"/>
-<path d="M${x - 2} ${base - 70 * s}L${x - 34 * s} ${base - 100 * s}L${x - 44 * s} ${base - 96 * s}M${x - 1} ${base - 92 * s}L${x + 30 * s} ${base - 128 * s}L${x + 40 * s} ${base - 124 * s}M${x - 2} ${base - 110 * s}L${x - 14 * s} ${base - 140 * s}M${x + 14 * s} ${base - 110 * s}L${x + 22 * s} ${base - 120 * s}" stroke-width="${3 * s}"/></g>`;
-}
-function fence(base) {
-  const R = seeded(7); let g = "";
-  for (let x = 12; x < W; x += 30 + R() * 18) {
-    const h = 34 + R() * 26, lean = R() * 8 - 4;
-    g += `<path d="M${x} ${base + 6}L${x + lean} ${base - h}L${x + lean + 5} ${base - h - 6}L${x + lean + 9} ${base - h}L${x + 9} ${base + 6}Z"/>`;
+const smokestack = (x, base, h, w) => `M${x} ${base}L${x + 2} ${base - h}H${x + w - 2}L${x + w} ${base}Z` + rect(x - 1, base - h - 4, w + 2, 5);
+// The palace far away: a stacked city on a hill, a domed hall in the middle, gothic spires around it.
+function palace(R) {
+  const d = [`M-20 ${H}V320Q150 300 300 268Q380 255 460 268Q600 296 720 318V${H}Z`];
+  for (let x = -10; x < W; x += 14 + R() * 18) {
+    const hill = 320 - 62 * Math.exp(-(((x - 380) / 170) ** 2));
+    const h = 16 + R() * 40;
+    d.push(rect(x, hill - h, 12 + R() * 16, h + 30));
+    if (R() < 0.3) { const sx = x + 6; d.push(`M${sx - 4} ${hill - h}L${sx} ${hill - h - 30 - R() * 40}L${sx + 4} ${hill - h}Z`); }
   }
-  g += `<path d="M0 ${base - 20}Q175 ${base - 30} 350 ${base - 18}T700 ${base - 24}" fill="none" stroke="currentColor" stroke-width="4"/>`;
-  return g;
+  d.push(rect(300, 190, 160, 90), `M308 190L380 160L452 190Z`, rect(334, 140, 92, 52), `M334 142Q334 72 380 62Q426 72 426 142Z`,
+    rect(373, 42, 14, 22), `M375 44L380 14L385 44Z`);
+  for (const [x, top, w] of [[262, 150, 26], [478, 168, 24], [222, 200, 18], [522, 206, 18], [600, 226, 14], [160, 236, 14]]) {
+    d.push(rect(x, top, w, 160), `M${x - 3} ${top}L${x + w / 2} ${top - 46 - R() * 30}L${x + w + 3} ${top}Z`);
+  }
+  return d.join("");
+}
+// Flame tongues along a line: an outer flame and a brighter core each.
+function flames(seed, base, x0, x1, minH, maxH, peak) {
+  const R = seeded(seed); let o = "", i = "";
+  for (let x = x0; x < x1; x += 12 + R() * 20) {
+    const near = peak == null ? 1 : Math.exp(-(((x - peak) / 160) ** 2)) * 0.7 + 0.3;
+    const h = (minH + R() * (maxH - minH)) * near, w = 16 + R() * 26, lean = R() * 16 - 8;
+    const tong = (hh, ww) => `M${x - ww / 2} ${base}C${x - ww / 2} ${base - hh * 0.45} ${x + lean - ww * 0.15} ${base - hh * 0.6} ${x + lean} ${base - hh}`
+      + `C${x + lean * 0.3 + ww * 0.25} ${base - hh * 0.55} ${x + ww / 2} ${base - hh * 0.4} ${x + ww / 2} ${base}Z`;
+    o += tong(h, w); i += tong(h * 0.6, w * 0.45);
+  }
+  return `<path class="o" d="${o}"/><path class="i" d="${i}"/>`;
+}
+function bareTree(x, base, s, dir) {
+  const R = seeded(Math.round(x * 13 + s * 7)); let d = `M${x} ${base}Q${x + dir * 8 * s} ${base - 60 * s} ${x + dir * 30 * s} ${base - 120 * s}`;
+  for (let k = 0; k < 7; k++) {
+    const t = 0.3 + R() * 0.65, bx = x + dir * 30 * s * t, by = base - 120 * s * t, len = (30 + R() * 50) * s, ang = (-90 + dir * (20 + R() * 60)) * Math.PI / 180;
+    d += `M${bx} ${by}l${(Math.cos(ang) * len).toFixed(1)} ${(Math.sin(ang) * len).toFixed(1)}l${(dir * 8 * s).toFixed(1)} ${(-6 * s).toFixed(1)}`;
+  }
+  return `<path d="${d}" fill="none" stroke="currentColor" stroke-width="${2.2 * s}" stroke-linecap="round"/>`;
+}
+function lampPost(x, base, h) {
+  return rect(x - 2, base - h, 4, h) + `M${x - 9} ${base - h}L${x - 6} ${base - h - 22}H${x + 6}L${x + 9} ${base - h}Z` + `M${x - 7} ${base - h - 22}L${x} ${base - h - 30}L${x + 7} ${base - h - 22}Z`;
 }
 export function startScene(layer) {
   if (!document.getElementById("gd-scene-css")) {
     const st = document.createElement("style"); st.id = "gd-scene-css"; st.textContent = SCENE_CSS; document.head.appendChild(st);
   }
-  const box = document.createElement("div");
-  box.className = "gd-scene";
+  const R = seeded(31);
   const svg = (cls, inner) => `<svg class="${cls}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><g fill="currentColor">${inner}</g></svg>`;
-  const far = skyline(11, 300, 50, 210, { towers: 0.38 });
-  const mid = skyline(23, 336, 50, 175, { towers: 0.24, windows: true });
-  const near = skyline(41, 366, 40, 115, { towers: 0.12, windows: true });
-  const winEls = (ws, o) => ws.map(([x, y, w, h]) => `<rect class="win" x="${x}" y="${y}" width="${w}" height="${h}" opacity="${o}"/>`).join("");
-  box.innerHTML = `<div class="glow"></div>`
-    + svg("l1", `<path d="${far.d}"/><path d="${cathedral(390, 300, 0.85)}"/>`)
-    + `<div class="haze" style="height:70%;opacity:.55"></div>`
-    + svg("l2", `<path d="${mid.d}"/>${winEls(mid.wins, 0.55)}`)
-    + `<div class="haze" style="height:45%;opacity:.45"></div>`
-    + svg("l3", `<path d="${near.d}"/>${winEls(near.wins, 0.8)}${deadTree(560, 366, 1)}${deadTree(95, 366, 0.8)}`)
-    + svg("l4", `<path d="M-20 ${H}V384Q150 374 330 382T720 380V${H}Z"/>${fence(392)}`);
-  layer.appendChild(box);
+  // Middle: smokestacks on the left, townhouses, kept low in the center so the palace shows.
+  let mid = smokestack(36, 360, 210, 14) + smokestack(70, 360, 240, 16) + smokestack(112, 360, 185, 12);
+  for (let x = -10; x < W; ) {
+    const w = 46 + R() * 40, center = Math.abs(x + w / 2 - 380) < 130;
+    mid += townhouse(R, x, 362, w, center ? 34 + R() * 26 : 70 + R() * 70);
+    x += w + 2 + R() * 6;
+  }
+  mid += `M-20 ${H}V360H720V${H}Z`;
+  // Near: tall houses framing both sides, rubble in the middle, two lamp posts.
+  const near = townhouse(R, -14, 386, 120, 170) + townhouse(R, 108, 386, 70, 110) + townhouse(R, 540, 386, 80, 130) + townhouse(R, 616, 386, 100, 185)
+    + `M180 386L200 372L230 378L262 366L300 376L340 368L380 378L420 370L460 377L500 368L540 386Z` + `M-20 ${H}V384H720V${H}Z`;
+  const lamps = lampPost(150, 388, 120) + lampPost(528, 388, 140);
+  const lampGlow = `<rect class="lamp" x="145" y="${388 - 120 - 20}" width="10" height="16" rx="2"/><rect class="lamp" x="523" y="${388 - 140 - 20}" width="10" height="16" rx="2"/>`;
+  // Foreground: an iron fence with spear tips, bare branches from both edges.
+  let fence = `M-20 ${H}V394H720V${H}Z` + rect(-20, 372, 740, 3) + rect(-20, 386, 740, 3);
+  for (let x = -4; x < W; x += 13) fence += rect(x, 366, 2.6, 30) + `M${x - 1.6} 367L${x + 1.3} 360L${x + 4.2} 367Z`;
+  layer.insertAdjacentHTML("beforeend", `<div class="gd-scene">
+<div class="sky"></div><div class="pulse"></div>
+${svg("l1 depth", `<path d="${palace(seeded(5))}"/>`)}
+${svg("flames f1", flames(17, 300, 120, 660, 40, 120, 380))}
+<div class="fog" style="height:22%"></div>
+${svg("l2 depth", `<path d="${mid}"/>`)}
+${svg("flames f2", flames(29, 362, 200, 540, 18, 50, 360))}
+${svg("l3 depth", `<path d="${near}"/><path d="${lamps}"/>${lampGlow}`)}
+${svg("l4 depth", `<path d="${fence}"/>${bareTree(-6, 400, 1.3, 1)}${bareTree(706, 400, 1.15, -1)}`)}
+</div>`);
+  const box = layer.lastElementChild;
+  // Each flame band flickers at its own pace.
+  box.querySelector(".f2").style.animationDuration = "1.7s";
+  box.querySelector(".f2").style.animationDelay = "-.6s";
   // Tiny parallax: near layers move a bit more than far ones as you scroll (a few px at most).
-  const layers = [...box.querySelectorAll("svg")], k = [0.006, 0.012, 0.022, 0.034], max = [4, 8, 14, 20];
+  const layers = [...box.querySelectorAll(".depth")], k = [0.006, 0.014, 0.024, 0.034], max = [4, 9, 15, 20];
   let ticking = false;
   const apply = () => {
     ticking = false;
