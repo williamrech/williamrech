@@ -1274,3 +1274,5 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .cursed .uname-wrap, .cursed .uname-wrap .uname { overflow: visible; text-overflow: clip; }
 .me-chip:has(.cursed), .me-chip:has(.cursed) .uname-wrap { overflow: visible; }
 .me-chip:has(.cursed) { position: relative; z-index: 3; }
+/* The toast is a popover so it shows above open popups (undo the browser's popover defaults) */
+#toast[popover] { inset: auto; left: 50%; bottom: calc(44px + env(safe-area-inset-bottom)); margin: 0; border: 0; overflow: visible; width: max-content; }

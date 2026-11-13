@@ -760,6 +760,8 @@ let toastTimer;
 function toast(msg, ms = 3200) {
   const t = $("toast");
   t.textContent = msg;
+  // Re-raise it above any open popup (popups live in the browser's top layer, which would hide it).
+  if (t.showPopover) { try { if (t.matches(":popover-open")) t.hidePopover(); t.showPopover(); void t.offsetWidth; } catch {} }
   t.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("show"), ms);
