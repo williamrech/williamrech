@@ -435,10 +435,23 @@ function spawnEffect(layer, kind, scale = 1) {
     const setLen = (px, secs) => { rig.style.setProperty("--t", `${secs}s`); rig.style.setProperty("--len", `${px}px`); };
     setLen(rest, 0);
     const room = () => (scale < 1 ? layer.clientHeight : innerHeight);
+    // Climbing back: stop the swing where it is and ease back to hanging straight over the climb (no snap at the top).
+    const settle = (secs) => {
+      if (!rig.classList.contains("down")) return;
+      const cur = getComputedStyle(rig).transform;
+      rig.style.transition = "none"; rig.style.transform = cur;
+      rig.classList.remove("down");
+      rig.style.transform = ""; const base = getComputedStyle(rig).transform;
+      rig.style.transform = cur; void rig.offsetWidth;
+      rig.style.transition = `transform ${secs}s ease-in-out`; rig.style.transform = base;
+      clearTimeout(rig._settle);
+      rig._settle = setTimeout(() => { rig.style.transition = ""; rig.style.transform = ""; }, secs * 1000 + 50);
+    };
     const cycle = () => {
       if (!rig.isConnected) return;
       if (!document.hidden && !still) {
         // "down": swinging the whole time it's off the web; "moving": legs going while it travels.
+        clearTimeout(rig._settle); rig.style.transition = ""; rig.style.transform = "";
         rig.classList.add("moving", "down");
         setLen(rest + room() * rnd(0.18, 0.5), rnd(4, 6.5));
         layer._spiderUp = setTimeout(() => {
@@ -447,7 +460,8 @@ function spawnEffect(layer, kind, scale = 1) {
             rig.classList.add("moving");
             const up = rnd(5, 7);
             setLen(rest, up);
-            layer._spiderUp = setTimeout(() => rig.classList.remove("moving", "down"), up * 1000);
+            settle(up * 0.8);
+            layer._spiderUp = setTimeout(() => rig.classList.remove("moving"), up * 1000);
           }, rnd(3000, 8000));
         }, 6500);
       }
@@ -458,7 +472,8 @@ function spawnEffect(layer, kind, scale = 1) {
       clearTimeout(layer._spiderUp);
       rig.classList.add("moving");
       setLen(rest, 0.9);
-      layer._spiderUp = setTimeout(() => rig.classList.remove("moving", "down"), 1000);
+      settle(0.9);
+      layer._spiderUp = setTimeout(() => rig.classList.remove("moving"), 1000);
     };
     layer.dataset.fx = kind;
     return;
