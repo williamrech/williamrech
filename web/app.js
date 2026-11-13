@@ -747,6 +747,7 @@ const api = {
   adminSetUserFlag: call("adminSetUserFlag"),
   setAdmin: call("setAdmin"),
   claimAdmin: call("claimAdmin"),
+  adminRounds: call("adminRounds"),
 };
 
 // ---------- Constants ----------
@@ -1984,7 +1985,7 @@ function buildRound(r, ask) {
   // Footer: who sent it on the left, the time left on the right (exact time on long-press/hover).
   const who = mine ? "Você" : `de ${nameHtml(r.ownerUid, r.ownerName)}`;
   const dl = r.open ? deadlineParts(r.closesAt) : null;
-  const when = !r.open ? `<span class="deadline">encerrado</span>`
+  const when = !r.open ? `<span class="deadline">${r.closedBy === "admin" ? "encerrado pelo admin" : "encerrado"}</span>`
     : dl ? `<span class="deadline${dl.urgent ? " urgent" : ""}" title="${esc(dl.abs)}">⏳ ${esc(dl.rel)}</span>` : "";
 
   li.innerHTML = `
@@ -2855,7 +2856,8 @@ function logGroups(entries) {
         case "created": g.from = a; row(e.at, e.scheduled ? "⏰" : "📣", `${a} mandou pra ${e.count} pessoa${e.count === 1 ? "" : "s"}${e.scheduled ? " (agendado)" : ""}`); break;
         case "answer": row(e.at, e.changes ? "🌀" : "💬", e.changes ? `${a} mudou pra: ${e.value}` : `${a} respondeu: ${e.value}`, e.via ? `pela ${e.via}` : ""); break;
         case "seen": row(e.at, "👁", `${a} viu no app`); break;
-        case "closed": row(e.at, "🔒", `${a} encerrou`); break;
+        case "closed": row(e.at, "🔒", e.byAdmin ? `${a} encerrou (como admin)` : `${a} encerrou`); break;
+        case "deleted": row(e.at, "🗑️", `${a} apagou (como admin)`); break;
         case "expired": row(e.at, "⌛", "fechou (acabou o tempo)"); break;
         case "muted": row(e.at, "🔕", `${a} silenciou`, "", "meh"); break;
         case "unmuted": row(e.at, "🔔", `${a} reativou`); break;
@@ -3935,3 +3937,44 @@ function fillLookSelect(keep) {
 }
 $("occ-effect").addEventListener("change", () => fillLookSelect());
 ["occ-ns-icon", "occ-ns-title", "occ-ns-ideas"].forEach((id) => $(id).addEventListener("input", renderCurseHead));
+
+// Admin: everything running right now, from everyone, with ⋯ → Encerrar / Apagar. Nobody gets notified;
+// the card says "encerrado pelo admin" (or just disappears), and it's written to the admin Logs.
+async function loadAdminRounds() {
+  const box = $("adm-rounds");
+  box.innerHTML = `<p class="muted small">Carregando…</p>`;
+  const res = await withBusy(null, () => api.adminRounds({}));
+  if (!res) { box.innerHTML = `<p class="muted small">Não deu pra carregar.</p>`; return; }
+  const list = res.data.rounds || [];
+  $("adm-rounds-sum").textContent = list.length ? String(list.length) : "";
+  if (!list.length) { box.innerHTML = `<p class="muted small">Nada no ar agora.</p>`; return; }
+  box.innerHTML = "";
+  for (const r of list) {
+    const to = r.recipients.map((u) => personName(u, r.recipientNames[u])).join(", ");
+    const dl = r.closesAt ? deadlineParts({ toMillis: () => r.closesAt }) : null;
+    const resp = r.answerType === "none" ? "aviso" : `${r.answered}/${r.recipients.length} responderam`;
+    const row = document.createElement("div");
+    row.className = "adm-round";
+    row.innerHTML = `<span class="adm-round-emoji"></span><span class="adm-round-text"><b></b><span class="muted small"></span></span>`;
+    row.querySelector(".adm-round-emoji").textContent = r.emoji;
+    row.querySelector("b").textContent = r.title;
+    row.querySelector(".muted").textContent = `${personName(r.ownerUid, r.ownerName)} → ${to} · ${resp}${dl ? " · " + dl.rel : ""}`;
+    const more = document.createElement("button");
+    more.type = "button"; more.className = "more"; more.textContent = "⋯";
+    more.setAttribute("aria-label", "Mais opções"); more.setAttribute("aria-haspopup", "menu");
+    more.onclick = () => openPopMenu(more, [
+      { label: "🔒 Encerrar", ask: "Fecha agora pra todo mundo. No card aparece “encerrado pelo admin”.", yes: "Encerrar", run: async () => {
+        const ok = await withBusy(null, () => api.closeRound({ roundId: r.id }));
+        if (ok) { toast("Encerrado. 🔒"); loadAdminRounds(); }
+      } },
+      { label: "🗑️ Apagar", danger: true, ask: "Some do mural de todo mundo, com as respostas.", yes: "Apagar", run: async () => {
+        const ok = await withBusy(null, () => api.deleteRound({ roundId: r.id }));
+        if (ok) { toast("Apagado. 🧹"); loadAdminRounds(); }
+      } },
+    ]);
+    row.appendChild(more);
+    box.appendChild(row);
+  }
+}
+$("adm-rounds-sec").addEventListener("toggle", () => { if ($("adm-rounds-sec").open) loadAdminRounds(); });
+$("adm-rounds-refresh").addEventListener("click", loadAdminRounds);

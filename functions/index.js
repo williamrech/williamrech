@@ -508,11 +508,29 @@ handlers.closeRound = async (req) => {
   const ref = db.doc(`rounds/${String((req.data && req.data.roundId) || "")}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Isso não existe mais.");
-  if (snap.get("ownerUid") !== auth.uid) throw new HttpsError("permission-denied", "Só quem criou pode encerrar.");
-  await ref.update({ open: false });
+  // Its creator, or an admin (marked on the card as "encerrado pelo admin"; no notification to anyone).
+  const byAdmin = snap.get("ownerUid") !== auth.uid;
+  if (byAdmin) {
+    const me = await db.doc(`users/${auth.uid}`).get();
+    if (!me.exists || me.get("admin") !== true) throw new HttpsError("permission-denied", "Só quem criou pode encerrar.");
+  }
+  await ref.update(byAdmin ? { open: false, closedBy: "admin" } : { open: false });
   await logEvent("closed", { roundId: ref.id, roundTitle: snap.get("title"), emoji: snap.get("emoji"), actorUid: auth.uid,
-    actorName: snap.get("ownerName") });
+    actorName: byAdmin ? "Admin" : snap.get("ownerName"), byAdmin });
   return { ok: true };
+};
+
+// Admin: every round that's still running, from everyone (the app only sees the ones you're part of).
+handlers.adminRounds = async (req) => {
+  await requireAdmin(req);
+  const snap = await db.collection("rounds").where("open", "==", true).get();
+  const rounds = snap.docs.map((d) => {
+    const r = d.data();
+    return { id: d.id, title: r.title || "", emoji: r.emoji || "🔔", ownerUid: r.ownerUid, ownerName: r.ownerName || "",
+      recipients: r.recipients || [], recipientNames: r.recipientNames || {}, answered: Object.keys(r.answers || {}).length,
+      answerType: r.answerType, createdAt: r.createdAt ? r.createdAt.toMillis() : 0, closesAt: r.closesAt ? r.closesAt.toMillis() : 0 };
+  }).sort((a, b) => b.createdAt - a.createdAt);
+  return { rounds };
 };
 
 // Delete a round for everyone (its creator, or an admin).
@@ -524,6 +542,7 @@ handlers.deleteRound = async (req) => {
   if (snap.get("ownerUid") !== auth.uid) {
     const me = await db.doc(`users/${auth.uid}`).get();
     if (!me.exists || me.get("admin") !== true) throw new HttpsError("permission-denied", "Só quem criou pode apagar.");
+    await logEvent("deleted", { roundId: ref.id, roundTitle: snap.get("title"), emoji: snap.get("emoji"), actorUid: auth.uid, actorName: "Admin", byAdmin: true });
   }
   await ref.delete();
   return { ok: true };

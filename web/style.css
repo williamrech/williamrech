@@ -1276,3 +1276,10 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .me-chip:has(.cursed) { position: relative; z-index: 3; }
 /* The toast is a popover so it shows above open popups (undo the browser's popover defaults) */
 #toast[popover] { inset: auto; left: 50%; bottom: calc(44px + env(safe-area-inset-bottom)); margin: 0; border: 0; overflow: visible; width: max-content; }
+/* Admin: everything running right now */
+.adm-rounds { display: grid; gap: 2px; margin-bottom: 6px; }
+.adm-round { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.adm-round:last-child { border-bottom: 0; }
+.adm-round-emoji { font-size: 1.2rem; text-align: center; }
+.adm-round-text { display: grid; min-width: 0; font-size: 0.9rem; }
+.adm-round-text .muted { overflow-wrap: anywhere; }
