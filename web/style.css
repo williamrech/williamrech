@@ -1187,10 +1187,29 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .curse-banner { margin: 6px auto 0; max-width: 520px; padding: 8px 12px; border-radius: 12px; font-size: 0.85rem; text-align: center; cursor: pointer;
   background: color-mix(in srgb, var(--caramel) 16%, transparent); border: 1px dashed color-mix(in srgb, var(--caramel) 55%, transparent); color: var(--fg); }
 .curse-banner[hidden] { display: none; }
-.cursed .uname, .cursed { background: linear-gradient(100deg, var(--crema) 0%, var(--caramel) 30%, var(--fg) 50%, var(--caramel) 70%, var(--crema) 100%);
-  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: curse-shimmer 3.2s linear infinite; }
-@keyframes curse-shimmer { to { background-position: -250% 0; } }
-@media (prefers-reduced-motion: reduce) { .cursed .uname, .cursed { animation: none; } }
+/* Cursed name: oozing ectoplasm — sickly green glow, wisps rising off it, a queasy wobble */
+.cursed { --ecto: color-mix(in srgb, #8dff6a 72%, var(--caramel)); position: relative; display: inline-block; isolation: isolate; }
+.cursed .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 55%, #c9ffb0) !important; -webkit-text-fill-color: currentColor;
+  text-shadow: 0 0 4px var(--ecto), 0 0 12px color-mix(in srgb, var(--ecto) 70%, transparent), 0 2px 18px color-mix(in srgb, var(--ecto) 45%, transparent);
+  animation: ecto-pulse 2.8s ease-in-out infinite, ecto-wobble 5.5s ease-in-out infinite; display: inline-block; }
+.cursed::before, .cursed::after {
+  content: ""; position: absolute; left: 8%; right: 25%; bottom: 25%; height: 1.5em; z-index: -1; pointer-events: none; border-radius: 45% 55% 40% 60%;
+  background: radial-gradient(ellipse at 50% 70%, var(--ecto), color-mix(in srgb, var(--ecto) 40%, transparent) 45%, transparent 72%);
+  filter: blur(3.5px); opacity: 0; animation: ecto-rise 3.2s ease-out infinite;
+}
+.cursed::after { left: 35%; right: 5%; animation-delay: 1.6s; animation-duration: 3.8s; }
+@keyframes ecto-rise {
+  0% { transform: translateY(20%) scale(.6, .5); opacity: 0; }
+  25% { opacity: .95; }
+  100% { transform: translateY(-120%) scale(1.3, 1.1) skewX(-12deg); opacity: 0; }
+}
+@keyframes ecto-pulse {
+  0%, 100% { text-shadow: 0 0 4px var(--ecto), 0 0 12px color-mix(in srgb, var(--ecto) 70%, transparent), 0 2px 18px color-mix(in srgb, var(--ecto) 45%, transparent); }
+  45% { text-shadow: 0 0 7px var(--ecto), 0 0 20px color-mix(in srgb, var(--ecto) 85%, transparent), 0 4px 28px color-mix(in srgb, var(--ecto) 60%, transparent); }
+  60% { text-shadow: 0 0 3px var(--ecto), 0 0 9px color-mix(in srgb, var(--ecto) 55%, transparent), 0 2px 14px color-mix(in srgb, var(--ecto) 35%, transparent); }
+}
+@keyframes ecto-wobble { 0%, 100% { transform: skewX(0) translateY(0); } 30% { transform: skewX(-2deg) translateY(.5px); } 65% { transform: skewX(1.5deg) translateY(-.5px); } }
+@media (prefers-reduced-motion: reduce) { .cursed .uname, .cursed::before, .cursed::after { animation: none; } .cursed::before { opacity: .45; } }
 .curses { display: grid; gap: 6px; margin-bottom: 10px; }
 .curse-row { display: grid; grid-template-columns: minmax(70px, 34%) 1fr 40px; gap: 6px; align-items: center; }
 .curse-who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
