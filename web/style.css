@@ -1188,16 +1188,17 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
   background: color-mix(in srgb, var(--caramel) 16%, transparent); border: 1px dashed color-mix(in srgb, var(--caramel) 55%, transparent); color: var(--fg); }
 .curse-banner[hidden] { display: none; }
 /* Cursed name: oozing ectoplasm — sickly green glow, wisps rising off it, a queasy wobble */
-.cursed { --ecto: color-mix(in srgb, #8dff6a 72%, var(--caramel)); position: relative; display: inline-block; isolation: isolate; }
-.cursed .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 55%, #c9ffb0) !important; -webkit-text-fill-color: currentColor;
+.cursed { position: relative; display: inline-block; isolation: isolate; }
+.cursed.l-ecto { --ecto: color-mix(in srgb, #8dff6a 72%, var(--caramel)); }
+.cursed.l-ecto .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 55%, #c9ffb0) !important; -webkit-text-fill-color: currentColor;
   text-shadow: 0 0 4px var(--ecto), 0 0 12px color-mix(in srgb, var(--ecto) 70%, transparent), 0 2px 18px color-mix(in srgb, var(--ecto) 45%, transparent);
   animation: ecto-pulse 2.8s ease-in-out infinite, ecto-wobble 5.5s ease-in-out infinite; display: inline-block; }
-.cursed::before, .cursed::after {
+.cursed.l-ecto::before, .cursed.l-ecto::after {
   content: ""; position: absolute; left: 8%; right: 25%; bottom: 25%; height: 1.5em; z-index: -1; pointer-events: none; border-radius: 45% 55% 40% 60%;
   background: radial-gradient(ellipse at 50% 70%, var(--ecto), color-mix(in srgb, var(--ecto) 40%, transparent) 45%, transparent 72%);
   filter: blur(3.5px); opacity: 0; animation: ecto-rise 3.2s ease-out infinite;
 }
-.cursed::after { left: 35%; right: 5%; animation-delay: 1.6s; animation-duration: 3.8s; }
+.cursed.l-ecto::after { left: 35%; right: 5%; animation-delay: 1.6s; animation-duration: 3.8s; }
 @keyframes ecto-rise {
   0% { transform: translateY(20%) scale(.6, .5); opacity: 0; }
   25% { opacity: .95; }
@@ -1209,13 +1210,13 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
   60% { text-shadow: 0 0 3px var(--ecto), 0 0 9px color-mix(in srgb, var(--ecto) 55%, transparent), 0 2px 14px color-mix(in srgb, var(--ecto) 35%, transparent); }
 }
 @keyframes ecto-wobble { 0%, 100% { transform: skewX(0) translateY(0); } 30% { transform: skewX(-2deg) translateY(.5px); } 65% { transform: skewX(1.5deg) translateY(-.5px); } }
-@media (prefers-reduced-motion: reduce) { .cursed .uname, .cursed::before, .cursed::after { animation: none; } .cursed::before { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .cursed.l-ecto .uname, .cursed.l-ecto::before, .cursed.l-ecto::after { animation: none; } .cursed.l-ecto::before { opacity: .45; } }
 .curses { display: grid; gap: 6px; margin-bottom: 10px; }
 .curse-row { display: grid; grid-template-columns: minmax(70px, 34%) 1fr 40px; gap: 6px; align-items: center; }
 .curse-who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .curse-row input { margin: 0; min-width: 0; }
 /* Cursed badge: the emoji becomes a green silhouette that oozes along with the name */
-.cursed .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
+.cursed.l-ecto .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
   text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 6px var(--ecto), 0 0 14px color-mix(in srgb, var(--ecto) 70%, transparent);
   animation: ecto-pulse-badge 2.8s ease-in-out infinite, ecto-wobble 5.5s ease-in-out infinite; }
 @keyframes ecto-pulse-badge {
@@ -1223,4 +1224,6 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
   45% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 9px var(--ecto), 0 0 22px color-mix(in srgb, var(--ecto) 85%, transparent); }
   60% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 4px var(--ecto), 0 0 10px color-mix(in srgb, var(--ecto) 55%, transparent); }
 }
-@media (prefers-reduced-motion: reduce) { .cursed .ubadge { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cursed.l-ecto .ubadge { animation: none; } }
+.ns-row { grid-template-columns: 76px 1fr; }
+.curse-dice[hidden] { display: inline-flex; visibility: hidden; }

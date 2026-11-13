@@ -82,6 +82,7 @@ function matchesPattern(pat, t) {
   }
   return false;
 }
+const CURSE_LOOKS = { "": "Nenhum", ecto: "Ectoplasma" }; // name looks for the occasion's Troca de nome
 // "when" can hold several patterns separated by commas (any one matches).
 const occasionMatches = (occ, t) => String(occ.when || "").split(",").some((p) => matchesPattern(p, t));
 
@@ -95,8 +96,11 @@ function todaysOccasion() {
   list.sort((a, b) => (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
   const merged = {};
   for (const [id, o] of list) { Object.assign(merged, o); merged.id = id; }
-  // Curses from every active occasion add up (higher priority wins per person).
-  merged.curses = Object.assign({}, ...list.map(([, o]) => (o.curses && typeof o.curses === "object" ? o.curses : {})));
+  // Curses from every active occasion add up (higher priority wins per person); each keeps its own occasion's look.
+  merged.curses = {}; merged.curseCfg = {};
+  for (const [, o] of list) for (const [u, n] of Object.entries(o.curses && typeof o.curses === "object" ? o.curses : {})) {
+    merged.curses[u] = n; merged.curseCfg[u] = curseCfgOf(o);
+  }
   return list.length ? merged : null;
 }
 
@@ -1310,7 +1314,14 @@ function styledName(name, style) {
     `<span class="uname f-${st.font} x-${st.effect}" style="--uc:${st.color}">${esc(name)}</span></span>`;
 }
 
-// Curse: today's occasion can replace someone's name (shimmering in the theme's colors).
+// Curse: today's occasion can replace someone's name. Each occasion sets its own icon, wording, look and 🎲 ideas.
+function curseCfgOf(o) {
+  const c = (o && o.nameSwap && typeof o.nameSwap === "object") ? o.nameSwap : {};
+  const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+  return { icon: str(c.icon, 8), title: str(c.title, 30), banner: str(c.banner, 120), look: c.look in CURSE_LOOKS ? c.look : "",
+    ideas: Array.isArray(c.ideas) ? c.ideas.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, 30)) : [] };
+}
+const curseCfg = (uid) => (todayOcc && todayOcc.curseCfg && todayOcc.curseCfg[uid]) || curseCfgOf(null);
 function curseOf(uid) {
   const c = todayOcc && todayOcc.curses && todayOcc.curses[uid];
   return typeof c === "string" && c.trim() ? c.trim() : null;
@@ -1319,7 +1330,7 @@ const displayName = (uid, fallback) => curseOf(uid) || (family[uid] && family[ui
 function nameHtml(uid, fallback) {
   const p = family[uid];
   const c = curseOf(uid);
-  if (c) return `<span class="cursed">${styledName(c, p && p.style)}</span>`;
+  if (c) { const k = curseCfg(uid).look; return `<span class="cursed${k ? " l-" + k : ""}">${styledName(c, p && p.style)}</span>`; }
   return styledName((p && p.name) || fallback || "?", p && p.style);
 }
 
@@ -1337,8 +1348,8 @@ function renderCurseBanner() {
   const c = curseOf(auth.currentUser.uid);
   show("curse-banner", !!c);
   if (!c) return;
-  const f = ((family[auth.currentUser.uid] || me || {}).gender) === "f";
-  el.innerHTML = `🧙 Você foi amaldiçoad${f ? "a" : "o"}! Enquanto durar a ocasião, todo mundo te vê como <b>${esc(c)}</b>.`;
+  const cfg = curseCfg(auth.currentUser.uid);
+  el.innerHTML = `${cfg.icon ? esc(cfg.icon) + " " : ""}${cfg.banner ? esc(cfg.banner) + " " : ""}Enquanto durar a ocasião, todo mundo te vê como <b>${esc(c)}</b>.`;
 }
 
 let draftStyle = null;
@@ -1347,7 +1358,7 @@ function renderStyleEditor() {
   $("style-preview").innerHTML = `${styledName(p.name || "Você", draftStyle)}<span class="edit-icon" aria-hidden="true">✏️</span>`;
   const curse = auth.currentUser && curseOf(auth.currentUser.uid);
   show("curse-note", !!curse);
-  if (curse) $("curse-note").innerHTML = `Hoje a maldição fala mais alto: você aparece como <b>${esc(curse)}</b>.`;
+  if (curse) { const cfg = curseCfg(auth.currentUser.uid); $("curse-note").innerHTML = `${cfg.icon ? esc(cfg.icon) + " " : ""}Hoje você aparece como <b>${esc(curse)}</b>.`; }
   const mk = (wrapId, entries, key, render) => {
     const wrap = $(wrapId);
     wrap.innerHTML = "";
@@ -3371,6 +3382,10 @@ function readOccForm() {
   const curses = {};
   document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, 30); });
   if (Object.keys(curses).length) o.curses = curses;
+  const ns = { icon: $("occ-ns-icon").value.trim(), title: $("occ-ns-title").value.trim(), banner: $("occ-ns-banner").value.trim(),
+    look: $("occ-ns-look").value, ideas: $("occ-ns-ideas").value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 60) };
+  Object.keys(ns).forEach((k) => { if (!ns[k] || (Array.isArray(ns[k]) && !ns[k].length)) delete ns[k]; });
+  if (Object.keys(ns).length) o.nameSwap = ns;
   const pr = $("occ-priority").value.trim();
   if (pr !== "") o.priority = Number(pr) || 0;
   if (!$("occ-enabled").checked) o.enabled = false;
@@ -3382,23 +3397,30 @@ function renderWhenInfo() {
   const next = nextDates(when, 3);
   $("occ-when-info").textContent = next.length ? `${next[0].i === 0 ? "✓ Hoje é dia! · " : ""}Próximas: ${next.map(fmtDate).join(", ")}` : "⚠ Não cai em nenhum dia dos próximos 2 anos.";
 }
-// Maldições: a name per person (empty = no curse), with 🎲 themed suggestions.
-const CURSE_IDEAS = ["Conde Drácula", "Múmia Desenrolada", "Bruxa do 71", "Fantasma Chorão", "Lobisomem de Pijama", "Zumbi Sonolento",
-  "Abóbora Podre", "Morcego Fofoqueiro", "Caveira Risonha", "Gato Preto", "Vampira Dentuça", "Frankenstein Cansado",
-  "Duende Encrenqueiro", "Saci Sem Gorro", "Mula Sem Cabeça", "Cuca Mal-Humorada", "Papai Noel Falso", "Rena Atrapalhada"];
+// Troca de nome: a name per person (empty = none), 🎲 picks from this occasion's own ideas.
+const curseIdeas = () => $("occ-ns-ideas").value.split("\n").map((x) => x.trim()).filter(Boolean);
+function renderCurseHead() {
+  const t = $("occ-ns-title").value.trim();
+  $("occ-ns-head").textContent = `${$("occ-ns-icon").value.trim() || "🎭"} ${t || "Troca de nome"} (nome que a pessoa ganha nesse dia)`;
+  document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { i.placeholder = t ? `sem ${t.toLowerCase()}` : "nome normal"; });
+  const has = curseIdeas().length > 0;
+  document.querySelectorAll("#occ-curses .curse-dice").forEach((b) => { b.hidden = !has; });
+}
 function renderCurseFields(curses) {
   const box = $("occ-curses");
   box.innerHTML = "";
   Object.entries(family).filter(([, p]) => p && p.name).sort((a, b) => a[1].name.localeCompare(b[1].name)).forEach(([uid, p]) => {
     const row = document.createElement("div");
     row.className = "curse-row";
-    row.innerHTML = `<span class="curse-who"></span><input data-uid="${esc(uid)}" maxlength="30" placeholder="sem maldição"><button type="button" class="icon-btn" aria-label="Sugerir nome">🎲</button>`;
+    row.innerHTML = `<span class="curse-who"></span><input data-uid="${esc(uid)}" maxlength="30"><button type="button" class="icon-btn curse-dice" aria-label="Sugerir nome">🎲</button>`;
     row.querySelector(".curse-who").textContent = p.name;
     const inp = row.querySelector("input");
     inp.value = curses[uid] || "";
     row.querySelector("button").onclick = () => {
+      const ideas = curseIdeas();
+      if (!ideas.length) return;
       let n;
-      do { n = CURSE_IDEAS[Math.floor(Math.random() * CURSE_IDEAS.length)]; } while (n === inp.value && CURSE_IDEAS.length > 1);
+      do { n = ideas[Math.floor(Math.random() * ideas.length)]; } while (n === inp.value && ideas.length > 1);
       inp.value = n;
     };
     box.appendChild(row);
@@ -3418,7 +3440,11 @@ function openOccasionEditor(id) {
   $("occ-effect").value = o.effect || "";
   $("occ-priority").value = o.priority ?? "";
   $("occ-enabled").checked = o.enabled !== false;
+  const ns = curseCfgOf(o);
+  $("occ-ns-icon").value = ns.icon; $("occ-ns-title").value = ns.title; $("occ-ns-banner").value = ns.banner;
+  $("occ-ns-look").value = ns.look; $("occ-ns-ideas").value = ns.ideas.join("\n");
   renderCurseFields(o.curses || {});
+  renderCurseHead();
   const sel = $("occ-palette");
   sel.innerHTML = `<option value="">(a de cada um)</option>`;
   Object.entries(allPalettes()).forEach(([pid, p]) => sel.add(new Option((p && p.name) || pid, pid)));
@@ -3874,3 +3900,7 @@ window.addEventListener("pageshow", (e) => { if (e.persisted) { hiddenAt = hidde
   const obs = new MutationObserver(update);
   document.querySelectorAll("dialog").forEach((d) => obs.observe(d, { attributes: true, attributeFilter: ["open"] }));
 })();
+
+// Troca de nome form: the look list, and a live header/placeholder/🎲 as you type.
+for (const [k, l] of Object.entries(CURSE_LOOKS)) $("occ-ns-look").add(new Option(l, k));
+["occ-ns-icon", "occ-ns-title", "occ-ns-ideas"].forEach((id) => $(id).addEventListener("input", renderCurseHead));

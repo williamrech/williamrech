@@ -89,6 +89,19 @@ const ref = getFirestore().doc("config/fun");
     if (hp && !hp.effect) update["palettes.halloween.effect"] = "haunted";
     update.configVersion = 9;
   }
+  // configVersion 10: the name swap's wording/look moved onto each occasion. Occasions that already
+  // have swapped names keep exactly what they showed before (Maldição, 🧙, ectoplasm, the old 🎲 list).
+  if ((Number(cur.configVersion) || 0) < 10) {
+    for (const [id, o] of Object.entries(cur.occasions || {})) {
+      if (o && o.curses && Object.keys(o.curses).length && !o.nameSwap) update[`occasions.${id}.nameSwap`] = {
+        icon: "🧙", title: "Maldição", banner: "Você foi amaldiçoado(a)!", look: "ecto",
+        ideas: ["Conde Drácula", "Múmia Desenrolada", "Bruxa do 71", "Fantasma Chorão", "Lobisomem de Pijama", "Zumbi Sonolento",
+          "Abóbora Podre", "Morcego Fofoqueiro", "Caveira Risonha", "Gato Preto", "Vampira Dentuça", "Frankenstein Cansado",
+          "Duende Encrenqueiro", "Saci Sem Gorro", "Mula Sem Cabeça", "Cuca Mal-Humorada"],
+      };
+    }
+    update.configVersion = 10;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

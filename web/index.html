@@ -371,7 +371,14 @@
         <label class="field">Paleta<select id="occ-palette"></select></label>
         <label class="field">Efeito<select id="occ-effect"><option value="">Nenhum</option></select></label>
       </div>
-      <p class="muted small pick-label">🧙 Maldições (nome que a pessoa ganha nesse dia)</p>
+      <p class="muted small pick-label" id="occ-ns-head">🎭 Troca de nome</p>
+      <div class="pick-row ns-row">
+        <label class="field ns-icon">Ícone<input id="occ-ns-icon" maxlength="8" placeholder="🎭"></label>
+        <label class="field">Nome da troca<input id="occ-ns-title" maxlength="30" placeholder="ex: Maldição"></label>
+      </div>
+      <label class="field">Frase pra quem foi trocado<input id="occ-ns-banner" maxlength="120" placeholder="ex: Você foi amaldiçoado(a)!"></label>
+      <label class="field">Visual do nome<select id="occ-ns-look"></select></label>
+      <label class="field">Ideias pro 🎲 (uma por linha)<textarea id="occ-ns-ideas" rows="4"></textarea></label>
       <div id="occ-curses" class="curses"></div>
       <label class="field">Desenhos (decor)<input id="occ-decor" maxlength="300" placeholder="pumpkin.svg ghost.svg 🦇"></label>
       <div class="chips mini-picker" id="occ-decor-picker"></div>
