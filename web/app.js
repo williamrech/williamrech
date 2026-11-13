@@ -84,7 +84,7 @@ function matchesPattern(pat, t) {
 }
 // Name looks for a swapped name. Each effect brings its own; an occasion can pin any of them.
 const NAME_LOOKS = { ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações" };
-const EFFECT_LOOK = { haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
+const EFFECT_LOOK = { grimdawn: "ecto", haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
 // Swapped names are capped so they always fit the top chip without "…" (they skip the clipping).
 const CURSE_MAX = 22;
 const autoLook = (effect) => EFFECT_LOOK[effect] || "glitter"; // no effect → glitter
@@ -330,7 +330,12 @@ function placeDecor(spec, force = false) {
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 // One list of names, used in the palette studio, the occasion editor and Configurações.
-const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando" };
+const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando", grimdawn: "⚔️ Grim Dawn" };
+// Effects only an occasion can use (not offered for themes).
+const OCCASION_ONLY_FX = ["grimdawn"];
+// The Grim Dawn pack lives in its own file, fetched only when the effect is on (same version as app.js).
+let gdModule = null;
+const loadGrimDawn = () => (gdModule ||= import(new URL("grimdawn.js" + new URL(import.meta.url).search, import.meta.url).href));
 // Assombrado: corner web, a spider on its thread, fog along the bottom, and an eye where you tap the background.
 const WEB_SVG = `<svg viewBox="0 0 160 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round">
 <g stroke-width="1.3">${[0, 15, 30, 45, 60, 75, 90].map((a) => { const r = (a * Math.PI) / 180; return `<path d="M0 0 L${(160 * Math.cos(r)).toFixed(1)} ${(160 * Math.sin(r)).toFixed(1)}"/>`; }).join("")}</g>
@@ -361,10 +366,10 @@ function eyeSvg(id, slit) {
 }
 const HEART_SVG = `<svg viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21.5 C5 16 0 12 0 6.6 C0 3 2.8 0 6.4 0 C8.8 0 10.8 1.3 12 3.3 C13.2 1.3 15.2 0 17.6 0 C21.2 0 24 3 24 6.6 C24 12 19 16 12 21.5Z" fill="currentColor"/></svg>`;
 const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor"/></svg>`;
-function fillEffectSelect(sel) {
+function fillEffectSelect(sel, forOccasion = false) {
   const keep = sel.value;
   sel.innerHTML = `<option value="">Nenhum</option>`;
-  for (const [k, label] of Object.entries(EFFECTS)) sel.add(new Option(label, k));
+  for (const [k, label] of Object.entries(EFFECTS)) if (forOccasion || !OCCASION_ONLY_FX.includes(k)) sel.add(new Option(label, k));
   sel.value = keep in EFFECTS ? keep : "";
 }
 // A plain cup on a saucer in the theme's drawing colors (coffee on Espresso, matcha on Matcha…).
@@ -425,6 +430,10 @@ function spawnEffect(layer, kind, scale = 1) {
     layer.appendChild(web);
     startFog(layer, scale, still);
     if (kind === "haunted-bg") return;
+  }
+  if (kind === "grimdawn") { // ash + embers (taps are handled below, with the eye)
+    if (!still) loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn") m.startAsh(layer, scale); }).catch((e) => console.warn("grimdawn", e));
+    return;
   }
   if (kind === "haunted") {
     // The spider hangs from the web; now and then it drops a random distance, swings, and climbs back.
@@ -697,9 +706,14 @@ function tapDoesSomething(el) {
   return false;
 }
 document.addEventListener("click", (e) => {
-  if (effectKey !== "haunted" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if ((effectKey !== "haunted" && effectKey !== "grimdawn") || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (tapWasClosing || !(e.target instanceof Element) || tapDoesSomething(e.target)) return;
   if (document.querySelector("dialog[open]")) return;
+  if (effectKey === "grimdawn") { // ⚔️ loot explosion or a rift (see grimdawn.js)
+    const x = e.clientX, y = e.clientY;
+    loadGrimDawn().then((m) => { if (effectKey === "grimdawn") m.grimTap(x, y, document.getElementById("fx")); }).catch((err) => console.warn("grimdawn", err));
+    return;
+  }
   const w = Math.round(34 + Math.random() * 90);
   const ms = Math.round(2000 + Math.random() * 2000);
   const pair = Math.random() < 1 / 6;
@@ -3341,7 +3355,7 @@ $("pal-name").addEventListener("input", (e) => { st.pal.name = e.target.value; r
 $("pal-emoji").addEventListener("input", (e) => { st.emoji = e.target.value; renderStudio(); });
 $("pal-only").addEventListener("change", (e) => commit(() => { st.only = e.target.checked; }));
 fillEffectSelect($("pal-effect"));
-fillEffectSelect($("occ-effect"));
+fillEffectSelect($("occ-effect"), true);
 $("pal-effect").addEventListener("change", (e) => commit(() => { st.effect = e.target.value; }));
 $("pal-undo").addEventListener("click", () => { if (!st.hist.length) return; st.fut.push(snap()); restore(st.hist.pop()); renderStudio(); });
 $("pal-redo").addEventListener("click", () => { if (!st.fut.length) return; st.hist.push(snap()); restore(st.fut.pop()); renderStudio(); });
