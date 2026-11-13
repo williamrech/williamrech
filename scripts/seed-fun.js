@@ -102,6 +102,12 @@ const ref = getFirestore().doc("config/fun");
     }
     update.configVersion = 10;
   }
+  // configVersion 11: Grim Dawn — "Cinzas e Brasas" palette (occasion-only) and a 👑 só-admin occasion with no date yet.
+  if ((Number(cur.configVersion) || 0) < 11) {
+    if (!(cur.palettes && cur.palettes.cinzas)) update["palettes.cinzas"] = defaults.palettes.cinzas;
+    if (!(cur.occasions && cur.occasions["grim-dawn"])) update["occasions.grim-dawn"] = defaults.occasions["grim-dawn"];
+    update.configVersion = 11;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

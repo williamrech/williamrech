@@ -83,8 +83,8 @@ function matchesPattern(pat, t) {
   return false;
 }
 // Name looks for a swapped name. Each effect brings its own; an occasion can pin any of them.
-const NAME_LOOKS = { ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações" };
-const EFFECT_LOOK = { grimdawn: "ecto", haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
+const NAME_LOOKS = { ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações", ember: "🔥 Brasas" };
+const EFFECT_LOOK = { grimdawn: "ember", haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
 // Swapped names are capped so they always fit the top chip without "…" (they skip the clipping).
 const CURSE_MAX = 22;
 const autoLook = (effect) => EFFECT_LOOK[effect] || "glitter"; // no effect → glitter

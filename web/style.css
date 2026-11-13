@@ -1267,6 +1267,12 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .cursed.l-steam::before, .cursed.l-steam::after { width: 1.4em; height: 1em; bottom: 35%; border-radius: 50%; filter: blur(3px);
   background: radial-gradient(ellipse, var(--lk2), color-mix(in srgb, var(--lk2) 50%, transparent) 45%, transparent 72%); animation: lk-wisp 3.6s ease-out infinite; }
 @keyframes lk-wisp { 0% { transform: translateY(.2em) scale(.5, .4); opacity: 0; } 30% { opacity: .9; } 100% { transform: translate(-.3em, -1.6em) scale(1.3, 1.1) skewX(-14deg); opacity: 0; } }
+.cursed.l-ember { --lk: #ff6a1a; --lk2: #ffdcae; --pc: ""; }
+/* Brasas: embers flickering up off the letters */
+.cursed.l-ember::before, .cursed.l-ember::after { width: .22em; height: .22em; border-radius: 50%; background: var(--lk2);
+  box-shadow: 0 0 4px 1px var(--lk), 0 0 9px 2px color-mix(in srgb, var(--lk) 50%, transparent); bottom: 35%; animation: lk-ember 2.3s ease-out infinite; }
+.cursed.l-ember::after { animation-duration: 2.9s; }
+@keyframes lk-ember { 0% { transform: translate(0, .2em); opacity: 0; } 15% { opacity: 1; } 35% { opacity: .5; } 50% { opacity: 1; } 100% { transform: translate(-.4em, -1.8em); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .cursed.lk .uname, .cursed.lk::before, .cursed.lk::after, .heart { animation: none; } .heart { display: none; } }
 /* A curse has no respect for limits: cursed names skip the clip (no "…", names are capped instead),
    so the glow spills past the chip's border and the wisps fly out over the header. */

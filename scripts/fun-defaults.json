@@ -164,6 +164,17 @@
       "decor": "heart.svg flower.svg heart.svg flower.svg heart.svg 💕",
       "effect": "sparkles",
       "onlyOccasions": true
+    },
+    "cinzas": {
+      "name": "Cinzas e Brasas",
+      "bg": "#14110f",
+      "surface": "#241e1a",
+      "text": "#e9dfcf",
+      "muted": "#a69a8a",
+      "accent": "#c4562a",
+      "highlight": "#b25cff",
+      "decor": "lantern.svg crow.svg crow.svg lantern.svg crow.svg",
+      "onlyOccasions": true
     }
   },
   "occasions": {
@@ -246,10 +257,41 @@
       "effect": "sparkles",
       "banner": "Feliz Dia dos Namorados! 💘",
       "priority": 5
+    },
+    "grim-dawn": {
+      "when": "",
+      "adminOnly": true,
+      "palette": "cinzas",
+      "effect": "grimdawn",
+      "decor": "lantern.svg crow.svg crow.svg lantern.svg crow.svg",
+      "banner": "⚔️ Cairn nunca dorme. Toque no vazio e veja o que cai.",
+      "version": "1.1.9.8",
+      "priority": 5,
+      "nameSwap": {
+        "icon": "👁️",
+        "title": "Possessão",
+        "banner": "Um Etéreo tomou o seu corpo!",
+        "ideas": [
+          "Servo de Ch'thon",
+          "Lenhador Possesso",
+          "Cultista Sanguinário",
+          "Etéreo Faminto",
+          "Coveiro de Cairn",
+          "Ladrão de Ferro",
+          "Saqueador de Baús",
+          "Mendigo do Cruzamento",
+          "Bruxa do Pântano",
+          "Carniçal Tagarela",
+          "Esqueleto Cansado",
+          "Inquisidor Atrasado",
+          "Nêmesis do Sofá",
+          "Alma Penada"
+        ]
+      }
     }
   },
   "decorVersion": 2,
-  "configVersion": 9,
+  "configVersion": 11,
   "terms": {
     "recado": {
       "weight": 70,
