@@ -1010,8 +1010,8 @@ function renderSettings() {
     li.appendChild(b);
     list.appendChild(li);
   }
-  // Hidden from my feed ("Ocultar do meu feed"): show them again.
-  if (hiddenOnes.length) list.insertAdjacentHTML("beforeend", `<li class="muted small list-sub">Ocultos do seu feed</li>`);
+  // Hidden from my feed ("Ocultar do meu mural"): show them again.
+  if (hiddenOnes.length) list.insertAdjacentHTML("beforeend", `<li class="muted small list-sub">Ocultos do seu mural</li>`);
   for (const [rid, v] of hiddenOnes) {
     const r = rounds.find((x) => x.id === rid);
     const known = (v && v.title) ? v : r ? { title: r.title, emoji: r.emoji } : hiddenTitles[rid];
@@ -1024,7 +1024,7 @@ function renderSettings() {
     b.onclick = async () => {
       try {
         await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [rid]: deleteField() }, updatedAt: serverTimestamp() }, { merge: true });
-        toast("Voltou pro seu feed. 👀");
+        toast("Voltou pro seu mural. 👀");
       } catch (err) { toast(friendlyError(err)); }
     };
     li.appendChild(b);
@@ -1673,6 +1673,20 @@ function renderRounds() {
   }
 }
 
+// "há 35 min" / "ontem" — or, after a tap, "19:35" / "ontem 19:35" (remembered).
+let absTime = false;
+try { absTime = localStorage.getItem("absTime") === "1"; } catch {}
+function ageText(ms, abs = absTime) {
+  const d = new Date(ms), now = new Date();
+  const yest = new Date(now.getTime() - 86400000).toDateString() === d.toDateString();
+  const hmTxt = `${pad2s(d.getHours())}:${pad2s(d.getMinutes())}`;
+  if (abs) return d.toDateString() === now.toDateString() ? hmTxt : yest ? `ontem ${hmTxt}` : `${dmyOf(d)} ${hmTxt}`;
+  const min = Math.floor((now - d) / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  if (d.toDateString() === now.toDateString()) return `há ${Math.floor(min / 60)} h`;
+  return yest ? "ontem" : dmyOf(d);
+}
 const editingAnswer = new Set(); // rounds where I tapped "mudar" (this session only)
 function buildRound(r, ask) {
   const uid = auth.currentUser.uid;
@@ -1729,6 +1743,23 @@ function buildRound(r, ask) {
     <div class="actions"></div>
     <div class="round-meta small"><span class="who">${who}</span>${when}</div>`;
   const actions = li.querySelector(".actions");
+
+  // When it was sent, small in the corner: "há 35 min" (tap: exact time, for every card).
+  if (r.createdAt && r.createdAt.toMillis) {
+    const t = r.createdAt.toMillis();
+    const age = document.createElement("button");
+    age.type = "button";
+    age.className = "round-age";
+    age.textContent = ageText(t);
+    age.title = absTime ? ageText(t, false) : ageText(t, true);
+    age.onclick = (e) => {
+      e.stopPropagation();
+      absTime = !absTime;
+      try { localStorage.setItem("absTime", absTime ? "1" : ""); } catch {}
+      renderRounds();
+    };
+    li.querySelector(".round-corner").prepend(age);
+  }
 
   // Status icons: tap for the details.
   li.querySelectorAll(".st").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); toast(b.dataset.detail || "Sem detalhes.", 4500); }));
@@ -1821,15 +1852,15 @@ function buildRound(r, ask) {
   }
   if (done || r.answerType === "none") {
     if (mine) {
-      menu.push({ label: "🗑️ Apagar pra todo mundo", danger: true, ask: "Some do feed de todo mundo.", yes: "Apagar", run: async () => {
+      menu.push({ label: "🗑️ Apagar pra todo mundo", danger: true, ask: "Some do mural de todo mundo.", yes: "Apagar", run: async () => {
         const res = await withBusy(null, () => api.deleteRound({ roundId: r.id }));
         if (res) toast("Apagado. 🧹");
       } });
     } else {
-      menu.push({ label: "🙈 Ocultar do meu feed", run: async () => {
+      menu.push({ label: "🙈 Ocultar do meu mural", run: async () => {
         try {
           await setDoc(doc(db, "users", auth.currentUser.uid), { hidden: { [r.id]: { title: r.title, emoji: r.emoji || "🔔", at: Date.now() } }, updatedAt: serverTimestamp() }, { merge: true });
-          toast("Ocultado do seu feed. 🙈");
+          toast("Ocultado do seu mural. 🙈");
         } catch (err) { toast(friendlyError(err)); }
       } });
     }
@@ -2813,7 +2844,7 @@ function renderStudio() {
       <div class="mini" data-role="bg">
         <div class="mini-decor"></div>
         <div class="mini-top"><span data-role="muted">Ela gosta de sorvete?</span><span data-role="muted">⚙</span></div>
-        <div class="mini-tabs" data-role="surface"><span class="sel" data-role="highlight">Feed</span><span data-role="muted">Recados</span></div>
+        <div class="mini-tabs" data-role="surface"><span class="sel" data-role="highlight">Mural</span><span data-role="muted">Recados</span></div>
         <div class="mini-card" data-role="surface">
           <div class="mini-title" data-role="highlight">🍝 Vai ter almoço hoje?</div>
           <div class="mini-meta" data-role="muted">de Patroa · há 5 min</div>
