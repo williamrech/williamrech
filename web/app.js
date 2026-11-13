@@ -578,6 +578,11 @@ function spawnEffect(layer, kind, scale = 1) {
   layer.dataset.fx = kind;
 }
 let effectKey = null;
+function timeLeftStyle(r) {
+  const end = r.closesAt && r.closesAt.toMillis ? r.closesAt.toMillis() : 0, start = r.createdAt && r.createdAt.toMillis ? r.createdAt.toMillis() : 0;
+  if (!end || !start || end <= start) return "";
+  return ` style="--left:${Math.max(0, Math.min(1, (end - Date.now()) / (end - start))).toFixed(3)}"`;
+}
 // ---------- Occasion background image ----------
 // Stored in Firestore backgrounds/{id} as a downscaled JPEG (data URL); shown full screen behind the feed.
 // When one is on, it replaces the drawn Grim Dawn scene (the effects keep running on top).
@@ -631,6 +636,7 @@ function runEffect(kind) {
   kind = kind || null;
   if (kind === effectKey) return;
   effectKey = kind;
+  document.body.classList.toggle("gd-skin", kind === "grimdawn"); // the Grim Dawn pack restyles the app (CSS comes with grimdawn.js)
   // The steaming cup lives behind the feed (like the drawings); the rest float above it.
   const behind = kind === "smoke";
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
@@ -2100,10 +2106,11 @@ function buildRound(r, ask) {
   }
 
   // Footer: who sent it on the left, the time left on the right (exact time on long-press/hover).
+  // --left (0..1, share of time still left) is used by themes that draw the deadline as a bar.
   const who = mine ? "Você" : `de ${nameHtml(r.ownerUid, r.ownerName)}`;
   const dl = r.open ? deadlineParts(r.closesAt) : null;
   const when = !r.open ? `<span class="deadline">${r.closedBy === "admin" ? "encerrado pelo admin" : "encerrado"}</span>`
-    : dl ? `<span class="deadline${dl.urgent ? " urgent" : ""}" title="${esc(dl.abs)}">⏳ ${esc(dl.rel)}</span>` : "";
+    : dl ? `<span class="deadline${dl.urgent ? " urgent" : ""}" title="${esc(dl.abs)}"${timeLeftStyle(r)}>⏳ ${esc(dl.rel)}</span>` : "";
 
   li.innerHTML = `
     <div class="round-head"><span class="round-emoji">${esc(r.emoji || "🔔")}</span>

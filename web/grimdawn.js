@@ -58,6 +58,7 @@ function ensureCss() {
 // ---------- Ash & embers ----------
 export function startAsh(layer, scale = 1) {
   ensureCss();
+  ensureSkin();
   const k = Math.max(scale, 0.5);
   for (let i = 0; i < Math.round(30 * scale) + 4; i++) {
     const a = document.createElement("i");
@@ -78,203 +79,92 @@ export function startAsh(layer, scale = 1) {
   }
 }
 
-// ---------- The burning city (behind the feed) ----------
-// A ruined Victorian street seen in perspective: wrecked facades on both sides recede toward a vanishing
-// point, where a pale domed palace looms through smoke and aether fire. Every building is tinted by its
-// distance (near = black, far = foggy green), windows are holes lit by the fire behind, roofs are broken.
-// Foreground: a wrecked carriage, an iron fence, lamp posts, bare branches. Buildings never move; the fire
-// flickers, the glow breathes, smoke drifts slowly. Scrolling shifts the depth bands a few px apart.
-const SCENE_CSS = `
-.gd-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 72vh; pointer-events: none; --fire: #46ff9a;
-  --fog: color-mix(in srgb, var(--fire) 38%, var(--bg)); --near: color-mix(in srgb, var(--bg) 40%, black);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%); mask-image: linear-gradient(to bottom, transparent 0, #000 22%); }
-.gd-scene > * { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; }
-.gd-scene svg { display: block; overflow: visible; }
-.gd-scene .sky { background:
-  radial-gradient(38% 30% at 60% 50%, color-mix(in srgb, var(--fire) 60%, #fff) 0, color-mix(in srgb, var(--fire) 35%, transparent) 40%, transparent 75%),
-  radial-gradient(80% 45% at 55% 55%, color-mix(in srgb, var(--fire) 20%, transparent), transparent 80%); opacity: .9; }
-.gd-scene .breathe { animation: gd-breathe 5s ease-in-out infinite; will-change: opacity; }
-@keyframes gd-breathe { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
-.gd-scene .fire { filter: blur(14px); will-change: opacity; animation: gd-glow 4.6s ease-in-out infinite alternate; }
-.gd-scene .fire.b { filter: blur(9px); animation-duration: 3.4s; animation-delay: -1.7s; }
-.gd-scene .fire .o { fill: var(--fire); opacity: .55; }
-.gd-scene .fire .i { fill: color-mix(in srgb, var(--fire) 45%, #fff); opacity: .5; }
-.gd-scene .ember-glow { will-change: opacity; animation: gd-glow 5.5s ease-in-out infinite alternate; }
-.gd-scene .ember-glow.b { animation-duration: 3.9s; animation-delay: -2s; }
-@keyframes gd-glow { 0% { opacity: .55; } 40% { opacity: .9; } 70% { opacity: .7; } 100% { opacity: 1; } }
-.gd-scene .smoke { filter: blur(10px); will-change: transform; animation: gd-smoke 14s ease-in-out infinite alternate; }
-.gd-scene .smoke.b { animation-duration: 19s; animation-delay: -6s; }
-.gd-scene .smoke ellipse { fill: color-mix(in srgb, color-mix(in srgb, var(--fire) 12%, var(--bg)) 85%, #000); }
-@keyframes gd-smoke { from { transform: translate(0, 0); } to { transform: translate(-6px, -14px); } }
-.gd-scene .lamp { fill: color-mix(in srgb, var(--fire) 55%, #fff); filter: drop-shadow(0 0 4px var(--fire)); }
-.gd-scene .rim { filter: drop-shadow(0 -1px 1.5px color-mix(in srgb, var(--fire) 60%, transparent)); }
-@media (prefers-reduced-motion: reduce) { .gd-scene .fire, .gd-scene .breathe, .gd-scene .smoke { animation: none; } }
-`;
-function seeded(seed) { let r = seed; return () => ((r = (r * 9301 + 49297) % 233280) / 233280); }
-const SW = 400, SH = 600, VX = 262, VY = 318; // portrait drawing; vanishing point a bit right of center
-const f1 = (n) => n.toFixed(1);
-const quad = (a, b, c, d) => `M${f1(a[0])} ${f1(a[1])}L${f1(b[0])} ${f1(b[1])}L${f1(c[0])} ${f1(c[1])}L${f1(d[0])} ${f1(d[1])}Z`;
-const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-// Depth tint: 0 = right in front (black), 1 = at the vanishing point (fog).
-const tint = (t) => `color-mix(in srgb, var(--fog) ${Math.round(2 + 82 * Math.pow(t, 1.6))}%, var(--near))`;
+// ---------- The look: a dark backdrop + the app restyled like the game's UI ----------
+// No painted scene (drawn cities looked cheap). Instead: near-black with grain, a vignette and a faint aether
+// glow from below; cards like item tooltips (bronze-rimmed, square), iron-plate buttons and tabs, an engraved
+// serif, rarity-colored titles (purple = for you, yellow = running, grey = ended), deadlines as draining bars.
+const FONT = (f) => new URL(`fonts/${f}`, import.meta.url).href;
+const GRAIN = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .9 0"/></filter><rect width="180" height="180" filter="url(#n)"/></svg>`);
+const SKIN_CSS = () => `
+@font-face { font-family: "GD Cinzel"; src: url("${FONT("cinzel.woff")}") format("woff"); font-weight: 400 900; font-display: swap; }
+@font-face { font-family: "GD Fell"; src: url("${FONT("fell.woff")}") format("woff"); font-display: swap; }
+.gd-backdrop { position: absolute; inset: 0; pointer-events: none; }
+.gd-backdrop .glow { position: absolute; inset: 0; background:
+  radial-gradient(120% 55% at 50% 112%, color-mix(in srgb, #46ff9a 16%, transparent), transparent 70%),
+  radial-gradient(90% 70% at 50% 40%, transparent 40%, rgba(0, 0, 0, .55) 100%);
+  animation: gd-breathe 7s ease-in-out infinite; will-change: opacity; }
+@keyframes gd-breathe { 0%, 100% { opacity: .8; } 50% { opacity: 1; } }
+.gd-backdrop .grain { position: absolute; inset: 0; background-image: url("${GRAIN}"); background-size: 180px; opacity: .07; mix-blend-mode: overlay; }
+.gd-backdrop .mist { position: absolute; left: -30%; right: -30%; bottom: -10%; height: 45%; filter: blur(30px); opacity: .22; will-change: transform;
+  background: radial-gradient(40% 50% at 30% 60%, color-mix(in srgb, #46ff9a 30%, var(--bg)), transparent 70%), radial-gradient(35% 45% at 75% 70%, color-mix(in srgb, #46ff9a 22%, var(--bg)), transparent 70%);
+  animation: gd-mist 38s ease-in-out infinite alternate; }
+@keyframes gd-mist { from { transform: translateX(-4%); } to { transform: translateX(4%); } }
+@media (prefers-reduced-motion: reduce) { .gd-backdrop .glow, .gd-backdrop .mist { animation: none; } }
 
-// One wall of the street. side = -1 (left) or 1 (right). Returns buildings grouped by distance band.
-function wall(side, seed) {
-  const R = seeded(seed), edge = side < 0 ? 0 : SW, out = [];
-  const xAt = (i) => VX + (edge - VX) / (1 + i * 0.62);
-  for (let i = 0; i < 9; i++) {
-    const xa = xAt(i) + side * 1.5, xb = xAt(i + 1) - side * 1.5, t = 1 - Math.abs(xa - VX) / Math.abs(edge - VX); // distance of the near edge
-    if (i >= 2 && R() < 0.22) continue; // a gap where a building collapsed: the fire shows through
-    const ground = (x) => VY + (SH + 40 - VY) * (Math.abs(x - VX) / Math.abs(edge - VX));
-    const hf = side < 0 ? 0.75 + R() * 0.55 : 0.4 + R() * 0.45; // left side tall, right side lower: a diagonal, not a tunnel
-    const roof = (x) => VY - (VY + 60) * hf * (Math.abs(x - VX) / Math.abs(edge - VX));
-    const A = [xa, ground(xa)], B = [xa, roof(xa)], C = [xb, roof(xb)], D = [xb, ground(xb)];
-    const k = Math.abs(xa - xb) / 60; // local scale
-    // Broken roofline: jagged, sometimes a big bite out of it.
-    let top = "";
-    const steps = 6 + Math.floor(R() * 5), bite = R() < 0.55 ? Math.floor(R() * steps) : -1;
-    for (let s = 1; s < steps; s++) {
-      const p = lerp(B, C, s / steps), drop = (s === bite || s === bite + 1) ? (40 + R() * 70) * k : R() * 10 * k;
-      top += `L${f1(p[0])} ${f1(p[1] + drop)}`;
-    }
-    let d = `M${f1(A[0])} ${f1(A[1])}L${f1(B[0])} ${f1(B[1])}${top}L${f1(C[0])} ${f1(C[1])}L${f1(D[0])} ${f1(D[1])}Z`;
-    // Chimney stacks of different sizes (some missing, some snapped).
-    const stacks = Math.floor(R() * 3);
-    for (let s = 0; s < stacks; s++) {
-      const u = 0.2 + R() * 0.6, p = lerp(B, C, u), w = (8 + R() * 10) * k, h = (14 + R() * 30) * k * (R() < 0.25 ? 0.4 : 1);
-      d += quad([p[0] - w / 2, p[1] + 4], [p[0] - w / 2, p[1] - h], [p[0] + w / 2, p[1] - h], [p[0] + w / 2, p[1] + 4]);
-      for (let q = 0; q < 1 + Math.floor(R() * 3); q++) d += quad([p[0] - w / 2 + q * w / 3 + 0.5, p[1] - h], [p[0] - w / 2 + q * w / 3 + 0.5, p[1] - h - 6 * k], [p[0] - w / 2 + q * w / 3 + 0.5 + w / 5, p[1] - h - 6 * k], [p[0] - w / 2 + q * w / 3 + 0.5 + w / 5, p[1] - h]);
-    }
-    // Window holes (the fire shows through), in perspective; some blown out bigger.
-    // Each facade its own way: tall narrow windows, wide ones, mostly blind, or gutted (big holes).
-    const style = R(), cols = style < 0.25 ? 3 : 2 + Math.floor(R() * 2), rows = 2 + Math.floor(hf * 3 + R() * 2);
-    const narrow = style < 0.5 ? 0.18 : 0.3, keep = style > 0.85 ? 0.25 : 0.72, gutted = style > 0.92;
-    const P = (u, v) => lerp(lerp(A, B, v), lerp(D, C, v), u);
-    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
-      if (R() > keep) continue;
-      const mid = (c + 0.5) / cols, half = gutted ? 0.36 / cols : narrow / cols;
-      const v0 = 0.1 + (r / rows) * 0.8, v1 = v0 + (0.8 / rows) * (gutted ? 0.85 : 0.45 + R() * 0.15);
-      d += quad(P(mid - half, v0), P(mid - half, v1), P(mid + half, v1), P(mid + half, v0));
-    }
-    out.push({ d, t, band: i === 0 ? 3 : i <= 2 ? 2 : 1, roofMid: lerp(B, C, 0.5), k });
-  }
-  return out;
-}
-// The palace at the end of the street: a hill of buildings, a domed hall, spires.
-function palace(R) {
-  const d = [`M60 ${VY + 10}Q150 ${VY - 30} 236 ${VY - 46}Q330 ${VY - 30} 400 ${VY + 4}V${VY + 40}H60Z`];
-  for (let x = 70; x < 400; x += 9 + R() * 12) {
-    const hill = VY - 48 * Math.exp(-(((x - 250) / 110) ** 2)) - 4, h = 10 + R() * 26;
-    d.push(`M${f1(x)} ${f1(hill + 20)}V${f1(hill - h)}H${f1(x + 8 + R() * 10)}V${f1(hill + 20)}Z`);
-    if (R() < 0.25) d.push(`M${f1(x + 1)} ${f1(hill - h)}L${f1(x + 5)} ${f1(hill - h - 18 - R() * 26)}L${f1(x + 9)} ${f1(hill - h)}Z`);
-  }
-  // Hall + dome + lantern, two flanking towers with spires.
-  d.push(`M196 ${VY - 40}V${VY - 112}H304V${VY - 40}Z`, `M200 ${VY - 112}L250 ${VY - 134}L300 ${VY - 112}Z`,
-    `M220 ${VY - 132}V${VY - 168}H280V${VY - 132}Z`, `M220 ${VY - 166}Q220 ${VY - 222} 250 ${VY - 230}Q280 ${VY - 222} 280 ${VY - 166}Z`,
-    `M245 ${VY - 228}V${VY - 248}H255V${VY - 228}Z`, `M247 ${VY - 246}L250 ${VY - 274}L253 ${VY - 246}Z`,
-    `M168 ${VY - 40}V${VY - 140}H186V${VY - 40}Z`, `M165 ${VY - 140}L177 ${VY - 196}L189 ${VY - 140}Z`,
-    `M316 ${VY - 40}V${VY - 128}H332V${VY - 40}Z`, `M313 ${VY - 128}L324 ${VY - 176}L335 ${VY - 128}Z`);
-  return d.join("");
-}
-// Ragged fire along a line from p to q (heights shrink with distance). Blurred, it reads as light, not cartoon tongues.
-function fireBand(R, p, q, hNear, n) {
-  let o = "", i = "";
-  for (let s = 0; s < n; s++) {
-    const t = s / (n - 1), x = p[0] + (q[0] - p[0]) * t, y = p[1] + (q[1] - p[1]) * t, sc = 1 - t * 0.6;
-    const h = hNear * sc * (0.35 + R() * 0.9), w = (10 + R() * 18) * sc, lean = (R() * 2 - 1) * 6 * sc;
-    const tong = (hh, ww) => `M${f1(x - ww)} ${f1(y)}Q${f1(x - ww * 0.4)} ${f1(y - hh * 0.55)} ${f1(x + lean)} ${f1(y - hh)}Q${f1(x + ww * 0.5)} ${f1(y - hh * 0.5)} ${f1(x + ww)} ${f1(y)}Z`;
-    o += tong(h, w); if (R() < 0.7) i += tong(h * 0.55, w * 0.45);
-  }
-  return `<path class="o" d="${o}"/><path class="i" d="${i}"/>`;
-}
-function carriage(x, y, s) {
-  // An overturned carriage body with a broken wheel lying in front and one upright.
-  const wheel = (cx, cy, r, broken) => {
-    let g = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="currentColor" stroke-width="${2.6 * s}"/>`;
-    for (let a = 0; a < 8; a++) if (!(broken && a % 3 === 0)) { const an = a * Math.PI / 4; g += `<path d="M${cx} ${cy}L${f1(cx + Math.cos(an) * r)} ${f1(cy + Math.sin(an) * r)}" stroke="currentColor" stroke-width="${1.4 * s}"/>`; }
-    return g;
-  };
-  return `<path d="M${x} ${y}L${x + 10 * s} ${y - 46 * s}L${x + 78 * s} ${y - 58 * s}L${x + 96 * s} ${y - 20 * s}L${x + 88 * s} ${y}Z M${x + 20 * s} ${y - 44 * s}L${x + 40 * s} ${y - 48 * s}L${x + 42 * s} ${y - 30 * s}L${x + 22 * s} ${y - 27 * s}Z" fill-rule="evenodd"/>`
-    + `<path d="M${x + 60 * s} ${y - 58 * s}L${x + 70 * s} ${y - 76 * s}L${x + 84 * s} ${y - 74 * s}" fill="none" stroke="currentColor" stroke-width="${2 * s}"/>`
-    + wheel(x + 108 * s, y - 16 * s, 17 * s, true) + `<g transform="rotate(-70 ${x + 30 * s} ${y + 4 * s})">${wheel(x + 30 * s, y + 4 * s, 15 * s, true)}</g>`;
-}
-function lampPost(x, base, h, s) {
-  return `<path d="M${f1(x - 1.6 * s)} ${f1(base)}V${f1(base - h)}H${f1(x + 1.6 * s)}V${f1(base)}Z M${f1(x - 6 * s)} ${f1(base - h)}L${f1(x - 4 * s)} ${f1(base - h - 15 * s)}H${f1(x + 4 * s)}L${f1(x + 6 * s)} ${f1(base - h)}Z M${f1(x - 5 * s)} ${f1(base - h - 15 * s)}L${f1(x)} ${f1(base - h - 21 * s)}L${f1(x + 5 * s)} ${f1(base - h - 15 * s)}Z"/>`
-    + `<rect class="lamp" x="${f1(x - 3 * s)}" y="${f1(base - h - 13 * s)}" width="${f1(6 * s)}" height="${f1(10 * s)}"/>`;
-}
-function branches(x, y, s, dir, seed) {
-  const R = seeded(seed); let d = "";
-  const grow = (x0, y0, ang, len, depth) => {
-    const x1 = x0 + Math.cos(ang) * len, y1 = y0 + Math.sin(ang) * len;
-    d += `<path d="M${f1(x0)} ${f1(y0)}L${f1(x1)} ${f1(y1)}" stroke-width="${f1(Math.max(0.6, depth * 1.6 * s))}"/>`;
-    if (depth > 0) for (let b = 0; b < 2; b++) grow(x1, y1, ang + (R() * 0.9 - 0.45) + (b ? 0.35 : -0.35), len * (0.6 + R() * 0.2), depth - 1);
-  };
-  grow(x, y, dir > 0 ? -0.5 : Math.PI + 0.5, 60 * s, 4);
-  return `<g fill="none" stroke="currentColor" stroke-linecap="round">${d}</g>`;
+body.gd-skin #decor { display: none; } /* theme drawings (coffee beans…) don't belong here */
+body.gd-skin #banner { text-wrap: balance; }
+body.gd-skin { --gd-bronze: #6e5832; --gd-bronze-l: #b8975a; --gd-gold: #e9d29a; --gd-text: #dcd6c8; }
+/* Cards: item tooltips */
+body.gd-skin .round { position: relative; border-radius: 3px; border: 1px solid var(--gd-bronze);
+  background: linear-gradient(180deg, rgba(16, 18, 17, .93), rgba(7, 9, 8, .95));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .9), inset 0 0 0 2px rgba(184, 151, 90, .13), 0 8px 22px rgba(0, 0, 0, .55);
+  -webkit-backdrop-filter: none; backdrop-filter: none; }
+body.gd-skin .round::before, body.gd-skin .round::after { content: ""; position: absolute; width: 9px; height: 9px; pointer-events: none; opacity: .8; }
+body.gd-skin .round::before { top: 4px; left: 4px; border-top: 1px solid var(--gd-bronze-l); border-left: 1px solid var(--gd-bronze-l); }
+body.gd-skin .round::after { bottom: 4px; right: 4px; border-bottom: 1px solid var(--gd-bronze-l); border-right: 1px solid var(--gd-bronze-l); }
+body.gd-skin .round-title { font-family: "GD Fell", Georgia, serif; font-size: 1.14rem; letter-spacing: .01em; color: #f3d64e; text-shadow: 0 1px 1px #000; }
+body.gd-skin .round.ask .round-title { color: #c08cff; text-shadow: 0 0 10px rgba(178, 92, 255, .35), 0 1px 1px #000; }
+body.gd-skin .round.closed { opacity: .75; }
+body.gd-skin .round.closed .round-title { color: #9c9a94; text-shadow: none; }
+body.gd-skin .round-body { color: var(--gd-text); }
+body.gd-skin .round-emoji { filter: grayscale(.85) sepia(.45) contrast(1.1) brightness(.9); }
+body.gd-skin .round .answers b { color: #f3d64e; }
+/* Iron-plate buttons */
+body.gd-skin .round .actions button.secondary, body.gd-skin .round .actions .preview-opt {
+  border-radius: 2px; border: 1px solid #4a4e4b; color: #ddd6c6;
+  background: linear-gradient(180deg, #2f3331, #191b1a 60%, #121413);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 -2px 0 rgba(0, 0, 0, .55), 0 1px 0 rgba(0, 0, 0, .6);
+  font-family: "GD Cinzel", Georgia, serif; font-weight: 700; letter-spacing: .05em; }
+body.gd-skin .round .actions button.secondary:active { border-color: #46ff9a; box-shadow: inset 0 0 10px rgba(70, 255, 154, .25); }
+body.gd-skin .round .actions .preview-opt { opacity: .55; border-style: dashed; }
+/* Tabs: an iron bar; the open tab is a bronze-rimmed plate */
+body.gd-skin .tabs { border-radius: 3px; border: 1px solid #3c3221; background: linear-gradient(180deg, #121413, #090a0a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04); }
+body.gd-skin .tab { border-radius: 2px; font-family: "GD Cinzel", Georgia, serif; font-weight: 700; letter-spacing: .08em; color: #8d877a; }
+body.gd-skin .tab.selected { color: var(--gd-gold); background: linear-gradient(180deg, #2b2519, #16130d);
+  box-shadow: inset 0 0 0 1px var(--gd-bronze), inset 0 1px 0 rgba(255, 230, 170, .12), 0 0 12px rgba(233, 210, 154, .06); }
+/* Section heads with a bronze rule */
+body.gd-skin .feed-head { display: flex; align-items: center; gap: 10px; font-family: "GD Cinzel", Georgia, serif; color: var(--gd-bronze-l); letter-spacing: .14em; }
+body.gd-skin .feed-head::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--gd-bronze), transparent); }
+/* Header: the day's line engraved, the name chip a nameplate */
+body.gd-skin #topbar h1 { font-family: "GD Cinzel", Georgia, serif; font-style: normal; font-size: .86rem; letter-spacing: .1em; color: var(--gd-bronze-l); }
+body.gd-skin .me-chip { border-radius: 2px; border: 1px solid var(--gd-bronze); background: linear-gradient(180deg, #1b1d1c, #0b0c0c);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 230, 170, .08); }
+body.gd-skin .me-chip .uname { font-family: "GD Fell", Georgia, serif; }
+/* Banner: quest text between two bronze rules */
+body.gd-skin #occ-card.banner-occ { background: none; border: 0; box-shadow: none; }
+body.gd-skin #banner { font-family: "GD Fell", Georgia, serif; font-style: italic; color: #d8cfb8; position: relative; padding: 8px 6px; }
+body.gd-skin #banner::before, body.gd-skin #banner::after { content: ""; display: block; height: 1px; margin: 0 18%;
+  background: linear-gradient(90deg, transparent, var(--gd-bronze-l), transparent); }
+body.gd-skin #banner::before { margin-bottom: 8px; } body.gd-skin #banner::after { margin-top: 8px; }
+/* Deadline: a thin draining bar under the time left */
+body.gd-skin .round .deadline { position: relative; padding-bottom: 6px; color: var(--gd-text); }
+body.gd-skin .round .deadline[style]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 1px;
+  background: linear-gradient(90deg, #8fd9a8 calc(var(--left) * 100%), rgba(255, 255, 255, .08) 0); box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); }
+body.gd-skin .round .deadline.urgent[style]::after { background: linear-gradient(90deg, #e2463a calc(var(--left) * 100%), rgba(255, 255, 255, .08) 0); }
+/* The + : a riveted iron disc with an aether glow */
+body.gd-skin .fab { border-radius: 50%; color: #aaffd0; border: 2px solid var(--gd-bronze);
+  background: radial-gradient(circle at 35% 30%, #4b504d, #1b1d1c 70%);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, .65), 0 6px 18px rgba(0, 0, 0, .6), 0 0 18px rgba(70, 255, 154, .22); text-shadow: 0 0 8px rgba(70, 255, 154, .7); }
+/* Toasts: the game's yellow warning text on black */
+body.gd-skin #toast { border-radius: 2px; background: rgba(0, 0, 0, .88); border: 1px solid var(--gd-bronze); color: #f3d64e; font-family: "GD Fell", Georgia, serif; font-size: .98rem; }
+`;
+function ensureSkin() {
+  if (document.getElementById("gd-skin-css")) return;
+  const st = document.createElement("style"); st.id = "gd-skin-css"; st.textContent = SKIN_CSS(); document.head.appendChild(st);
 }
 export function startScene(layer) {
-  if (!document.getElementById("gd-scene-css")) {
-    const st = document.createElement("style"); st.id = "gd-scene-css"; st.textContent = SCENE_CSS; document.head.appendChild(st);
-  }
-  const R = seeded(77);
-  const svg = (cls, inner, style = "") => `<svg class="${cls}" style="${style}" viewBox="0 0 ${SW} ${SH}" preserveAspectRatio="xMidYMax slice" aria-hidden="true">${inner}</svg>`;
-  const walls = [...wall(-1, 13), ...wall(1, 41)];
-  const band = (b) => walls.filter((w) => w.band === b).sort((p, q) => q.t - p.t)
-    .map((w) => `<path d="${w.d}" fill-rule="evenodd" style="fill:${tint(w.t)}"/>`).join("");
-  // Fire: a big band around the palace's foot, and bursts on the broken roofs of the middle buildings.
-  const fireFar = fireBand(R, [60, VY + 14], [400, VY + 6], 150, 38);
-  let fireMid = "";
-  for (const w of walls.filter((w) => w.band === 1 || w.band === 2)) if (R() < 0.55) fireMid += fireBand(R, [w.roofMid[0] - 30 * w.k, w.roofMid[1] + 14 * w.k], [w.roofMid[0] + 30 * w.k, w.roofMid[1] + 10 * w.k], 70 * w.k, 9);
-  // Street: dark ground with cobble lines converging to the vanishing point, rubble at the walls.
-  // The street fades into the fog toward the vanishing point (no hard tip).
-  let street = `<defs><linearGradient id="gd-street" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${tint(0.15)}" stop-opacity="0"/><stop offset=".45" style="stop-color:${tint(0.15)}"/></linearGradient></defs>`
-    + `<path d="M-40 ${SH}L${VX} ${VY - 10}L${SW + 40} ${SH}Z" fill="url(#gd-street)"/>`;
-  let rubble = "";
-  for (let k = 0; k < 14; k++) {
-    const t = R(), side = R() < 0.5 ? -1 : 1, x = VX + side * (side < 0 ? VX : SW - VX) * (1 - t) * (0.8 + R() * 0.15), y = VY + (SH - VY) * (1 - t);
-    const s = (1 - t) * (6 + R() * 16);
-    rubble += `<path d="M${f1(x - s * 1.4)} ${f1(y + 2)}L${f1(x - s * 0.6)} ${f1(y - s * 0.7)}L${f1(x + s * 0.3)} ${f1(y - s)}L${f1(x + s * 1.3)} ${f1(y + 2)}Z" style="fill:${tint(t * 0.8)}"/>`;
-  }
-  // Lamp posts along the right sidewalk, shrinking into the distance.
-  let lamps = "";
-  for (const t of [0.05, 0.42, 0.66, 0.8]) {
-    const x = VX + (SW - 40 - VX) * (1 - t), base = VY + (SH - 10 - VY) * (1 - t), s = 1.25 * (1 - t) + 0.08;
-    lamps += `<g style="fill:${tint(t)}">${lampPost(x, base, 120 * s, s)}</g>`;
-  }
-  // Iron fence along the left foreground.
-  let fence = "";
-  for (let k = 0; k < 16; k++) {
-    const t = k / 16 * 0.55, x = 4 + (VX - 4) * t * 0.9, base = SH + 10 - (SH - VY) * t, h = 62 * (1 - t);
-    fence += `<path d="M${f1(x)} ${f1(base)}V${f1(base - h)}l${f1(1.6 * (1 - t))} ${f1(-7 * (1 - t))}l${f1(1.6 * (1 - t))} ${f1(7 * (1 - t))}V${f1(base)}Z"/>`;
-  }
-  fence += `<path d="M4 ${SH - 30}L${f1(VX * 0.5)} ${f1(SH - 30 - (SH - VY) * 0.55 * 0.7)}" stroke="currentColor" stroke-width="2.4"/><path d="M4 ${SH - 8}L${f1(VX * 0.5)} ${f1(SH - 8 - (SH - VY) * 0.55 * 0.8)}" stroke="currentColor" stroke-width="2.4"/>`;
-  const smoke = (cx, cy, s) => Array.from({ length: 6 }, (_, k) => `<ellipse cx="${f1(cx + k * 6 * s - 10)}" cy="${f1(cy - k * 26 * s)}" rx="${f1((22 + k * 8) * s)}" ry="${f1((14 + k * 5) * s)}" opacity="${f1(0.55 - k * 0.07)}"/>`).join("");
-  layer.insertAdjacentHTML("beforeend", `<div class="gd-scene">
-<div class="sky breathe"></div>
-<div class="ember-glow" style="background:radial-gradient(45% 16% at 62% 54%, color-mix(in srgb, var(--fire) 55%, transparent), transparent 72%)"></div>
-${svg("depth d0", `<path d="${palace(seeded(5))}" style="fill:${tint(0.97)}"/>`, "filter:blur(3px)")}
-${svg("fire", fireFar)}
-${svg("smoke", smoke(150, VY - 40, 1.3) + smoke(300, VY - 70, 1))}
-${svg("depth d1", band(1), "filter:blur(1.8px) drop-shadow(0 -1px 3px color-mix(in srgb, var(--fire) 50%, transparent))")}
-<div class="ember-glow b" style="background:radial-gradient(30% 14% at 30% 47%, color-mix(in srgb, var(--fire) 40%, transparent), transparent 70%), radial-gradient(26% 12% at 78% 52%, color-mix(in srgb, var(--fire) 35%, transparent), transparent 70%)"></div>
-${svg("fire b", fireMid)}
-${svg("smoke b", smoke(70, VY - 10, 1.6))}
-${svg("depth d2", street + rubble + band(2), "filter:blur(.9px) drop-shadow(0 -1px 2px color-mix(in srgb, var(--fire) 40%, transparent))")}
-${svg("depth d3", band(3) + lamps + `<g style="fill:${tint(0.02)};color:${tint(0.02)}">${fence}${carriage(150, SH - 18, 1.05)}${branches(-6, 120, 1.25, 1, 3)}${branches(SW + 6, 70, 1.05, -1, 9)}</g>`, "filter:blur(.5px)")}
-</div>`);
-  const box = layer.lastElementChild;
-  // Tiny parallax: near bands move a bit more than far ones as you scroll (a few px at most).
-  const layers = [...box.querySelectorAll(".depth")], k = [0.006, 0.014, 0.024, 0.036], max = [4, 9, 15, 22];
-  let ticking = false;
-  const apply = () => {
-    ticking = false;
-    if (!box.isConnected) { removeEventListener("scroll", onScroll); return; }
-    const y = Math.min(scrollY, 1200);
-    layers.forEach((l, i) => { l.style.transform = `translateY(${Math.min(y * k[i], max[i]).toFixed(1)}px)`; });
-  };
-  const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(apply); } };
-  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) addEventListener("scroll", onScroll, { passive: true });
-  apply();
+  ensureSkin();
+  layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="glow"></div><div class="mist"></div><div class="grain"></div></div>`);
 }
 
 // ---------- Tap ----------
