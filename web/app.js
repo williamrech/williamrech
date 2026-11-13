@@ -323,9 +323,25 @@ const SPIDER_SVG = `<svg viewBox="0 0 40 40" aria-hidden="true"><g stroke="curre
 <path d="M24 18 Q32 12 36 16"/><path d="M24 21 Q33 19 37 23"/><path d="M24 24 Q32 26 35 32"/><path d="M23 26 Q28 31 30 37"/></g>
 <ellipse cx="20" cy="15" rx="4" ry="3.5" fill="currentColor"/><ellipse cx="20" cy="24" rx="6" ry="7" fill="currentColor"/>
 <circle cx="18.3" cy="14.4" r="0.9" fill="var(--caramel, #e33)"/><circle cx="21.7" cy="14.4" r="0.9" fill="var(--caramel, #e33)"/></svg>`;
-const EYE_SVG = `<svg viewBox="0 0 100 50" aria-hidden="true"><path d="M2 25 Q50 -12 98 25 Q50 62 2 25Z" fill="color-mix(in srgb, var(--fg) 88%, #c9b)"/>
-<g class="iris"><circle cx="50" cy="25" r="15" fill="var(--caramel, #b33)"/><circle cx="50" cy="25" r="7" fill="#050505"/><circle cx="46" cy="20" r="2.4" fill="#fff" opacity=".85"/></g>
-<path d="M2 25 Q50 -12 98 25" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/></svg>`;
+// A bloodshot eye: yellowish white going red at the edges, branching veins, dark iris, glowing red
+// pupil (round, or now and then a slit), and a shadowed upper lid. Ids are unique per eye.
+function eyeSvg(id, slit) {
+  const veins = [
+    "M4 25 Q14 22 20 24 Q24 20 30 21", "M4 25 Q12 29 19 28 Q23 32 29 31", "M8 24 Q13 18 21 17",
+    "M96 25 Q86 22 80 24 Q76 19 70 20", "M96 25 Q87 29 81 28 Q77 33 71 32", "M92 24 Q86 18 79 16",
+  ].map((d, i) => `<path d="${d}" stroke-width="${i % 3 === 2 ? 0.7 : 1}"/>`).join("");
+  return `<svg viewBox="0 0 100 50" aria-hidden="true"><defs>
+<radialGradient id="sc${id}" cx="50%" cy="50%" r="55%"><stop offset="0" stop-color="#f1ead2"/><stop offset=".55" stop-color="#e2cfa8"/><stop offset="1" stop-color="#b8483a"/></radialGradient>
+<radialGradient id="pu${id}" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff5a3c"/><stop offset=".6" stop-color="#c0141b"/><stop offset="1" stop-color="#4a0508"/></radialGradient>
+<clipPath id="cl${id}"><path d="M2 25 Q50 -12 98 25 Q50 62 2 25Z"/></clipPath></defs>
+<g clip-path="url(#cl${id})"><rect width="100" height="50" fill="url(#sc${id})"/>
+<g fill="none" stroke="#a3121a" stroke-opacity=".75" stroke-linecap="round">${veins}</g>
+<g class="iris"><circle cx="50" cy="25" r="14" fill="#1e0a0b"/><circle cx="50" cy="25" r="14" fill="none" stroke="#5a1416" stroke-width="2"/>
+<g class="pupil">${slit ? `<ellipse cx="50" cy="25" rx="2.6" ry="11" fill="url(#pu${id})"/>` : `<circle cx="50" cy="25" r="6.5" fill="url(#pu${id})"/>`}</g>
+<circle cx="45.5" cy="20.5" r="1.8" fill="#fff" opacity=".55"/></g>
+<path d="M0 0 H100 V25 Q50 -12 0 25Z" fill="#000" opacity=".0"/><path d="M2 25 Q50 -12 98 25 Q50 4 2 25Z" fill="#000" opacity=".45"/></g>
+<path d="M2 25 Q50 -12 98 25" fill="none" stroke="#000" stroke-opacity=".6" stroke-width="2.5"/></svg>`;
+}
 const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor"/></svg>`;
 function fillEffectSelect(sel) {
   const keep = sel.value;
@@ -603,19 +619,27 @@ addEventListener("scroll", () => {
   fogLastY = scrollY;
 }, { passive: true });
 
-// Assombrado: tapping the empty background opens an eye there for a moment (random size and time).
+// Assombrado: tapping the empty background slowly opens an eye there (sometimes a pair): it stares,
+// its pupil tightens, it drifts a little, blinks, and closes. Random size, time and pupil.
+let eyeSeq = 0;
 document.addEventListener("click", (e) => {
   if (effectKey !== "haunted" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (e.target.closest("button, a, input, textarea, select, label, summary, details, dialog, header, nav, .round, .chip, .tab, .pop-menu, li, [role=button]")) return;
   if (document.querySelector("dialog[open]")) return;
-  const w = Math.round(28 + Math.random() * 90);
-  const ms = Math.round(1000 + Math.random() * 1500);
-  const eye = document.createElement("div");
-  eye.className = "haunt-eye";
-  eye.style.cssText = `left:${e.clientX - w / 2}px;top:${e.clientY - w / 4}px;width:${w}px;height:${w / 2}px;--dur:${ms}ms`;
-  eye.innerHTML = EYE_SVG;
-  document.getElementById("fx").appendChild(eye);
-  setTimeout(() => eye.remove(), ms + 100);
+  const w = Math.round(34 + Math.random() * 90);
+  const ms = Math.round(2000 + Math.random() * 2000);
+  const pair = Math.random() < 1 / 6;
+  const slit = Math.random() < 0.3;
+  const dx = (Math.random() * 2 - 1) * 9, dy = (Math.random() * 2 - 1) * 3;
+  const spots = pair ? [[-w * 0.62, 0], [w * 0.62, 0]] : [[0, 0]];
+  spots.forEach(([ox, oy], k) => {
+    const eye = document.createElement("div");
+    eye.className = "haunt-eye";
+    eye.style.cssText = `left:${e.clientX - w / 2 + ox}px;top:${e.clientY - w / 4 + oy}px;width:${w}px;height:${w / 2}px;--dur:${ms}ms;--dx:${dx}px;--dy:${dy}px;animation-delay:${k * 90}ms`;
+    eye.innerHTML = eyeSvg(`e${++eyeSeq}`, slit);
+    document.getElementById("fx").appendChild(eye);
+    setTimeout(() => eye.remove(), ms + 300);
+  });
 });
 
 // ---------- Phone only ----------
