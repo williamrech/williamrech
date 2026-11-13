@@ -1159,3 +1159,10 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .mini-fx .haunt-web { width: 64px; height: 64px; }
 .mini-fx .haunt-fog { filter: blur(8px); bottom: -10%; }
 .mini-fx .spider-rig { left: 26px; transform: scale(.55); transform-origin: 50% 0; }
+
+/* Assombrado cloud strips (parallax): soft cartoon clouds in theme colors with a glow on top */
+.fog-strip { position: absolute; left: 0; bottom: -2vh; transform-origin: 50% 100%; will-change: transform; pointer-events: none;
+  filter: blur(1.5px) drop-shadow(0 calc(var(--glow) * -0.4) var(--glow) color-mix(in srgb, var(--crema) 55%, transparent)); }
+.fog-strip svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.fog-strip path { fill: color-mix(in srgb, var(--fg) var(--mix), var(--bg)); }
+.mini-fx .fog-strip { bottom: -4%; filter: blur(.8px); }

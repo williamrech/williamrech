@@ -507,40 +507,83 @@ function runEffect(kind) {
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
   spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : null);
 }
-// Assombrado fog: patches of different heights rolling at their own speeds, breathing up and down.
-// A sideways swipe pushes them that way; scrolling makes them swell. Both fade out in ~1 s.
+// Assombrado fog: three cartoon cloud strips sliding in parallax (back: dim, small, slow → front:
+// light, big, fast, glowing) over a faint haze. Each strip repeats seamlessly and has its own
+// peaks and dips. A sideways swipe pushes them (front most), scrolling makes them swell.
 const fogPush = { vx: 0, swell: 0 };
+function cloudStripPath(seed) {
+  // One seamless 600×200 tile: bumps of different sizes along a wavy line (same height at both ends).
+  let r = seed;
+  const rand = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  const n = 6 + Math.floor(rand() * 3);
+  const ys = Array.from({ length: n }, () => 70 + rand() * 80);
+  ys.push(ys[0]);
+  let x = 0, d = `M0 200 L0 ${ys[0].toFixed(1)}`;
+  for (let i = 1; i <= n; i++) {
+    const nx = i === n ? 600 : x + (600 / n) * (0.75 + rand() * 0.5);
+    const xr = Math.min(nx, 600);
+    const rad = ((xr - x) / 2) * (1.05 + rand() * 0.5);
+    d += ` A${rad.toFixed(1)} ${(rad * (0.7 + rand() * 0.5)).toFixed(1)} 0 0 1 ${xr.toFixed(1)} ${ys[i].toFixed(1)}`;
+    x = xr;
+  }
+  return `${d} L600 200 Z`;
+}
 function startFog(layer, scale, still) {
   const rnd = (a, b) => a + Math.random() * (b - a);
   const W = () => layer.clientWidth || innerWidth, H = () => layer.clientHeight || innerHeight;
-  const blobs = Array.from({ length: 7 }, (_, i) => {
+  // Faint haze so the bottom is never empty between peaks.
+  const haze = Array.from({ length: 3 }, () => {
     const el = document.createElement("i");
     el.className = "haunt-fog";
-    const b = {
-      el, w: rnd(0.45, 0.95), h: rnd(0.12, 0.55), x: rnd(-0.6, 1), speed: rnd(14, 48) * Math.max(scale, 0.5),
-      period: rnd(7, 18), phase: rnd(0, 6.3), amp: rnd(0.15, 0.4), op: rnd(0.4, 0.85),
-    };
-    el.style.opacity = b.op;
+    const b = { el, w: rnd(0.6, 1), h: rnd(0.12, 0.24), x: rnd(-0.5, 1), speed: rnd(6, 14) * Math.max(scale, 0.5), period: rnd(9, 16), phase: rnd(0, 6.3), amp: 0.2 };
+    el.style.opacity = rnd(0.25, 0.4);
     layer.appendChild(el);
     return b;
   });
+  // The three strips.
+  const LAYERS = [
+    { depth: 0.35, h: 0.2, op: 0.28, speed: 12, glow: 6, mix: 35, seed: 11 },
+    { depth: 0.65, h: 0.26, op: 0.38, speed: 22, glow: 10, mix: 55, seed: 47 },
+    { depth: 1, h: 0.28, op: 0.42, speed: 36, glow: 16, mix: 75, seed: 83 },
+  ];
+  const strips = LAYERS.map((L, i) => {
+    const el = document.createElement("div");
+    el.className = "fog-strip";
+    const path = cloudStripPath(L.seed + Math.floor(Math.random() * 1000));
+    el.innerHTML = `<svg viewBox="0 0 1200 200" preserveAspectRatio="none" aria-hidden="true"><path d="${path}"/><path d="${path}" transform="translate(600 0)"/></svg>`;
+    el.style.setProperty("--mix", `${L.mix}%`);
+    el.style.setProperty("--glow", `${L.glow * Math.max(scale, 0.5)}px`);
+    el.style.opacity = L.op;
+    el.style.zIndex = String(i + 1);
+    layer.appendChild(el);
+    return { el, L, x: Math.random(), phase: rnd(0, 6.3), period: rnd(8, 14) };
+  });
   let last = performance.now();
   const frame = (now) => {
-    if (!layer.isConnected || !blobs[0].el.isConnected) return;
+    if (!layer.isConnected || !strips[0].el.isConnected) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     fogPush.vx *= Math.pow(0.25, dt); // momentum fades
     fogPush.swell *= Math.pow(0.3, dt);
     const w = W(), h = H(), t = now / 1000;
-    for (const b of blobs) {
+    for (const b of haze) {
       const bw = b.w * w;
-      b.x += ((b.speed + fogPush.vx * scale) * dt) / w;
+      b.x += ((b.speed + fogPush.vx * 0.2 * scale) * dt) / w;
       if (b.x * w > w + bw * 0.2) b.x = -b.w - 0.1;
       if (b.x * w < -bw * 1.3) b.x = 1;
-      const height = b.h * h * (1 + b.amp * Math.sin(t * (6.28 / b.period) + b.phase) + fogPush.swell);
       b.el.style.width = `${bw}px`;
-      b.el.style.height = `${Math.max(20, height)}px`;
+      b.el.style.height = `${Math.max(16, b.h * h * (1 + b.amp * Math.sin(t * (6.28 / b.period) + b.phase)))}px`;
       b.el.style.transform = `translateX(${b.x * w}px)`;
+    }
+    for (const st of strips) {
+      const ph = st.L.h * h; // strip height
+      const tile = ph * 3; // one 600×200 tile at this height
+      st.x = (st.x + ((st.L.speed * Math.max(scale, 0.5) + fogPush.vx * st.L.depth * scale) * dt) / tile) % 1;
+      if (st.x < 0) st.x += 1;
+      const breathe = 1 + 0.08 * Math.sin(t * (6.28 / st.period) + st.phase) + fogPush.swell * st.L.depth;
+      st.el.style.height = `${ph}px`;
+      st.el.style.width = `${tile * 2}px`;
+      st.el.style.transform = `translateX(${-st.x * tile}px) scaleY(${breathe.toFixed(3)})`;
     }
     if (!still) requestAnimationFrame(frame);
   };
