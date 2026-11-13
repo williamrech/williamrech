@@ -3020,22 +3020,49 @@ function renderAdminPalettes() {
   });
 }
 
-function renderDecorPicker(pickerId, inputId) {
-  const wrap = $(pickerId);
+// Drawings picker for occasions: the same picture tiles as the palette studio, in the chosen palette's colors.
+// Tap toggles a drawing in the text field (emoji and hand-typed entries are kept); numbers show the order.
+function renderDecorPicker(pickerId, inputId, paletteSelectId) {
+  const wrap = $(pickerId), inp = $(inputId);
+  const tokens = () => inp.value.trim().split(/\s+/).filter(Boolean);
+  const paint = () => {
+    const p = getPalette(paletteSelectId && $(paletteSelectId).value) || getPalette("espresso") || DEFAULT_PALETTE;
+    const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
+    for (const [k, v] of Object.entries(vars)) if (HEX.test(String(v || ""))) wrap.style.setProperty(k, v);
+    const svgs = tokens().filter((t) => /\.svg$/.test(t));
+    wrap.querySelectorAll(".dg").forEach((t) => {
+      const i = svgs.indexOf(t.dataset.name);
+      t.classList.toggle("on", i >= 0);
+      t.setAttribute("aria-pressed", String(i >= 0));
+      t.querySelector(".dg-n").textContent = i >= 0 ? i + 1 : "";
+    });
+  };
   wrap.innerHTML = "";
   for (const name of allDrawingNames()) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    b.textContent = name.replace(/\.svg$/, "");
-    b.title = "Adicionar";
-    b.onclick = () => {
-      const inp = $(inputId);
-      inp.value = (inp.value.trim() + " " + name).trim();
+    const t = document.createElement("button");
+    t.type = "button";
+    t.className = "dg";
+    t.dataset.name = name;
+    t.title = name.replace(/\.svg$/, "");
+    t.setAttribute("aria-label", t.title);
+    t.innerHTML = `<span class="dg-img"></span><span class="dg-n"></span>`;
+    loadSvg(name).then((svg) => { t.querySelector(".dg-img").innerHTML = svg; });
+    t.onclick = () => {
+      const list = tokens(), i = list.indexOf(name);
+      if (i >= 0) list.splice(i, 1); else list.push(name);
+      inp.value = list.join(" ");
       inp.dispatchEvent(new Event("input"));
+      paint();
     };
-    wrap.appendChild(b);
+    wrap.appendChild(t);
   }
+  if (!wrap.dataset.wired) {
+    wrap.dataset.wired = "1";
+    inp.addEventListener("input", () => wrap._paint && wrap._paint());
+    if (paletteSelectId) $(paletteSelectId).addEventListener("change", () => wrap._paint && wrap._paint());
+  }
+  wrap._paint = paint;
+  paint();
 }
 
 // ===================================================================
@@ -3539,7 +3566,7 @@ function openOccasionEditor(id) {
   Object.entries(allPalettes()).forEach(([pid, p]) => sel.add(new Option((p && p.name) || pid, pid)));
   sel.value = o.palette || "";
   show("occ-delete", !!id);
-  renderDecorPicker("occ-decor-picker", "occ-decor");
+  renderDecorPicker("occ-decor-picker", "occ-decor", "occ-palette");
   renderRules();
   $("dlg-occ").showModal();
 }
