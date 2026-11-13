@@ -78,6 +78,107 @@ export function startAsh(layer, scale = 1) {
   }
 }
 
+// ---------- Ruins on the horizon (behind the feed) ----------
+// Four silhouette layers in the palette's colors: far ones pale and hazy, near ones dark, an ember glow
+// on the horizon and a few lit windows. Fixed to the bottom 30% of the screen; scrolling shifts the
+// layers a few pixels apart (near ones more), so it reads as depth without sliding.
+const SCENE_CSS = `
+.gd-scene { position: absolute; left: 0; right: 0; bottom: 0; height: 30vh; pointer-events: none; }
+.gd-scene .glow { position: absolute; inset: -60% -10% 0; background:
+  radial-gradient(75% 55% at 50% 88%, color-mix(in srgb, var(--caramel) 50%, transparent), transparent 75%),
+  radial-gradient(40% 35% at 60% 85%, color-mix(in srgb, var(--crema) 22%, transparent), transparent 70%); }
+.gd-scene svg { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; display: block; will-change: transform; }
+.gd-scene .l1 { color: color-mix(in srgb, color-mix(in srgb, var(--surface) 45%, var(--caramel)) 80%, var(--fg)); opacity: .38; }
+.gd-scene .l2 { color: color-mix(in srgb, color-mix(in srgb, var(--surface) 70%, var(--caramel)) 85%, var(--bg)); opacity: .8; }
+.gd-scene .l3 { color: color-mix(in srgb, var(--bg) 75%, var(--surface)); }
+.gd-scene .l4 { color: color-mix(in srgb, var(--bg) 50%, black); }
+.gd-scene .haze { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent), transparent); }
+.gd-scene .win { fill: color-mix(in srgb, var(--caramel) 70%, #ffd27a); }
+`;
+function seeded(seed) { let r = seed; return () => ((r = (r * 9301 + 49297) % 233280) / 233280); }
+const W = 700, H = 400; // drawn for a phone (about 390×250 px); wider screens crop the sides
+// A row of buildings standing on y = base. kind: "far" | "mid" | "near"
+function skyline(seed, base, minH, maxH, opts = {}) {
+  const R = seeded(seed), d = [], wins = [];
+  let x = -20;
+  while (x < W + 20) {
+    const t = R();
+    if (t < (opts.towers ?? 0.25)) { // tower with a spire (sometimes broken)
+      const w = 18 + R() * 22, h = maxH * (0.7 + R() * 0.3), top = base - h;
+      d.push(`M${x} ${base}V${top}H${x + w}V${base}Z`);
+      if (R() < 0.7) d.push(`M${x - 3} ${top}L${x + w / 2} ${top - (40 + R() * 70)}L${x + w + 3} ${top}Z`);
+      else d.push(`M${x} ${top}L${x + w * 0.3} ${top - 14}L${x + w * 0.5} ${top - 4}L${x + w * 0.75} ${top - 20}L${x + w} ${top}Z`);
+      if (opts.windows && R() < 0.5) wins.push([x + w / 2 - 2, top + 14 + R() * 20, 4, 7]);
+      x += w + R() * 10;
+    } else if (t < 0.85) { // house: gable or broken roof, maybe a chimney
+      const w = 34 + R() * 60, h = minH + R() * (maxH * 0.55 - minH), top = base - h;
+      d.push(`M${x} ${base}V${top}H${x + w}V${base}Z`);
+      if (R() < 0.65) d.push(`M${x - 4} ${top}L${x + w / 2} ${top - w * (0.35 + R() * 0.25)}L${x + w + 4} ${top}Z`);
+      else d.push(`M${x} ${top}L${x + w * 0.2} ${top - 10}L${x + w * 0.45} ${top + 2}L${x + w * 0.7} ${top - 16}L${x + w} ${top}Z`);
+      if (R() < 0.5) { const cx = x + w * (0.2 + R() * 0.5); d.push(`M${cx} ${top}V${top - 26 - R() * 14}H${cx + 7}V${top}Z`); }
+      if (opts.windows) for (let k = 0; k < 2; k++) if (R() < 0.3) wins.push([x + 6 + R() * (w - 14), top + 8 + R() * (h - 20), 4, 6]);
+      x += w + R() * 6;
+    } else x += 10 + R() * 40; // a gap
+  }
+  d.push(`M-20 ${base}H${W + 20}V${H}H-20Z`);
+  return { d: d.join(""), wins };
+}
+// A cathedral shell: nave, two towers (one broken), a rose window you can see through.
+function cathedral(cx, base, s) {
+  const p = [];
+  p.push(`M${cx - 70 * s} ${base}V${base - 120 * s}L${cx} ${base - 170 * s}L${cx + 70 * s} ${base - 120 * s}V${base}Z`);
+  p.push(`M${cx - 110 * s} ${base}V${base - 210 * s}H${cx - 70 * s}V${base}Z M${cx - 116 * s} ${base - 210 * s}L${cx - 90 * s} ${base - 320 * s}L${cx - 64 * s} ${base - 210 * s}Z`);
+  p.push(`M${cx + 70 * s} ${base}V${base - 190 * s}L${cx + 80 * s} ${base - 214 * s}L${cx + 92 * s} ${base - 196 * s}L${cx + 104 * s} ${base - 226 * s}L${cx + 110 * s} ${base - 186 * s}V${base}Z`);
+  return p.join("");
+}
+function deadTree(x, base, s) {
+  return `<g fill="none" stroke="currentColor" stroke-linecap="round">
+<path d="M${x} ${base}C${x + 2} ${base - 40 * s} ${x - 6} ${base - 70 * s} ${x - 2} ${base - 110 * s}" stroke-width="${7 * s}"/>
+<path d="M${x - 2} ${base - 70 * s}L${x - 34 * s} ${base - 100 * s}L${x - 44 * s} ${base - 96 * s}M${x - 1} ${base - 92 * s}L${x + 30 * s} ${base - 128 * s}L${x + 40 * s} ${base - 124 * s}M${x - 2} ${base - 110 * s}L${x - 14 * s} ${base - 140 * s}M${x + 14 * s} ${base - 110 * s}L${x + 22 * s} ${base - 120 * s}" stroke-width="${3 * s}"/></g>`;
+}
+function fence(base) {
+  const R = seeded(7); let g = "";
+  for (let x = 12; x < W; x += 30 + R() * 18) {
+    const h = 34 + R() * 26, lean = R() * 8 - 4;
+    g += `<path d="M${x} ${base + 6}L${x + lean} ${base - h}L${x + lean + 5} ${base - h - 6}L${x + lean + 9} ${base - h}L${x + 9} ${base + 6}Z"/>`;
+  }
+  g += `<path d="M0 ${base - 20}Q175 ${base - 30} 350 ${base - 18}T700 ${base - 24}" fill="none" stroke="currentColor" stroke-width="4"/>`;
+  return g;
+}
+export function startScene(layer) {
+  if (!document.getElementById("gd-scene-css")) {
+    const st = document.createElement("style"); st.id = "gd-scene-css"; st.textContent = SCENE_CSS; document.head.appendChild(st);
+  }
+  const box = document.createElement("div");
+  box.className = "gd-scene";
+  const svg = (cls, inner) => `<svg class="${cls}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><g fill="currentColor">${inner}</g></svg>`;
+  const far = skyline(11, 300, 50, 210, { towers: 0.38 });
+  const mid = skyline(23, 336, 50, 175, { towers: 0.24, windows: true });
+  const near = skyline(41, 366, 40, 115, { towers: 0.12, windows: true });
+  const winEls = (ws, o) => ws.map(([x, y, w, h]) => `<rect class="win" x="${x}" y="${y}" width="${w}" height="${h}" opacity="${o}"/>`).join("");
+  box.innerHTML = `<div class="glow"></div>`
+    + svg("l1", `<path d="${far.d}"/><path d="${cathedral(390, 300, 0.85)}"/>`)
+    + `<div class="haze" style="height:70%;opacity:.55"></div>`
+    + svg("l2", `<path d="${mid.d}"/>${winEls(mid.wins, 0.55)}`)
+    + `<div class="haze" style="height:45%;opacity:.45"></div>`
+    + svg("l3", `<path d="${near.d}"/>${winEls(near.wins, 0.8)}${deadTree(560, 366, 1)}${deadTree(95, 366, 0.8)}`)
+    + svg("l4", `<path d="M-20 ${H}V384Q150 374 330 382T720 380V${H}Z"/>${fence(392)}`);
+  layer.appendChild(box);
+  // Tiny parallax: near layers move a bit more than far ones as you scroll (a few px at most).
+  const layers = [...box.querySelectorAll("svg")], k = [0.006, 0.012, 0.022, 0.034], max = [4, 8, 14, 20];
+  let ticking = false;
+  const apply = () => {
+    ticking = false;
+    if (!box.isConnected) { removeEventListener("scroll", onScroll); return; }
+    const y = Math.min(scrollY, 1200);
+    layers.forEach((l, i) => { l.style.transform = `translateY(${Math.min(y * k[i], max[i]).toFixed(1)}px)`; });
+  };
+  const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(apply); } };
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) addEventListener("scroll", onScroll, { passive: true });
+  apply();
+}
+
 // ---------- Tap ----------
 export function grimTap(x, y, layer, force) { // force (tests only): "loot" | "rift" | "gate", lucky: 0..1
   ensureCss();

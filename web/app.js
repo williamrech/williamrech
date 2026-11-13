@@ -392,7 +392,7 @@ function spawnEffect(layer, kind, scale = 1) {
   clearTimeout(layer._fxTimer);
   layer.innerHTML = "";
   layer.dataset.fx = kind || "";
-  if (!(kind in EFFECTS) && kind !== "haunted-bg") return;
+  if (!(kind in EFFECTS) && kind !== "haunted-bg" && kind !== "grimdawn-bg") return;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (kind === "smoke") {
     // The cup stays put; steam only now and then (never with reduced motion).
@@ -432,6 +432,10 @@ function spawnEffect(layer, kind, scale = 1) {
     layer.appendChild(web);
     startFog(layer, scale, still);
     if (kind === "haunted-bg") return;
+  }
+  if (kind === "grimdawn-bg") { // ruins on the horizon, behind the feed (still, with a tiny scroll parallax)
+    loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn-bg") m.startScene(layer); }).catch((e) => console.warn("grimdawn", e));
+    return;
   }
   if (kind === "grimdawn") { // ash + embers (taps are handled below, with the eye)
     if (!still) loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn") m.startAsh(layer, scale); }).catch((e) => console.warn("grimdawn", e));
@@ -580,7 +584,7 @@ function runEffect(kind) {
   // The steaming cup lives behind the feed (like the drawings); the rest float above it.
   const behind = kind === "smoke";
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
-  spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : null);
+  spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : kind === "grimdawn" ? "grimdawn-bg" : null);
 }
 // Assombrado fog: three cartoon cloud strips sliding in parallax (back: dim, small, slow → front:
 // light, big, fast, glowing) over a faint haze. Each strip repeats seamlessly and has its own
