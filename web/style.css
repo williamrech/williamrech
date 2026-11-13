@@ -1143,7 +1143,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
   filter: blur(18px);
 }
 .spider-rig { position: absolute; top: 0; left: 62px; width: 34px; transform-origin: 50% 0; --len: 56px; --t: 0s; }
-.spider-rig.moving { animation: spider-swing 2.6s ease-in-out infinite alternate; }
+.spider-rig.down { animation: spider-swing 2.6s ease-in-out infinite alternate; }
 @keyframes spider-swing { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
 .spider-thread { position: absolute; left: 50%; top: 0; width: 1px; height: var(--len); background: color-mix(in srgb, var(--fg) 45%, transparent); transition: height var(--t) ease-in-out; }
 .spider { position: absolute; left: 0; top: calc(var(--len) - 6px); width: 34px; height: 34px; padding: 0; border: 0; background: none; min-height: 0;

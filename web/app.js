@@ -422,11 +422,17 @@ function spawnEffect(layer, kind, scale = 1) {
     const cycle = () => {
       if (!rig.isConnected) return;
       if (!document.hidden && !still) {
-        rig.classList.add("moving");
+        // "down": swinging the whole time it's off the web; "moving": legs going while it travels.
+        rig.classList.add("moving", "down");
         setLen(rest + room() * rnd(0.18, 0.5), rnd(4, 6.5));
         layer._spiderUp = setTimeout(() => {
           rig.classList.remove("moving");
-          layer._spiderUp = setTimeout(() => { rig.classList.add("moving"); setLen(rest, rnd(5, 7)); setTimeout(() => rig.classList.remove("moving"), 7000); }, rnd(3000, 8000));
+          layer._spiderUp = setTimeout(() => {
+            rig.classList.add("moving");
+            const up = rnd(5, 7);
+            setLen(rest, up);
+            layer._spiderUp = setTimeout(() => rig.classList.remove("moving", "down"), up * 1000);
+          }, rnd(3000, 8000));
         }, 6500);
       }
       layer._fxTimer = setTimeout(cycle, rnd(20000, 40000));
@@ -436,7 +442,7 @@ function spawnEffect(layer, kind, scale = 1) {
       clearTimeout(layer._spiderUp);
       rig.classList.add("moving");
       setLen(rest, 0.9);
-      setTimeout(() => rig.classList.remove("moving"), 1000);
+      layer._spiderUp = setTimeout(() => rig.classList.remove("moving", "down"), 1000);
     };
     layer.dataset.fx = kind;
     return;
