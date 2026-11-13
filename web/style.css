@@ -1138,11 +1138,10 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .haunt-web { position: absolute; top: 0; left: 0; width: 160px; height: 160px; color: var(--fg); opacity: .22; }
 .haunt-web svg { width: 100%; height: 100%; display: block; }
 .haunt-fog {
-  position: absolute; bottom: -10vh; width: 95%; height: 40vh; border-radius: 50%; font-style: normal;
-  background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--fg) 30%, transparent), transparent 70%);
-  filter: blur(18px); animation: fog-roll linear infinite alternate;
+  position: absolute; left: 0; bottom: -6vh; border-radius: 50%; font-style: normal; will-change: transform, height;
+  background: radial-gradient(ellipse at 50% 65%, color-mix(in srgb, var(--fg) 30%, transparent), transparent 70%);
+  filter: blur(18px);
 }
-@keyframes fog-roll { from { transform: translateX(-12%) scale(1, .9); } to { transform: translateX(22%) scale(1.15, 1.05); } }
 .spider-rig { position: absolute; top: 0; left: 62px; width: 34px; transform-origin: 50% 0; --len: 56px; --t: 0s; }
 .spider-rig.moving { animation: spider-swing 2.6s ease-in-out infinite alternate; }
 @keyframes spider-swing { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
@@ -1158,5 +1157,5 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 @keyframes eye-life { 0% { transform: scaleY(0); opacity: 0; } 12% { transform: scaleY(1); opacity: 1; } 82% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(0); opacity: 0; } }
 @keyframes eye-look { 0%, 20% { transform: translateX(0); } 40% { transform: translateX(-14px); } 62% { transform: translateX(12px); } 80%, 100% { transform: translateX(0); } }
 .mini-fx .haunt-web { width: 64px; height: 64px; }
-.mini-fx .haunt-fog { height: 60%; filter: blur(8px); }
+.mini-fx .haunt-fog { filter: blur(8px); bottom: -10%; }
 .mini-fx .spider-rig { left: 26px; transform: scale(.55); transform-origin: 50% 0; }

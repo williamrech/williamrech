@@ -389,12 +389,7 @@ function spawnEffect(layer, kind, scale = 1) {
     web.className = "haunt-web";
     web.innerHTML = WEB_SVG;
     layer.appendChild(web);
-    for (let i = 0; i < 3; i++) {
-      const f = document.createElement("i");
-      f.className = "haunt-fog";
-      f.style.cssText = `left:${-30 + i * 35}%;animation-duration:${(38 + i * 11) * Math.max(scale, 0.6)}s;animation-delay:${-i * 9}s;opacity:${0.5 + i * 0.15}`;
-      layer.appendChild(f);
-    }
+    startFog(layer, scale, still);
     if (kind === "haunted-bg") return;
   }
   if (kind === "haunted") {
@@ -512,6 +507,59 @@ function runEffect(kind) {
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
   spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : null);
 }
+// Assombrado fog: patches of different heights rolling at their own speeds, breathing up and down.
+// A sideways swipe pushes them that way; scrolling makes them swell. Both fade out in ~1 s.
+const fogPush = { vx: 0, swell: 0 };
+function startFog(layer, scale, still) {
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const W = () => layer.clientWidth || innerWidth, H = () => layer.clientHeight || innerHeight;
+  const blobs = Array.from({ length: 7 }, (_, i) => {
+    const el = document.createElement("i");
+    el.className = "haunt-fog";
+    const b = {
+      el, w: rnd(0.45, 0.95), h: rnd(0.12, 0.55), x: rnd(-0.6, 1), speed: rnd(14, 48) * Math.max(scale, 0.5),
+      period: rnd(7, 18), phase: rnd(0, 6.3), amp: rnd(0.15, 0.4), op: rnd(0.4, 0.85),
+    };
+    el.style.opacity = b.op;
+    layer.appendChild(el);
+    return b;
+  });
+  let last = performance.now();
+  const frame = (now) => {
+    if (!layer.isConnected || !blobs[0].el.isConnected) return;
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    fogPush.vx *= Math.pow(0.25, dt); // momentum fades
+    fogPush.swell *= Math.pow(0.3, dt);
+    const w = W(), h = H(), t = now / 1000;
+    for (const b of blobs) {
+      const bw = b.w * w;
+      b.x += ((b.speed + fogPush.vx * scale) * dt) / w;
+      if (b.x * w > w + bw * 0.2) b.x = -b.w - 0.1;
+      if (b.x * w < -bw * 1.3) b.x = 1;
+      const height = b.h * h * (1 + b.amp * Math.sin(t * (6.28 / b.period) + b.phase) + fogPush.swell);
+      b.el.style.width = `${bw}px`;
+      b.el.style.height = `${Math.max(20, height)}px`;
+      b.el.style.transform = `translateX(${b.x * w}px)`;
+    }
+    if (!still) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+let fogTouchX = null;
+addEventListener("touchstart", (e) => { fogTouchX = e.touches[0] ? e.touches[0].clientX : null; }, { passive: true });
+addEventListener("touchmove", (e) => {
+  if (effectKey !== "haunted" || fogTouchX === null || !e.touches[0]) return;
+  const x = e.touches[0].clientX;
+  fogPush.vx = Math.max(-700, Math.min(700, fogPush.vx + (x - fogTouchX) * 9));
+  fogTouchX = x;
+}, { passive: true });
+let fogLastY = scrollY;
+addEventListener("scroll", () => {
+  if (effectKey === "haunted") fogPush.swell = Math.min(0.8, fogPush.swell + Math.abs(scrollY - fogLastY) / 400);
+  fogLastY = scrollY;
+}, { passive: true });
+
 // Assombrado: tapping the empty background opens an eye there for a moment (random size and time).
 document.addEventListener("click", (e) => {
   if (effectKey !== "haunted" || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
