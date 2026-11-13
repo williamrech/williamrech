@@ -153,6 +153,7 @@ function applyLook() {
   placeDecor(decorSpec);
   renderPreviewBar(previewing);
   // An occasion's effect is for everyone; otherwise the theme's own effect, unless you switched it off.
+  applyBgImage((todayOcc && todayOcc.bgImage) || "");
   const fxOff = typeof me !== "undefined" && me && me.fxOff === true;
   runEffect((todayOcc && todayOcc.effect) || (!fxOff && pal.effect) || null);
   if (typeof renderSettings === "function" && typeof auth !== "undefined" && auth.currentUser) renderSettings();
@@ -577,6 +578,55 @@ function spawnEffect(layer, kind, scale = 1) {
   layer.dataset.fx = kind;
 }
 let effectKey = null;
+// ---------- Occasion background image ----------
+// Stored in Firestore backgrounds/{id} as a downscaled JPEG (data URL); shown full screen behind the feed.
+// When one is on, it replaces the drawn Grim Dawn scene (the effects keep running on top).
+let bgImageId = "";
+const bgCache = {};
+function loadBgImage(id) {
+  if (!bgCache[id]) bgCache[id] = getDoc(doc(db, "backgrounds", id)).then((s) => (s.exists() ? s.get("img") : "")).catch(() => "");
+  return bgCache[id];
+}
+function applyBgImage(id) {
+  if (id === bgImageId) return;
+  bgImageId = id;
+  effectKey = null; // let the effect re-mount (the drawn scene only shows without an image)
+  const box = document.getElementById("bgimg");
+  document.body.classList.toggle("has-bgimg", !!id);
+  if (!id) { box.hidden = true; box.innerHTML = ""; return; }
+  loadBgImage(id).then((url) => {
+    if (bgImageId !== id) return;
+    if (!url) { box.hidden = true; return; }
+    box.innerHTML = `<div class="img"></div>`;
+    box.firstChild.style.backgroundImage = `url("${url}")`;
+    box.hidden = false;
+  });
+}
+// Shrink a picked photo to at most 1600 px and a JPEG under ~700 KB (a Firestore document holds 1 MB).
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(), src = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(src);
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      let q = 0.82, url = c.toDataURL("image/jpeg", q);
+      while (url.length > 700000 && q > 0.4) { q -= 0.08; url = c.toDataURL("image/jpeg", q); }
+      resolve(url);
+    };
+    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error("Não deu pra ler essa imagem.")); };
+    img.src = src;
+  });
+}
+function setOccBg(id) {
+  $("occ-bg").value = id;
+  show("occ-bg-clear", !!id);
+  const th = $("occ-bg-thumb");
+  th.style.backgroundImage = "";
+  if (id) loadBgImage(id).then((url) => { if ($("occ-bg").value === id && url) th.style.backgroundImage = `url("${url}")`; });
+}
 function runEffect(kind) {
   kind = kind || null;
   if (kind === effectKey) return;
@@ -584,7 +634,7 @@ function runEffect(kind) {
   // The steaming cup lives behind the feed (like the drawings); the rest float above it.
   const behind = kind === "smoke";
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
-  spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : kind === "grimdawn" ? "grimdawn-bg" : null);
+  spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : kind === "grimdawn" && !bgImageId ? "grimdawn-bg" : null);
 }
 // Assombrado fog: three cartoon cloud strips sliding in parallax (back: dim, small, slow → front:
 // light, big, fast, glowing) over a faint haze. Each strip repeats seamlessly and has its own
@@ -3496,6 +3546,7 @@ function readOccForm() {
   put("version", $("occ-version").value.trim());
   put("palette", $("occ-palette").value);
   put("decor", $("occ-decor").value.trim());
+  put("bgImage", $("occ-bg").value);
   put("effect", $("occ-effect").value);
   const curses = {};
   document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, CURSE_MAX); });
@@ -3571,6 +3622,7 @@ function openOccasionEditor(id) {
   sel.value = o.palette || "";
   show("occ-delete", !!id);
   renderDecorPicker("occ-decor-picker", "occ-decor", "occ-palette");
+  setOccBg(o.bgImage || "");
   renderRules();
   $("dlg-occ").showModal();
 }
@@ -3584,6 +3636,23 @@ $("occ-try").addEventListener("click", () => {
   applyLook();
   toast("Prévia só no seu aparelho. Toque em “sair” pra voltar.", 4000);
 });
+// Background image: uploaded right away (shrunk), saved into the occasion with "Salvar".
+$("occ-bg-file").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    toast("Enviando a imagem…");
+    const url = await shrinkImage(file);
+    const base = String(occEditing || $("occ-id").value.trim() || "fundo").toLowerCase().replace(/[^a-z0-9-]/g, "") || "fundo";
+    const id = `${base}-${Date.now().toString(36)}`;
+    await setDoc(doc(db, "backgrounds", id), { img: url, updatedAt: serverTimestamp() });
+    bgCache[id] = Promise.resolve(url);
+    setOccBg(id);
+    toast("Imagem pronta. Toque em Salvar.");
+  } catch (err) { toast(friendlyError(err)); }
+});
+$("occ-bg-clear").addEventListener("click", () => setOccBg(""));
 $("occ-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const id = occEditing || $("occ-id").value.trim().toLowerCase();

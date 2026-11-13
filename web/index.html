@@ -44,6 +44,7 @@
   <script src="firebase-config.js?v=__V__"></script>
 </head>
 <body>
+  <div id="bgimg" aria-hidden="true" hidden></div>
   <div id="decor" aria-hidden="true"></div>
   <div id="fx-back" aria-hidden="true"></div>
   <div id="fx" aria-hidden="true"></div>
@@ -390,6 +391,15 @@
       <div id="occ-curses" class="curses"></div>
       <label class="field">Desenhos (decor)<input id="occ-decor" maxlength="300" placeholder="pumpkin.svg ghost.svg 🦇"></label>
       <div class="ps-decor theme-scope occ-decor-picker" id="occ-decor-picker" aria-label="Desenhos do fundo"></div>
+      <div class="field">Imagem de fundo
+        <div class="occ-bg-row">
+          <div id="occ-bg-thumb" class="occ-bg-thumb" aria-hidden="true"></div>
+          <label class="button secondary occ-bg-pick">Escolher imagem<input type="file" id="occ-bg-file" accept="image/*" hidden></label>
+          <button type="button" id="occ-bg-clear" class="secondary" hidden>Tirar</button>
+        </div>
+        <span class="muted small">Ocupa a tela toda, atrás de tudo. Os efeitos continuam por cima.</span>
+        <input type="hidden" id="occ-bg">
+      </div>
       <div class="pick-row">
         <label class="field">Prioridade<input id="occ-priority" type="number" min="0" max="999" inputmode="numeric"></label>
         <label class="toggle occ-enabled"><input type="checkbox" id="occ-enabled"> <span>Ativa</span></label>

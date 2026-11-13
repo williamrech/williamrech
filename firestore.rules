@@ -54,6 +54,15 @@ service cloud.firestore {
     }
 
     // Drawings uploaded from the Admin tab (SVG text). Public, admins write.
+    // Occasion background images (admin uploads a downscaled JPEG; family members read it while logged in).
+    match /backgrounds/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin()
+        && request.resource.data.img is string
+        && request.resource.data.img.size() < 1000000
+        && id.matches('^[a-z0-9-]+$');
+      allow delete: if isAdmin();
+    }
     match /decor/{name} {
       allow read: if true;
       allow write: if isAdmin()

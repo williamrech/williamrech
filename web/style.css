@@ -300,6 +300,17 @@ select:invalid, select option[value=""] { color: var(--muted); }
 
 /* ---------- Coffee decorations ---------- */
 #decor { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+/* An occasion's background image: full screen behind everything, darkened for reading, drifting very slowly. */
+#bgimg { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+#bgimg .img { position: absolute; inset: -4%; background: center / cover no-repeat; animation: bg-drift 60s ease-in-out infinite alternate; will-change: transform; }
+#bgimg::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 72%, transparent), color-mix(in srgb, var(--bg) 30%, transparent) 45%, color-mix(in srgb, var(--bg) 55%, transparent)); }
+@keyframes bg-drift { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.06) translate(-1.5%, -1%); } }
+@media (prefers-reduced-motion: reduce) { #bgimg .img { animation: none; } }
+body.has-bgimg, body.has-bgimg .theme-scope { --card: color-mix(in srgb, var(--surface) 62%, transparent); }
+.occ-bg-row { display: flex; gap: 8px; align-items: center; margin: 6px 0 4px; }
+.occ-bg-thumb { width: 64px; height: 44px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg) center / cover no-repeat; flex: none; }
+.occ-bg-pick { display: inline-flex; align-items: center; cursor: pointer; }
 #decor img { position: absolute; height: auto; user-select: none; -webkit-user-select: none; }
 header, main, footer { position: relative; z-index: 1; }
 
