@@ -31,6 +31,9 @@ const CSS = `
 .gd-far { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 .gd-far .gd-rift { mix-blend-mode: screen; opacity: .8; filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
 .gd-far canvas.gd-riftgl { position: absolute; pointer-events: none; mix-blend-mode: screen; }
+.gd-raven { position: absolute; left: 0; top: 0; display: block; pointer-events: none; z-index: 2;
+  filter: drop-shadow(0 0 1.5px rgba(255, 50, 20, 1)) drop-shadow(0 0 5px rgba(220, 20, 0, .8)) drop-shadow(0 0 12px rgba(160, 10, 0, .5)); }
+.gd-raven .w { transform-box: fill-box; transform-origin: 50% 100%; }
 .gd-far .gd-soot { position: absolute; border-radius: 50%; pointer-events: none;
   background: radial-gradient(closest-side, rgba(0,0,0,.85) 35%, rgba(0,0,0,.5) 65%, transparent 100%); }
 .gd-portal { position: absolute; border-radius: 50%; overflow: hidden;
@@ -118,6 +121,10 @@ const SKIN_CSS = () => `
 @font-face { font-family: "GD Cinzel"; src: url("${FONT("cinzel.woff")}") format("woff"); font-weight: 400 900; font-display: swap; }
 @font-face { font-family: "GD Fell"; src: url("${FONT("fell.woff")}") format("woff"); font-display: swap; }
 .gd-backdrop { position: absolute; inset: 0; pointer-events: none; }
+/* The sky for this effect only (the palette stays as it is), like the Malmouth wallpaper: the burning city
+   lights the sky just above its roofs in aether green, fading to a deep green-black at the top of the screen.
+   (Compared on 14.11 with black-above-roofs-green-at-top; this one gave the city more depth.) */
+.gd-backdrop .tint { position: absolute; inset: 0; background: linear-gradient(to top, #030605 0%, #071510 40%, #12392b 56%, #0b2019 72%, #07110d 100%); }
 .gd-backdrop .glow { position: absolute; inset: 0; background:
   radial-gradient(90% 70% at 50% 40%, transparent 40%, rgba(0, 0, 0, .55) 100%);
   animation: gd-breathe 7s ease-in-out infinite; will-change: opacity; }
@@ -145,7 +152,9 @@ body.gd-skin .round.ask .round-title { color: #c08cff; text-shadow: 0 0 10px rgb
 body.gd-skin .round.closed { opacity: .75; }
 body.gd-skin .round.closed .round-title { color: #9c9a94; text-shadow: none; }
 body.gd-skin .round-body { color: var(--gd-text); }
-body.gd-skin .round-emoji { filter: grayscale(.85) sepia(.45) contrast(1.1) brightness(.9); }
+body.gd-skin .round-emoji, body.gd-skin .tile-emoji, body.gd-skin .adm-round-emoji, body.gd-skin .emoji-grid button,
+body.gd-skin #ed-emoji, body.gd-skin .gd-emo { filter: grayscale(.55) sepia(.55) saturate(.9) brightness(.9) contrast(1.05); }
+body.gd-skin .round-emoji .gd-emo, body.gd-skin .tile-emoji .gd-emo { filter: none; } /* don't tint twice */
 body.gd-skin .round .answers b { color: #f3d64e; }
 /* Iron-plate buttons */
 body.gd-skin .round .actions button.secondary, body.gd-skin .round .actions .preview-opt {
@@ -189,6 +198,39 @@ body.gd-skin #toast { border-radius: 2px; background: rgba(0, 0, 0, .88); border
 function ensureSkin() {
   if (document.getElementById("gd-skin-css")) return;
   const st = document.createElement("style"); st.id = "gd-skin-css"; st.textContent = SKIN_CSS(); document.head.appendChild(st);
+  sepiaEmoji();
+}
+// Emoji inside ordinary text (answers, chips, tabs) get wrapped in <span class="gd-emo"> so the skin can tint
+// them like old photos. Skips form fields, the effect layers and curse badges (they have their own look).
+const EMO = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\uFE0F|\u20E3|\p{Emoji_Modifier}|\u200D(?:\p{Extended_Pictographic}|\p{Regional_Indicator}))*/gu;
+const EMO_SKIP = "input, textarea, select, script, style, svg, [contenteditable], #fx, #fx-back, .gd-emo, .ubadge, .cursed, .emoji-grid";
+function wrapEmoji(root) {
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const hits = [];
+  for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+    EMO.lastIndex = 0;
+    if (!EMO.test(t.data)) continue;
+    const p = t.parentElement;
+    if (!p || p.closest(EMO_SKIP)) continue;
+    hits.push(t);
+  }
+  for (const t of hits) {
+    const frag = document.createDocumentFragment(); let last = 0;
+    t.data.replace(EMO, (m, i) => {
+      if (i > last) frag.appendChild(document.createTextNode(t.data.slice(last, i)));
+      const sp = document.createElement("span"); sp.className = "gd-emo"; sp.textContent = m; frag.appendChild(sp);
+      last = i + m.length; return m;
+    });
+    if (last < t.data.length) frag.appendChild(document.createTextNode(t.data.slice(last)));
+    t.replaceWith(frag);
+  }
+}
+function sepiaEmoji() {
+  let queued = false;
+  const run = () => { queued = false; if (document.body.classList.contains("gd-skin")) wrapEmoji(document.body); };
+  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(run); } })
+    .observe(document.body, { childList: true, subtree: true, characterData: true });
+  run();
 }
 // ---------- The bottom of the screen: Malmouth burning ----------
 // The skyline rows (below), the app's fog engine tinted for rolling smoke, and aether lightning far away.
@@ -379,7 +421,7 @@ export function startScene(layer, helpers = {}) {
   if (!document.getElementById("gd-bottom-css")) {
     const st = document.createElement("style"); st.id = "gd-bottom-css"; st.textContent = BOTTOM_CSS; document.head.appendChild(st);
   }
-  layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="glow"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
+  layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="tint"></div><div class="glow"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
   const storm = layer.querySelector(".gd-storm");
   startCity(layer);
   if (helpers.fog) helpers.fog(); // rolling smoke strips (pushed by swipes, swelling on scroll)
@@ -417,9 +459,13 @@ export function startRifts(layer) {
     if (!document.hidden && !spot.firstChild && shown) {
       const x = Math.random(), kind = x < 0.4 ? "purple" : x < 0.7 ? "green" : "red";
       spot.style.setProperty("--glow", { purple: "rgba(155, 61, 240, .75)", green: "rgba(60, 240, 150, .7)", red: "rgba(190, 40, 20, .7)" }[kind]);
-      spot.style.left = `${cx}px`; spot.style.top = `${r.bottom - 46}px`; // stands where the ＋ stood
+      spot.style.left = `${cx}px`; spot.style.top = `${cy}px`; // exactly over the ＋
       const hold = rnd(5000, 10000), total = RIFT_OPEN + hold + RIFT_CLOSE;
       rift(spot, kind, hold);
+      if (Math.random() < 0.45) { // sometimes a chaos raven (or two) bursts out and flees
+        const k = Math.random() < 0.25 ? 2 : 1;
+        for (let i = 0; i < k; i++) setTimeout(() => raven(spot), RIFT_OPEN + rnd(300, hold * 0.6) + i * rnd(150, 500));
+      }
       fab.animate([
         { opacity: 1, transform: "scale(1)" },
         { opacity: 0, transform: "scale(.4)", offset: (RIFT_OPEN * 0.7) / total },
@@ -557,7 +603,7 @@ float fbm(vec2 p){ float v = 0., a = .5; for (int k = 0; k < 5; k++) { v += a*n(
 mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 void main(){
   vec2 px = gl_FragCoord.xy;
-  vec2 ctr = vec2(res.x*.5, foot + sz.y*.5);
+  vec2 ctr = vec2(res.x*.5, foot);             // foot = the centre's height in the canvas
   vec2 q = (px - ctr) / (sz*.5);               // the oval is the unit circle here
   q /= max(o, .02);                            // grows open from nothing
   float r = length(q);
@@ -569,7 +615,8 @@ void main(){
   float wisp = fbm(rot(-t*.7 + 1.6*(1. - r))*q*3.1 + warp);
   // Ragged edge.
   float fl = fbm(vec2(q.x*3.2, q.y*1.4 - t*2.4)) * fbm(vec2(q.x*4.2 + 3., q.y*2.2 - t*3.4));
-  float rr = r - fire * fl * 1.6 * smoothstep(-.6, 1.1, q.y);     // tongues of fire lick up off the top
+  // Tongues of fire lick out over the rim all round, longest at the top (fire rises).
+  float rr = r - fire * fl * (.75 + 1.9*smoothstep(-1.1, 1.3, q.y));
   float edge = 1. - smoothstep(.62, 1., rr + (fbm(q*2.7 + t*.5) - .5)*.55);
   // Hot core: a vertical streak, brightest low in the middle.
   float streak = exp(-q.x*q.x*14.) * smoothstep(1., .1, abs(q.y + .15));
@@ -578,13 +625,14 @@ void main(){
   col += cMid * edge * smoothstep(.35, .8, sm) * 1.6;
   col += cHot * edge * (streak*.9 + core*.5) * (.55 + .7*sm);
   col *= mix(.25, 1.1, smoothstep(.3, .65, wisp));
-  col += fire * cHot * edge * smoothstep(.45, .75, fl*1.8) * smoothstep(-.2, .8, q.y) * .6;  // bright flame cores   // dark smoke threads through it
+  col += fire * cHot * edge * smoothstep(.4, .72, fl*1.8) * smoothstep(.75, 1.1, r) * 1.1;   // bright flame cores outside the rim
+  col += fire * cMid * edge * smoothstep(.85, 1.2, r) * .55;  // bright flame cores   // dark smoke threads through it
   // Soft halo of light around the tear.
   float hr = max(r - .8, 0.); col += cMid * .2 * exp(-hr*hr*9.) * (1. - edge*.6);
   // A ring of glimmers around it, where the button's rim was, each twinkling on its own.
   for (int k = 0; k < 16; k++) {
     float fk = float(k), a = fk/16.*6.2832 + h(vec2(fk, 3.))*.3;
-    vec2 sp = ctr + vec2(cos(a)*sz.x*1.05, sin(a)*sz.y*.6) * (.92 + .16*h(vec2(fk, 9.)));
+    vec2 sp = ctr + vec2(cos(a), sin(a)) * sz.x*.68 * (.95 + .14*h(vec2(fk, 9.)));   // outside the rim
     float d = length(px - sp) / dpr;
     float tw = .35 + .65*smoothstep(.2, .9, n(vec2(fk*7.3, t*1.7)));
     col += gold * cSpeck * exp(-d*d*.35) * tw * 1.3 * o;
@@ -594,6 +642,32 @@ void main(){
   gl_FragColor = vec4(min(col, vec3(a)), a);
 }`;
 const RIFT_OPEN = 700, RIFT_CLOSE = 650;
+// A small chaos raven: a dark silhouette with a red glow and a red eye, wings beating, flying out of the
+// portal and away to the left (up or a little down), wobbling, then gone. At most a third of the portal wide.
+const RAVEN = `<svg viewBox="0 0 24 14" width="100%" height="100%"><g fill="#0b0505" stroke="#7a1208" stroke-width=".7" stroke-linejoin="round">
+<path class="w" d="M11 7 C8 2 4 0 0.5 1.5 C4 2.5 6.5 5 9 8 Z"/><path class="w" d="M13 7 C15 2.5 19 0.5 23 1 C19.5 2.5 16.5 5 14 8 Z"/>
+<path d="M3.5 7.2 L1 8 L3.8 8.4 C5 10 9 10.5 13 9.6 L18 11.5 L16.8 9.2 C15 7.6 12 6.8 8 6.9 C6 6.9 4.8 6.8 3.5 7.2 Z"/>
+<circle cx="4.6" cy="7.6" r=".7" fill="#ff3a1c" stroke="none"/></g></svg>`;
+export function raven(spot) {
+  if (!spot.isConnected || document.hidden) return;
+  const b = document.createElement("i");
+  b.className = "gd-raven";
+  const w = rnd(16, 19);
+  b.style.cssText = `width:${w}px;height:${w * 0.58}px;margin:${-w * 0.29}px 0 0 ${-w / 2}px`;
+  b.innerHTML = RAVEN;
+  spot.appendChild(b);
+  b.querySelectorAll(".w").forEach((wg) => wg.animate([{ transform: "scaleY(1)" }, { transform: "scaleY(-.7)" }],
+    { duration: rnd(110, 150), iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
+  const ang = (rnd(150, 200) * Math.PI) / 180, dist = rnd(220, 380), dur = rnd(1700, 2600);
+  const wob = rnd(8, 18), ph = rnd(0, 6.283), frames = [];
+  for (let i = 0; i <= 14; i++) {
+    const f = i / 14, d = dist * f * (0.6 + 0.4 * f);
+    const px = Math.cos(ang) * d, py = Math.sin(ang) * d * -1 + Math.sin(ph + f * 9) * wob * f;
+    frames.push({ transform: `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) scale(${(0.35 + 0.75 * Math.min(1, f * 4)).toFixed(2)})`,
+      opacity: f < 0.08 ? f / 0.08 : f > 0.8 ? (1 - f) / 0.2 : 1 });
+  }
+  b.animate(frames, { duration: dur, easing: "linear", fill: "both" }).onfinish = () => b.remove();
+}
 const RIFT_GL_COL = {
   purple: { hot: [1.0, 0.55, 1.0], mid: [0.62, 0.2, 1.0], dim: [0.2, 0.03, 0.42] },
   red: { hot: [1.0, 0.62, 0.3], mid: [0.85, 0.16, 0.05], dim: [0.3, 0.03, 0.01] },
@@ -602,13 +676,15 @@ const RIFT_GL_COL = {
 function riftGL(layer, kind, hold) {
   const red = kind === "red";
   // All three the same size, standing in for the ＋ button; the layer's point is the portal's centre.
-  const W = 44, H = 92; // keep H in step with startRifts (r.bottom - H / 2)
-  const CW = Math.round(W * 3.2), footY = H * 0.4, CH = Math.round(footY + H * (kind === "green" ? 1.75 : 1.45));
+  // A perfect circle the size of the ＋ button, centred on the layer's point; flames need room above.
+  const fabEl = document.getElementById("fab");
+  const W = (fabEl && fabEl.offsetWidth) || 56, H = W;
+  const CW = Math.round(W * 3), footY = W * 1.2, CH = Math.round(W * 3.6);
   const cv = document.createElement("canvas");
   const dpr = Math.min(2, devicePixelRatio || 1);
   cv.width = Math.round(CW * dpr); cv.height = Math.round(CH * dpr);
   cv.className = "gd-riftgl";
-  cv.style.cssText = `left:${-CW / 2}px;top:${-(CH - footY - H / 2)}px;width:${CW}px;height:${CH}px`;
+  cv.style.cssText = `left:${-CW / 2}px;top:${-(CH - footY)}px;width:${CW}px;height:${CH}px`;
   const gl = cv.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: false });
   if (!gl) return false;
   const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
@@ -625,13 +701,13 @@ function riftGL(layer, kind, hold) {
   const col = RIFT_GL_COL[kind] || RIFT_GL_COL.purple;
   gl.uniform2f(U("res"), cv.width, cv.height);
   gl.uniform2f(U("sz"), W * dpr, H * dpr);
-  gl.uniform1f(U("foot"), footY * dpr); gl.uniform1f(U("gold"), 1); gl.uniform1f(U("fire"), kind === "green" ? 1 : 0); gl.uniform3fv(U("cSpeck"), kind === "green" ? [0.55, 1, 0.75] : red ? [1, 0.55, 0.3] : [1, 0.78, 0.38]); gl.uniform1f(U("dpr"), dpr);
+  gl.uniform1f(U("foot"), footY * dpr); gl.uniform1f(U("gold"), 1); gl.uniform1f(U("fire"), 1); gl.uniform3fv(U("cSpeck"), kind === "green" ? [0.55, 1, 0.75] : red ? [1, 0.55, 0.3] : [1, 0.78, 0.38]); gl.uniform1f(U("dpr"), dpr);
   gl.uniform3fv(U("cHot"), col.hot); gl.uniform3fv(U("cMid"), col.mid); gl.uniform3fv(U("cDim"), col.dim);
   const uT = U("t"), uO = U("o"), uF = U("fade");
   // A scorched patch under it (drawn normally, so it darkens what's behind).
   const soot = document.createElement("div");
   soot.className = "gd-soot";
-  const sw = W * 2.3, shh = H * 1.25;
+  const sw = W * 1.15, shh = W * 1.15;
   soot.style.cssText = `left:${-sw / 2}px;top:${-shh / 2}px;width:${sw}px;height:${shh}px;opacity:0`;
   layer.appendChild(soot); layer.appendChild(cv);
   // Gold motes drifting up off a riftgate.
@@ -643,7 +719,7 @@ function riftGL(layer, kind, hold) {
       : red ? "background:#ffb07a;box-shadow:0 0 5px 1px #ff5a20;opacity:0;mix-blend-mode:screen"
       : "background:#ffd27a;box-shadow:0 0 5px 1px #ffb640;opacity:0;mix-blend-mode:screen";
     layer.appendChild(sp); motes.push(sp);
-    const a = rnd(0, 6.283), x0 = Math.cos(a) * W * 1.05, y0 = Math.sin(a) * H * 0.6;
+    const a = rnd(0, 6.283), x0 = Math.cos(a) * W * 0.68, y0 = Math.sin(a) * W * 0.68;
     sp.animate([
       { transform: `translate(${x0}px, ${y0}px)`, opacity: 0 },
       { opacity: 1, offset: 0.3 },
@@ -740,20 +816,27 @@ function loot(x, y, layer, forceLucky) {
   const ROW = 22, n2 = entries.length;
   const baseY = Math.max(y - 34, 70 + (n2 - 1) * ROW); // bottom plate; the stack grows upward
   const pileY = Math.min(H - 36, baseY + 56);
+  // Gravity arcs: x moves steadily, y rises, slows and falls, so every path is a true curve, fanned out like
+  // the ribs of an open umbrella. y(s) = a s² + b s with y(1) = dy and the top of the arc at peak (< 0).
+  const arc = (dx, dy, peak, n = 16, rot = 0, rot1 = 0, sc0 = 1) => {
+    const P = Math.min(peak, dy - 10), b = 2 * P - 2 * Math.sqrt(P * P - P * dy), a = dy - b, fr = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, yy = a * t * t + b * t;
+      fr.push({ transform: `translate(${(dx * t).toFixed(1)}px, ${yy.toFixed(1)}px) rotate(${(rot * t + rot1 * t * t).toFixed(0)}deg) scale(${(sc0 + (1 - sc0) * Math.min(1, t * 3)).toFixed(2)})`, offset: t });
+    }
+    return fr;
+  };
   const FLY = 720, life = items.some((it) => it.beam === "legendary") ? 6000 : items.some((it) => it.beam) ? 5000 : 3800;
   entries.forEach((e, i) => {
     const { it } = e, delay = i * 45;
     // Where it lands (relative to the tap).
-    const dx = Math.max(26 - x, Math.min(W - 26 - x, rnd(-105, 105))), dy = pileY - y + rnd(-20, 20);
+    const fan = n2 > 1 ? (i / (n2 - 1)) * 2 - 1 : rnd(-0.5, 0.5);                     // spread evenly, left to right
+    const dx = Math.max(26 - x, Math.min(W - 26 - x, fan * 110 + rnd(-14, 14))), dy = pileY - y + rnd(-14, 14) + Math.abs(fan) * 10;
     const glowCol = it.col && it.col !== COLOR.common && it.col !== COLOR.broken && it.col !== COLOR.iron ? it.col : null;
     if (e.iron) {
       for (let k = 0; k < Math.min(9, 3 + Math.round(iron / 10)); k++) {
-        const b2 = el(g, "gd-bit"), bx = dx + rnd(-12, 12), by = dy + rnd(-4, 4), pk = -rnd(30, 70);
-        b2.animate([
-          { transform: "translate(0,0) rotate(0deg)", easing: "cubic-bezier(.3,.7,.6,1)" },
-          { transform: `translate(${bx * 0.5}px, ${pk}px) rotate(${rnd(-300, 300)}deg)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
-          { transform: `translate(${bx}px, ${by}px) rotate(${rnd(-90, 90)}deg)` },
-        ], { duration: FLY * 0.85, delay: rnd(0, 120), fill: "both" });
+        const b2 = el(g, "gd-bit"), bx = dx * rnd(0.7, 1.3) + rnd(-12, 12), by = dy + rnd(-4, 4);
+        b2.animate(arc(bx, by, -rnd(40, 80), 12, rnd(-400, 400)), { duration: FLY * 0.85, delay: rnd(0, 120), easing: "linear", fill: "both" });
         b2.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
       }
     } else {
@@ -772,14 +855,12 @@ function loot(x, y, layer, forceLucky) {
         }
       }
       const node = el(g, "gd-item", "", spriteFor(it.art));
-      const peak = -rnd(70, 120), rot = rnd(-260, 260), lie = rnd(-70, 70);
-      node.animate([
-        { transform: "translate(0px, 0px) rotate(0deg) scale(.4)", easing: "cubic-bezier(.3,.7,.6,1)" },
-        { transform: `translate(${dx * 0.5}px, ${peak}px) rotate(${rot}deg) scale(1)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
-        { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${lie}deg)`, offset: 0.86, easing: "ease-out" },
-        { transform: `translate(${dx}px, ${dy - 3}px) scale(1) rotate(${lie * 0.94}deg)`, offset: 0.93, easing: "ease-in" },
-        { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${lie}deg)` },
-      ], { duration: FLY, delay, fill: "both" });
+      // Centre items fly highest, outer ones lower and wider — the umbrella's ribs.
+      const peak = -(rnd(85, 120) - Math.abs(fan) * 35), end = rnd(-70, 70) + (Math.random() < 0.5 ? -360 : 360); // one tumble, lands at a slant
+      const fr = arc(dx, dy, peak, 18, end, 0, 0.4).map((f) => ({ ...f, offset: f.offset * 0.88 }));
+      fr.push({ transform: `translate(${dx}px, ${dy - 4}px) rotate(${end - 4}deg) scale(1)`, offset: 0.94 }); // a little bounce
+      fr.push({ transform: `translate(${dx}px, ${dy}px) rotate(${end}deg) scale(1)`, offset: 1 });
+      node.animate(fr, { duration: FLY, delay, easing: "linear", fill: "both" });
       if (it.broken) node.animate([{ opacity: 1 }, { opacity: 0, filter: "blur(2px)" }], { duration: 700, delay: delay + FLY + 700, fill: "forwards" });
       else node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
       if (it.beam) beam(g, dx, dy, it.beam, delay + FLY - 80, life, y);
