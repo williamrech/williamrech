@@ -28,11 +28,11 @@ const CSS = `
   100% { transform: translate(var(--sway), -70vh); opacity: 0; }
 }
 .gd-fx { position: absolute; pointer-events: none; }
-.gd-far { position: fixed; left: 30vw; bottom: 4.5vh; width: 0; height: 0; pointer-events: none; }
+.gd-far { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
 .gd-far .gd-rift { mix-blend-mode: screen; opacity: .8; filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
 .gd-far canvas.gd-riftgl { position: absolute; pointer-events: none; mix-blend-mode: screen; }
 .gd-far .gd-soot { position: absolute; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(0,0,0,.8) 25%, rgba(0,0,0,.45) 60%, transparent 100%); }
+  background: radial-gradient(closest-side, rgba(0,0,0,.85) 35%, rgba(0,0,0,.5) 65%, transparent 100%); }
 .gd-portal { position: absolute; border-radius: 50%; overflow: hidden;
   -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
 .gd-portal i { position: absolute; inset: -25%; border-radius: 50%; }
@@ -119,7 +119,6 @@ const SKIN_CSS = () => `
 @font-face { font-family: "GD Fell"; src: url("${FONT("fell.woff")}") format("woff"); font-display: swap; }
 .gd-backdrop { position: absolute; inset: 0; pointer-events: none; }
 .gd-backdrop .glow { position: absolute; inset: 0; background:
-  radial-gradient(120% 55% at 50% 112%, color-mix(in srgb, #46ff9a 16%, transparent), transparent 70%),
   radial-gradient(90% 70% at 50% 40%, transparent 40%, rgba(0, 0, 0, .55) 100%);
   animation: gd-breathe 7s ease-in-out infinite; will-change: opacity; }
 @keyframes gd-breathe { 0%, 100% { opacity: .8; } 50% { opacity: 1; } }
@@ -203,13 +202,13 @@ body.gd-skin .haunt-fog { opacity: .25 !important; }
 // The user's own painted strips, three of each: cathedral (back), residential (middle), industrial (front).
 // Each app open picks one strip per row, a zoom, a slice and maybe a mirror, then it stays put.
 // Numbers per strip: natural width, height, and the x range whose ground is solid (so a slice never has gaps).
-const CITY = {"gd-city-c1":[1200,262,3,1182],"gd-city-r1":[1200,174,10,1197],"gd-city-i1":[1200,204,12,1178],"gd-city-c2":[1200,247,10,1193],"gd-city-r2":[1200,217,5,1188],"gd-city-i2":[1200,219,1,1198],"gd-city-i3":[1200,230,1,1198],"gd-city-r3":[1200,214,1,1198],"gd-city-c3":[1200,207,1,1198]};
+const CITY = {"gd-city-c1":[1406,307,4,1385],"gd-city-r1":[1740,252,15,1736],"gd-city-i1":[1698,288,17,1667],"gd-city-c2":[1522,313,12,1514],"gd-city-r2":[1616,292,6,1601],"gd-city-i2":[1651,301,2,1648],"gd-city-i3":[1648,316,2,1645],"gd-city-r3":[1644,293,1,1642],"gd-city-c3":[1643,284,1,1641]};
 const CITY_CSS = `
 .gd-city { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .gd-city .row { position: absolute; left: 0; right: 0; overflow: hidden; }
 .gd-city .row img { position: absolute; top: 0; max-width: none; user-select: none; -webkit-user-drag: none; }
-.gd-city .haze { position: absolute; left: -10%; right: -10%; mix-blend-mode: screen;
-  background: radial-gradient(ellipse 60% 100% at 50% 100%, rgba(80, 255, 170, .42), rgba(40, 200, 130, .18) 45%, transparent 75%); }
+.gd-city .seam { position: absolute; left: 0; width: 100%; mix-blend-mode: screen; }
+.gd-city .seam.still { background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(80, 255, 170, .35), rgba(40, 200, 130, .14) 45%, transparent 75%); }
 .gd-city .sky { position: absolute; left: -20%; right: -20%; bottom: 14vh; height: 52vh; mix-blend-mode: screen;
   background: radial-gradient(ellipse 55% 60% at 50% 70%, rgba(60, 220, 150, .26), rgba(30, 150, 100, .1) 55%, transparent 80%); }
 .gd-city .floor { position: absolute; left: 0; right: 0; bottom: 0; height: 9vh; background: linear-gradient(to top, rgba(6, 12, 10, .85), transparent); }
@@ -218,26 +217,28 @@ function startCity(layer) {
   if (!document.getElementById("gd-city-css")) {
     const st = document.createElement("style"); st.id = "gd-city-css"; st.textContent = CITY_CSS; document.head.appendChild(st);
   }
-  const vw = innerWidth, vh = innerHeight, maxTop = vh * 0.5;
+  const vw = innerWidth, vh = innerHeight;
   const city = document.createElement("div");
   city.className = "gd-city";
   city.innerHTML = `<div class="sky"></div>`; // the burning sky glowing behind the cathedral
-  // Back to front. Heights are fractions of the screen; the back rows stand on a higher line, so they peek over.
+  // Back to front. Heights are fractions of the screen; the cathedral's top always reaches past half the screen.
   const rows = [
-    { k: "c", h: rnd(0.28, 0.33), base: rnd(0.17, 0.2), tone: "brightness(1.02) saturate(.9) blur(.5px)", haze: 1 },
-    { k: "r", h: rnd(0.22, 0.27), base: rnd(0.075, 0.1), tone: "brightness(.72) saturate(.95)", haze: 0.85 },
-    { k: "i", h: rnd(0.18, 0.23), base: 0, tone: "brightness(.5) contrast(1.12)", haze: 0 },
+    { k: "c", h: rnd(0.32, 0.37), base: rnd(0.2, 0.24), tone: "brightness(1.02) saturate(.9) blur(.5px)" },
+    { k: "r", h: rnd(0.26, 0.31), base: rnd(0.09, 0.12), tone: "brightness(.72) saturate(.95)" },
+    { k: "i", h: rnd(0.21, 0.26), base: 0, tone: "brightness(.5) contrast(1.12)" },
   ];
-  for (const r of rows) {
-    const names = Object.keys(CITY).filter((n) => n[8] === r.k);
-    const name = pick(names), [w, h, x0, x1] = CITY[name];
-    let H = Math.min(r.h * vh, maxTop - r.base * vh);
-    let sc = H / h;
+  const c = rows[0];
+  if (c.base + c.h < 0.53) c.h = 0.53 - c.base;
+  if (c.base + c.h > 0.62) c.h = 0.62 - c.base;
+  const seams = [];
+  rows.forEach((r, i) => {
+    const name = pick(Object.keys(CITY).filter((n) => n[8] === r.k)), [w, h, x0, x1] = CITY[name];
+    let H = r.h * vh, sc = H / h;
     if ((x1 - x0) * sc < vw) { sc = vw / (x1 - x0); H = h * sc; } // always wide enough: no gaps
     const off = x0 * sc + rnd(0, (x1 - x0) * sc - vw);
     const row = document.createElement("div");
     row.className = "row";
-    const fade = r.haze ? "-webkit-mask-image:linear-gradient(to top, transparent, #000 14%);mask-image:linear-gradient(to top, transparent, #000 14%);" : "";
+    const fade = i < 2 ? "-webkit-mask-image:linear-gradient(to top, transparent, #000 14%);mask-image:linear-gradient(to top, transparent, #000 14%);" : "";
     row.style.cssText = `bottom:${r.base * vh}px;height:${H}px;filter:${r.tone};${fade}${Math.random() < 0.5 ? "transform:scaleX(-1);" : ""}`;
     const img = new Image();
     img.src = new URL(`img/${name}.webp`, import.meta.url).href;
@@ -245,16 +246,132 @@ function startCity(layer) {
     img.style.cssText = `left:${-off}px;width:${w * sc}px;height:${H}px`;
     row.appendChild(img);
     city.appendChild(row);
-    // Green glow rising where this row meets the one in front of it.
-    if (r.haze) {
-      const hz = document.createElement("div");
-      hz.className = "haze";
-      hz.style.cssText = `bottom:${r.base * vh - H * 0.1}px;height:${H * 0.75}px;opacity:${r.haze}`;
-      city.appendChild(hz);
+    r.H = H; r.el = row;
+    // Between this row and the next one in front: a band of green fire, its foot hidden behind the front row.
+    if (i < 2) {
+      const next = rows[i + 1];
+      const band = document.createElement("canvas");
+      band.className = "seam";
+      const bh = vh * 0.24, bottom = next.base * vh + next.h * vh * 0.12;
+      band.style.cssText = `bottom:${bottom}px;height:${bh}px`;
+      city.appendChild(band);
+      seams.push(band); band.backRow = row; band.tone = r.tone;
     }
-  }
+  });
   city.insertAdjacentHTML("beforeend", `<div class="floor"></div>`);
   layer.appendChild(city);
+  if (!seamFire(seams, vw, vh * 0.24)) seams.forEach((b) => b.classList.add("still")); // no WebGL: a still glow
+}
+
+// Green fire burning between the rows: flames flickering up, now and then a flash of light, something bursting,
+// or a distant lamp that sputters and goes out. One small GPU shader renders both bands at low resolution
+// (fire is soft anyway) and they're copied onto their canvases, ~30 frames a second, paused when hidden.
+const FIRE_FS = `precision mediump float;
+uniform vec2 res; uniform float t, seed, aspect, flash, bx, bage, lx, ly, lamp;
+float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+  return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+float fbm(vec2 p){ float v = 0., a = .5; for (int k = 0; k < 4; k++) { v += a*n(p); p = p*2.03 + 17.1; a *= .5; } return v; }
+void main(){
+  vec2 uv = gl_FragCoord.xy / res;
+  float x = uv.x * aspect, y = uv.y;
+  float patchy = smoothstep(.2, .8, n(vec2(x*.8 + seed, t*.07)));          // stronger and weaker stretches
+  float base = .3 + .7*patchy;
+  float f = fbm(vec2(x*3. + seed, y*2.2 - t*1.25)) * .7 + fbm(vec2(x*7.5 - seed, y*4.6 - t*2.3)) * .45;
+  float flame = smoothstep(.06, .55, f - y*(1.3 - .55*base)) * base;
+  float flick = .8 + .2*n(vec2(t*8., seed));
+  vec3 col = mix(vec3(.02, .24, .15), vec3(.2, .95, .6), smoothstep(.08, .55, flame));
+  col = mix(col, vec3(.86, 1., .93), smoothstep(.62, .95, flame));
+  col *= flame * flick * 1.35;
+  col += vec3(.08, .55, .34) * exp(-y*3.2) * (.3 + .45*base) * flick * .55;    // glow under the flames
+  col += vec3(.45, 1., .75) * flash * (exp(-y*1.5)*1.2 + .2);                     // a flash of light
+  if (bage >= 0.) {                                                            // something bursts
+    vec2 d = vec2((uv.x - bx)*aspect, y - .42); float r2 = dot(d, d);
+    float R = .08 + sqrt(bage)*.7, k = 1. - bage;
+    col += (vec3(1., 1., .94)*exp(-r2/(R*R*.08)) * 2. + vec3(.3, 1., .62)*exp(-r2/(R*R)) * 1.1) * k*k;
+    col += vec3(.25, .9, .55) * k*k*k * .35;                                     // its light washes the whole band
+  }
+  vec2 dl = vec2((uv.x - lx)*aspect, y - ly); float l2 = dot(dl, dl);         // a distant lamp
+  col += vec3(.78, 1., .72) * lamp * (exp(-l2*5000.) * 1.5 + exp(-l2*300.) * .45);
+  col *= smoothstep(1., .62, y) * smoothstep(0., .16, y);   // soft at both edges, never a line
+  float a = clamp(max(col.r, max(col.g, col.b)), 0., 1.);
+  gl_FragColor = vec4(min(col, vec3(a)), a);
+}`;
+const lightUp = (band, steps, ms) => {
+  const row = band.backRow; if (!row) return;
+  row.animate(steps.map(([o, b]) => ({ offset: o, filter: `${band.tone} brightness(${b})` })), { duration: ms, easing: "ease-out" });
+};
+function seamFire(bands, w, bh) {
+  if (!bands.length) return true;
+  const Q = 0.5, cw = Math.round(w * Q), ch = Math.round(bh * Q);
+  const glc = document.createElement("canvas");
+  glc.width = cw; glc.height = ch;
+  const gl = glc.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: false });
+  if (!gl) return false;
+  const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
+  const vs = sh(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }"), fs = sh(gl.FRAGMENT_SHADER, FIRE_FS);
+  if (!vs || !fs) return false;
+  const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return false;
+  gl.useProgram(pr);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = {}; for (const k of ["res", "t", "seed", "aspect", "flash", "bx", "bage", "lx", "ly", "lamp"]) U[k] = gl.getUniformLocation(pr, k);
+  gl.uniform2f(U.res, cw, ch); gl.uniform1f(U.aspect, w / bh);
+  gl.viewport(0, 0, cw, ch);
+  const S = bands.map((c, i) => {
+    c.width = cw; c.height = ch;
+    return { band: c, ctx: c.getContext("2d"), seed: rnd(0, 90) + i * 37, flash: null, burst: null, lamp: { x: rnd(0.1, 0.9), y: rnd(0.38, 0.55), next: performance.now() + rnd(1000, 6000), on: 0, phase: "off" } };
+  });
+  const now0 = performance.now();
+  // Events.
+  const FLASH = [[0, 0], [0.05, 1], [0.16, 0.12], [0.26, 0.75], [0.45, 0.18], [1, 0]];
+  const env = (k) => { for (let i = 1; i < FLASH.length; i++) if (k <= FLASH[i][0]) { const [a, va] = FLASH[i - 1], [b, vb] = FLASH[i]; return va + (vb - va) * (k - a) / (b - a); } return 0; };
+  let nextFlash = now0 + rnd(4000, 9000), nextBurst = now0 + rnd(7000, 14000);
+  const lampLevel = (L, t) => {
+    if (t < L.next) return L.on;
+    if (L.phase === "off") { L.phase = "on"; L.x = rnd(0.08, 0.92); L.y = rnd(0.38, 0.55); L.t0 = t; L.next = t + rnd(6000, 12000); }
+    else if (L.phase === "on") { L.phase = "sputter"; L.t0 = t; L.next = t + rnd(1400, 2400); }
+    else { L.phase = "off"; L.next = t + rnd(3000, 9000); }
+    return L.on;
+  };
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let last = 0;
+  const frame = (t) => {
+    if (!bands[0].isConnected) { const lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); return; }
+    if (!still) requestAnimationFrame(frame);
+    if (document.hidden || t - last < 32) return;
+    last = t;
+    if (t > nextFlash) {
+      const s = pick(S); s.flash = t; nextFlash = t + rnd(6000, 16000);
+      lightUp(s.band, [[0, 1], [0.05, 2.1], [0.16, 1.15], [0.26, 1.8], [0.45, 1.2], [1, 1]], 750); // lightning shows the buildings
+    }
+    if (t > nextBurst) {
+      const s = pick(S); s.burst = { t0: t, x: rnd(0.1, 0.9) }; nextBurst = t + rnd(9000, 22000);
+      lightUp(s.band, [[0, 1], [0.08, 1.6], [1, 1]], 1600);
+    }
+    for (const s of S) {
+      const fk = s.flash == null ? 1 : (t - s.flash) / 750;
+      const fl = fk >= 0 && fk < 1 ? env(fk) * 0.8 : 0;
+      if (fk >= 1) s.flash = null;
+      let bage = -1;
+      if (s.burst) { bage = (t - s.burst.t0) / 1600; if (bage > 1) { s.burst = null; bage = -1; } }
+      const L = s.lamp; lampLevel(L, t);
+      if (L.phase === "on") L.on = Math.min(1, (t - L.t0) / 400) * (0.9 + 0.1 * Math.random());
+      else if (L.phase === "sputter") { const k = (t - L.t0) / (L.next - L.t0); L.on = Math.random() < 0.55 - k * 0.45 ? rnd(0.5, 1) * (1 - k * 0.5) : rnd(0, 0.12); }
+      else L.on = 0;
+      gl.uniform1f(U.t, (t - now0) / 1000); gl.uniform1f(U.seed, s.seed); gl.uniform1f(U.flash, fl);
+      gl.uniform1f(U.bx, s.burst ? s.burst.x : 0); gl.uniform1f(U.bage, bage);
+      gl.uniform1f(U.lx, L.x); gl.uniform1f(U.ly, L.y); gl.uniform1f(U.lamp, L.on);
+      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      s.ctx.clearRect(0, 0, cw, ch);
+      s.ctx.drawImage(glc, 0, 0);
+    }
+  };
+  requestAnimationFrame(frame);
+  return true;
 }
 
 export function startScene(layer, helpers = {}) {
@@ -262,7 +379,7 @@ export function startScene(layer, helpers = {}) {
   if (!document.getElementById("gd-bottom-css")) {
     const st = document.createElement("style"); st.id = "gd-bottom-css"; st.textContent = BOTTOM_CSS; document.head.appendChild(st);
   }
-  layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="glow"></div><div class="mist"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
+  layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="glow"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
   const storm = layer.querySelector(".gd-storm");
   startCity(layer);
   if (helpers.fog) helpers.fog(); // rolling smoke strips (pushed by swipes, swelling on scroll)
@@ -283,8 +400,8 @@ export function grimTap(x, y, layer, force) { // every tap drops loot; force (te
   if (!force && layer.querySelectorAll(".gd-fx").length >= 4) return; // don't pile up
   loot(x, y, layer, force && force.lucky);
 }
-// Rifts open on their own, in the back above the ＋ button (this pack's "spider coming down"): a big purple
-// riftgate or a small red chthonic tear. Faded and heavily glowing, so they read as far away.
+// Rifts open on their own and take the ＋ button's place for a while: purple riftgate, green aether-fire
+// riftgate or red chthonic tear, all the same size. The ＋ fades out underneath and stays tappable.
 export function startRifts(layer) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   ensureCss();
@@ -293,11 +410,22 @@ export function startRifts(layer) {
   layer.appendChild(spot);
   const open = () => {
     if (!spot.isConnected) return;
-    if (!document.hidden && !spot.firstChild) {
+    const fab = document.getElementById("fab");
+    const r = fab && fab.getBoundingClientRect();
+    const cx = r && r.left + r.width / 2, cy = r && r.top + r.height / 2;
+    const shown = r && r.width > 0 && fab.contains(document.elementFromPoint(cx, cy));
+    if (!document.hidden && !spot.firstChild && shown) {
       const x = Math.random(), kind = x < 0.4 ? "purple" : x < 0.7 ? "green" : "red";
       spot.style.setProperty("--glow", { purple: "rgba(155, 61, 240, .75)", green: "rgba(60, 240, 150, .7)", red: "rgba(190, 40, 20, .7)" }[kind]);
-      spot.style.left = `${rnd(0.16, 0.46) * 100}vw`; // somewhere along the street, clear of the ＋ button
-      rift(spot, kind, rnd(5000, 10000));
+      spot.style.left = `${cx}px`; spot.style.top = `${r.bottom - 46}px`; // stands where the ＋ stood
+      const hold = rnd(5000, 10000), total = RIFT_OPEN + hold + RIFT_CLOSE;
+      rift(spot, kind, hold);
+      fab.animate([
+        { opacity: 1, transform: "scale(1)" },
+        { opacity: 0, transform: "scale(.4)", offset: (RIFT_OPEN * 0.7) / total },
+        { opacity: 0, transform: "scale(.4)", offset: (RIFT_OPEN + hold + RIFT_CLOSE * 0.4) / total },
+        { opacity: 1, transform: "scale(1)" },
+      ], { duration: total, easing: "ease-in-out" });
     }
     setTimeout(open, rnd(20000, 40000));
   };
@@ -453,14 +581,10 @@ void main(){
   col += fire * cHot * edge * smoothstep(.45, .75, fl*1.8) * smoothstep(-.2, .8, q.y) * .6;  // bright flame cores   // dark smoke threads through it
   // Soft halo of light around the tear.
   float hr = max(r - .8, 0.); col += cMid * .2 * exp(-hr*hr*9.) * (1. - edge*.6);
-  // Light pooled on the ground at its foot, and a faint ring of glimmers around it.
-  vec2 g = (px - vec2(res.x*.5, foot)) / vec2(sz.x*1.25, sz.x*.36);
-  float gr = length(g);
-  col += cMid * .45 * exp(-gr*gr*2.2) * o;
-  // Gold specks scattered on the ring around a riftgate, each twinkling on its own.
+  // A ring of glimmers around it, where the button's rim was, each twinkling on its own.
   for (int k = 0; k < 16; k++) {
     float fk = float(k), a = fk/16.*6.2832 + h(vec2(fk, 3.))*.3;
-    vec2 sp = vec2(res.x*.5, foot) + vec2(cos(a)*sz.x*1.25, sin(a)*sz.x*.36) * (.9 + .25*h(vec2(fk, 9.)));
+    vec2 sp = ctr + vec2(cos(a)*sz.x*1.05, sin(a)*sz.y*.6) * (.92 + .16*h(vec2(fk, 9.)));
     float d = length(px - sp) / dpr;
     float tw = .35 + .65*smoothstep(.2, .9, n(vec2(fk*7.3, t*1.7)));
     col += gold * cSpeck * exp(-d*d*.35) * tw * 1.3 * o;
@@ -469,6 +593,7 @@ void main(){
   float a = clamp(max(col.r, max(col.g, col.b)), 0., 1.);
   gl_FragColor = vec4(min(col, vec3(a)), a);
 }`;
+const RIFT_OPEN = 700, RIFT_CLOSE = 650;
 const RIFT_GL_COL = {
   purple: { hot: [1.0, 0.55, 1.0], mid: [0.62, 0.2, 1.0], dim: [0.2, 0.03, 0.42] },
   red: { hot: [1.0, 0.62, 0.3], mid: [0.85, 0.16, 0.05], dim: [0.3, 0.03, 0.01] },
@@ -476,15 +601,14 @@ const RIFT_GL_COL = {
 };
 function riftGL(layer, kind, hold) {
   const red = kind === "red";
-  const W = red ? rnd(22, 28) : rnd(48, 58);          // narrow and tall, like the game's
-  const H = red ? W * rnd(3.6, 4.2) : W * rnd(2.3, 2.6);
-  const CW = Math.round(W * (red ? 4 : 3.2)), CH = Math.round(H * (kind === "green" ? 1.6 : 1.3) + W * 0.75);
-  const footY = W * 0.75;                              // canvas pixels from the bottom to the foot
+  // All three the same size, standing in for the ＋ button; the layer's point is the portal's centre.
+  const W = 44, H = 92; // keep H in step with startRifts (r.bottom - H / 2)
+  const CW = Math.round(W * 3.2), footY = H * 0.4, CH = Math.round(footY + H * (kind === "green" ? 1.75 : 1.45));
   const cv = document.createElement("canvas");
   const dpr = Math.min(2, devicePixelRatio || 1);
   cv.width = Math.round(CW * dpr); cv.height = Math.round(CH * dpr);
   cv.className = "gd-riftgl";
-  cv.style.cssText = `left:${-CW / 2}px;top:${-(CH - footY)}px;width:${CW}px;height:${CH}px`;
+  cv.style.cssText = `left:${-CW / 2}px;top:${-(CH - footY - H / 2)}px;width:${CW}px;height:${CH}px`;
   const gl = cv.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: false });
   if (!gl) return false;
   const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
@@ -501,31 +625,32 @@ function riftGL(layer, kind, hold) {
   const col = RIFT_GL_COL[kind] || RIFT_GL_COL.purple;
   gl.uniform2f(U("res"), cv.width, cv.height);
   gl.uniform2f(U("sz"), W * dpr, H * dpr);
-  gl.uniform1f(U("foot"), footY * dpr); gl.uniform1f(U("gold"), red ? 0 : 1); gl.uniform1f(U("fire"), kind === "green" ? 1 : 0); gl.uniform3fv(U("cSpeck"), kind === "green" ? [0.55, 1, 0.75] : [1, 0.78, 0.38]); gl.uniform1f(U("dpr"), dpr);
+  gl.uniform1f(U("foot"), footY * dpr); gl.uniform1f(U("gold"), 1); gl.uniform1f(U("fire"), kind === "green" ? 1 : 0); gl.uniform3fv(U("cSpeck"), kind === "green" ? [0.55, 1, 0.75] : red ? [1, 0.55, 0.3] : [1, 0.78, 0.38]); gl.uniform1f(U("dpr"), dpr);
   gl.uniform3fv(U("cHot"), col.hot); gl.uniform3fv(U("cMid"), col.mid); gl.uniform3fv(U("cDim"), col.dim);
   const uT = U("t"), uO = U("o"), uF = U("fade");
   // A scorched patch under it (drawn normally, so it darkens what's behind).
   const soot = document.createElement("div");
   soot.className = "gd-soot";
-  const sw = W * 2.6, shh = W * 0.75;
+  const sw = W * 2.3, shh = H * 1.25;
   soot.style.cssText = `left:${-sw / 2}px;top:${-shh / 2}px;width:${sw}px;height:${shh}px;opacity:0`;
   layer.appendChild(soot); layer.appendChild(cv);
   // Gold motes drifting up off a riftgate.
   const motes = [];
-  if (!red) for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 10; i++) {
     const sp = document.createElement("i");
     sp.className = "gd-spark";
     sp.style.cssText = kind === "green" ? "background:#d6ffe8;box-shadow:0 0 5px 1px #3cf096;opacity:0;mix-blend-mode:screen"
+      : red ? "background:#ffb07a;box-shadow:0 0 5px 1px #ff5a20;opacity:0;mix-blend-mode:screen"
       : "background:#ffd27a;box-shadow:0 0 5px 1px #ffb640;opacity:0;mix-blend-mode:screen";
     layer.appendChild(sp); motes.push(sp);
-    const x0 = rnd(-W * 1.1, W * 1.1), y0 = rnd(-W * 0.25, W * 0.15) - rnd(0, H * 0.5) * (Math.abs(x0) < W * 0.5 ? 1 : 0);
+    const a = rnd(0, 6.283), x0 = Math.cos(a) * W * 1.05, y0 = Math.sin(a) * H * 0.6;
     sp.animate([
       { transform: `translate(${x0}px, ${y0}px)`, opacity: 0 },
       { opacity: 1, offset: 0.3 },
       { transform: `translate(${x0 * 1.15}px, ${y0 - rnd(25, 60)}px)`, opacity: 0 },
     ], { duration: rnd(1400, 2400), delay: 400 + rnd(0, hold), easing: "ease-out", fill: "both" });
   }
-  const OPEN_MS = 700, CLOSE_MS = 650, TOTAL = OPEN_MS + hold + CLOSE_MS;
+  const OPEN_MS = RIFT_OPEN, CLOSE_MS = RIFT_CLOSE, TOTAL = OPEN_MS + hold + CLOSE_MS;
   soot.animate([{ opacity: 0 }, { opacity: 0.7, offset: OPEN_MS / TOTAL }, { opacity: 0.7, offset: (OPEN_MS + hold) / TOTAL }, { opacity: 0 }], { duration: TOTAL, fill: "both" });
   const t0 = performance.now(), seed = rnd(0, 50);
   const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
