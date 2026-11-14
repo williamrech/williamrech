@@ -28,7 +28,7 @@ const CSS = `
   100% { transform: translate(var(--sway), -70vh); opacity: 0; }
 }
 .gd-fx { position: absolute; pointer-events: none; }
-.gd-far { position: fixed; right: 108px; bottom: 20vh; width: 0; height: 0; pointer-events: none; }
+.gd-far { position: fixed; left: 30vw; bottom: 4.5vh; width: 0; height: 0; pointer-events: none; }
 .gd-far .gd-rift { mix-blend-mode: screen; opacity: .8; filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
 .gd-far canvas.gd-riftgl { position: absolute; pointer-events: none; mix-blend-mode: screen; }
 .gd-far .gd-soot { position: absolute; border-radius: 50%; pointer-events: none;
@@ -191,110 +191,81 @@ function ensureSkin() {
   if (document.getElementById("gd-skin-css")) return;
   const st = document.createElement("style"); st.id = "gd-skin-css"; st.textContent = SKIN_CSS(); document.head.appendChild(st);
 }
-// ---------- The bottom of the screen: what's left of Cairn ----------
-// Rolling smoke (the app's fog engine, tinted), then a mound of rubble with skulls, ribs, bones and blood, a
-// sword planted in it. A crow flies in and perches on a skull now and then (any tap scares it off), and
-// aether lightning flashes far away. Shapes get a stone/bone bevel + grit from an SVG lighting filter.
-const f1 = (n) => n.toFixed(1);
-function seeded(seed) { let r = seed; return () => ((r = (r * 9301 + 49297) % 233280) / 233280); }
+// ---------- The bottom of the screen: Malmouth burning ----------
+// The skyline rows (below), the app's fog engine tinted for rolling smoke, and aether lightning far away.
 const BOTTOM_CSS = `
 .gd-storm { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(90% 55% at 62% 0, rgba(150, 255, 205, .55), transparent 70%); }
-.gd-rubble { position: absolute; left: 0; right: 0; bottom: 0; height: min(27vh, 220px); z-index: 5; pointer-events: none; }
-.gd-rubble svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.gd-rubble .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 38%; background: linear-gradient(to top, rgba(0,0,0,.75), transparent); }
-.gd-crow { transform-box: fill-box; }
-.gd-crow .wing { display: none; transform-box: fill-box; transform-origin: 50% 100%; }
-.gd-crow.flying .wing { display: inline; animation: gd-flap .28s ease-in-out infinite alternate; }
-.gd-crow.flying .perch { display: none; }
-.gd-crow.perched .perch { transform-box: fill-box; transform-origin: 45% 100%; animation: gd-peck 7s ease-in-out infinite; }
-@keyframes gd-flap { from { transform: scaleY(1); } to { transform: scaleY(-.55); } }
-@keyframes gd-peck { 0%, 62%, 74%, 100% { transform: rotate(0); } 66% { transform: rotate(16deg); } 70% { transform: rotate(-5deg); } }
 body.gd-skin .fog-strip { filter: blur(14px); }
 body.gd-skin .fog-strip path { fill: color-mix(in srgb, #3fe08c 20%, #0b0f0d); }
 body.gd-skin .haunt-fog { opacity: .25 !important; }
 `;
-const STONE_FILTER = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="gd-stone" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
-<feGaussianBlur in="SourceAlpha" stdDeviation="1.3" result="b"/>
-<feDiffuseLighting in="b" surfaceScale="6" diffuseConstant="1.1" lighting-color="#e6fff2" result="d"><feDistantLight azimuth="255" elevation="38"/></feDiffuseLighting>
-<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.5" k2=".1" k3="0" k4="0" result="lit"/>
-<feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" seed="7" result="n"/>
-<feColorMatrix in="n" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.05" result="grit"/>
-<feComposite in="lit" in2="grit" operator="in" result="worn"/>
-<feBlend in="worn" in2="lit" mode="multiply" result="base"/>
-<feComposite in="base" in2="SourceAlpha" operator="in"/>
-</filter></svg>`;
-function rubbleSvg() {
-  const R = seeded(19), F = `filter="url(#gd-stone)"`;
-  const rock = (cx, cy, r, fill) => {
-    const n = 5 + Math.floor(R() * 3); let d = "";
-    for (let k = 0; k < n; k++) { const a = (k / n) * 6.283 + R() * 0.5, rr = r * (0.72 + R() * 0.45); d += `${k ? "L" : "M"}${f1(cx + Math.cos(a) * rr)} ${f1(cy + Math.sin(a) * rr * 0.72)}`; }
-    return `<path ${F} d="${d}Z" fill="${fill}"/>`;
-  };
-  const skull = (x, y, sc, rot) => `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${sc})"><path ${F} d="M-10 0C-10 -15 10 -15 10 0C10 5 7 7 6.5 9L6 14H-6L-6.5 9C-7 7 -10 5 -10 0Z" fill="#a39a82"/>`
-    + `<ellipse cx="-4.2" cy="1" rx="2.9" ry="3.2" fill="#070706"/><ellipse cx="4.2" cy="1" rx="2.9" ry="3.2" fill="#070706"/><path d="M0 5L-1.6 9H1.6Z" fill="#070706"/>`
-    + `<path d="M-3.6 10.5V14M-1.2 10.5V14M1.2 10.5V14M3.6 10.5V14" stroke="#1a1814" stroke-width=".8"/></g>`;
-  const bone = (x, y, len, rot) => `<g transform="translate(${x} ${y}) rotate(${rot})" ${F}><rect x="0" y="-1.6" width="${len}" height="3.2" rx="1.4" fill="#948b74"/><circle cx="0" cy="-1.8" r="2.4" fill="#948b74"/><circle cx="0" cy="1.8" r="2.4" fill="#948b74"/><circle cx="${len}" cy="-1.8" r="2.4" fill="#948b74"/><circle cx="${len}" cy="1.8" r="2.4" fill="#948b74"/></g>`;
-  let o = "";
-  const greys = ["#2b2f2d", "#343937", "#242826", "#3a3f3c"], dark = ["#1b1e1d", "#222624", "#151817"];
-  for (let x = -12; x < 412; x += 15 + R() * 14) o += rock(x, 98 + R() * 12, 13 + R() * 11, pick2(R, greys)); // back row
-  // The sword, planted (its foot is buried by the front rocks).
-  o += `<g transform="rotate(10 215 104)"><path ${F} d="M212.6 38H217.4L217 108H213Z" fill="#7b8580"/><path d="M215 40V104" stroke="#2c312f" stroke-width=".7"/>`
-    + `<rect ${F} x="203.5" y="34" width="23" height="4.2" rx="1" fill="#5d5340"/><rect x="213.4" y="20" width="3.2" height="14" fill="#2e2219"/><circle ${F} cx="215" cy="18" r="3.3" fill="#5d5340"/>`
-    + `<path d="M213.2 60Q214.5 70 213.4 84L214.6 84Q215.6 70 214.4 60Z" fill="#5a0b0b" opacity=".9"/></g>`;
-  // Remains.
-  o += `<g ${F} fill="none" stroke="#8f8670" stroke-width="2.3" stroke-linecap="round"><path d="M262 104Q282 96 304 102"/>`
-    + [0, 1, 2, 3, 4].map((k) => `<path d="M${268 + k * 8} ${102 - k * 0.4}q${3 + k * 0.3} ${-19 + k * 1.5} ${11 - k * 0.6} ${-3 + k * 0.6}"/>`).join("") + `</g>`;
-  o += bone(132, 110, 26, -14) + bone(318, 112, 22, 22) + bone(64, 113, 18, 8);
-  o += skull(112, 100, 1.05, -16) + skull(176, 108, 0.82, 22) + skull(252, 104, 0.92, -6) + skull(346, 108, 0.75, 14);
-  // Blood, pooled dark between the stones and run down a few of them.
-  o += `<path d="M96 116Q120 108 150 114Q172 110 196 117Q170 126 140 123Q112 126 96 116Z" fill="#4d0808" opacity=".92"/><path d="M118 114Q134 111 150 115" stroke="#a02020" stroke-width="1" fill="none" opacity=".55"/>`
-    + `<path d="M238 116Q262 110 290 116Q268 123 238 116Z" fill="#430707" opacity=".9"/><path d="M110 108q1 6 -.5 10M256 110q1.2 5 0 8M180 114q.8 4 0 7" stroke="#5c0a0a" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
-  for (let x = -16; x < 416; x += 20 + R() * 22) o += rock(x, 124 + R() * 8, 17 + R() * 14, pick2(R, dark)); // front row
-  for (let k = 0; k < 16; k++) o += rock(R() * 400, 112 + R() * 14, 2.5 + R() * 3.5, pick2(R, greys)); // debris
-  // The crow (starts hidden; perches on a skull).
-  o += `<g class="gd-crow" style="display:none" fill="#1a1f1d"><g transform="translate(110 87) scale(1.2)">`
-    + `<g class="perch"><path ${F} d="M-13 1L-23 6L-12 -3C-10 -9 -4 -13 3 -13C5 -17 8 -19 11.5 -18C13.5 -17.4 14.4 -16 14.8 -15L20.5 -13.4L14.6 -12.3C14 -9 12 -6 8 -3C4 0 -4 2 -9 1.4Z"/>`
-    + `<path d="M-2 0V4M3 -1V4" stroke="#1a1f1d" stroke-width="1.2"/><circle cx="11.6" cy="-15.4" r=".7" fill="#7dffb6"/></g>`
-    + `<g class="fly"><path class="wing" d="M-1 -9L-20 -24L-6 -8Z"/><path class="wing" d="M1 -9L20 -24L6 -8Z"/></g>`
-    + `</g></g>`;
-  return `<svg viewBox="0 -24 400 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true">${o}</svg>`;
+// ---------- Malmouth skyline ----------
+// The user's own painted strips, three of each: cathedral (back), residential (middle), industrial (front).
+// Each app open picks one strip per row, a zoom, a slice and maybe a mirror, then it stays put.
+// Numbers per strip: natural width, height, and the x range whose ground is solid (so a slice never has gaps).
+const CITY = {"gd-city-c1":[1200,262,3,1182],"gd-city-r1":[1200,174,10,1197],"gd-city-i1":[1200,204,12,1178],"gd-city-c2":[1200,247,10,1193],"gd-city-r2":[1200,217,5,1188],"gd-city-i2":[1200,219,1,1198],"gd-city-i3":[1200,230,1,1198],"gd-city-r3":[1200,214,1,1198],"gd-city-c3":[1200,207,1,1198]};
+const CITY_CSS = `
+.gd-city { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.gd-city .row { position: absolute; left: 0; right: 0; overflow: hidden; }
+.gd-city .row img { position: absolute; top: 0; max-width: none; user-select: none; -webkit-user-drag: none; }
+.gd-city .haze { position: absolute; left: -10%; right: -10%; mix-blend-mode: screen;
+  background: radial-gradient(ellipse 60% 100% at 50% 100%, rgba(80, 255, 170, .42), rgba(40, 200, 130, .18) 45%, transparent 75%); }
+.gd-city .sky { position: absolute; left: -20%; right: -20%; bottom: 14vh; height: 52vh; mix-blend-mode: screen;
+  background: radial-gradient(ellipse 55% 60% at 50% 70%, rgba(60, 220, 150, .26), rgba(30, 150, 100, .1) 55%, transparent 80%); }
+.gd-city .floor { position: absolute; left: 0; right: 0; bottom: 0; height: 9vh; background: linear-gradient(to top, rgba(6, 12, 10, .85), transparent); }
+`;
+function startCity(layer) {
+  if (!document.getElementById("gd-city-css")) {
+    const st = document.createElement("style"); st.id = "gd-city-css"; st.textContent = CITY_CSS; document.head.appendChild(st);
+  }
+  const vw = innerWidth, vh = innerHeight, maxTop = vh * 0.5;
+  const city = document.createElement("div");
+  city.className = "gd-city";
+  city.innerHTML = `<div class="sky"></div>`; // the burning sky glowing behind the cathedral
+  // Back to front. Heights are fractions of the screen; the back rows stand on a higher line, so they peek over.
+  const rows = [
+    { k: "c", h: rnd(0.28, 0.33), base: rnd(0.17, 0.2), tone: "brightness(1.02) saturate(.9) blur(.5px)", haze: 1 },
+    { k: "r", h: rnd(0.22, 0.27), base: rnd(0.075, 0.1), tone: "brightness(.72) saturate(.95)", haze: 0.85 },
+    { k: "i", h: rnd(0.18, 0.23), base: 0, tone: "brightness(.5) contrast(1.12)", haze: 0 },
+  ];
+  for (const r of rows) {
+    const names = Object.keys(CITY).filter((n) => n[8] === r.k);
+    const name = pick(names), [w, h, x0, x1] = CITY[name];
+    let H = Math.min(r.h * vh, maxTop - r.base * vh);
+    let sc = H / h;
+    if ((x1 - x0) * sc < vw) { sc = vw / (x1 - x0); H = h * sc; } // always wide enough: no gaps
+    const off = x0 * sc + rnd(0, (x1 - x0) * sc - vw);
+    const row = document.createElement("div");
+    row.className = "row";
+    const fade = r.haze ? "-webkit-mask-image:linear-gradient(to top, transparent, #000 14%);mask-image:linear-gradient(to top, transparent, #000 14%);" : "";
+    row.style.cssText = `bottom:${r.base * vh}px;height:${H}px;filter:${r.tone};${fade}${Math.random() < 0.5 ? "transform:scaleX(-1);" : ""}`;
+    const img = new Image();
+    img.src = new URL(`img/${name}.webp`, import.meta.url).href;
+    img.alt = ""; img.decoding = "async";
+    img.style.cssText = `left:${-off}px;width:${w * sc}px;height:${H}px`;
+    row.appendChild(img);
+    city.appendChild(row);
+    // Green glow rising where this row meets the one in front of it.
+    if (r.haze) {
+      const hz = document.createElement("div");
+      hz.className = "haze";
+      hz.style.cssText = `bottom:${r.base * vh - H * 0.1}px;height:${H * 0.75}px;opacity:${r.haze}`;
+      city.appendChild(hz);
+    }
+  }
+  city.insertAdjacentHTML("beforeend", `<div class="floor"></div>`);
+  layer.appendChild(city);
 }
-const pick2 = (R, arr) => arr[Math.floor(R() * arr.length)];
-let scareCrow = null;
-function startCrow(box) {
-  const crow = box.querySelector(".gd-crow");
-  if (!crow || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  // While flying it shows a small body with flapping wings; perched, the full bird.
-  crow.querySelector(".fly").insertAdjacentHTML("afterbegin", `<ellipse class="wing" style="animation:none" cx="0" cy="-8" rx="6.5" ry="3.2"/><path class="wing" style="animation:none" d="M5 -9L11 -7.5L5 -6.5Z"/>`);
-  let timer = 0, state = "away";
-  const later = (fn, ms) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
-  const leave = () => {
-    if (state !== "perched") return;
-    state = "leaving"; crow.setAttribute("class", "gd-crow flying");
-    crow.animate([{ transform: "translate(0px, 0px)" }, { transform: "translate(-240px, -190px)" }], { duration: 1700, easing: "cubic-bezier(.5,0,.8,.6)", fill: "forwards" })
-      .finished.then(() => { crow.style.display = "none"; state = "away"; later(arrive, rnd(25000, 60000)); }, () => {});
-  };
-  const arrive = () => {
-    if (!crow.isConnected) return;
-    if (document.hidden) return later(arrive, 8000);
-    state = "arriving"; crow.style.display = ""; crow.setAttribute("class", "gd-crow flying");
-    crow.animate([{ transform: "translate(210px, -170px)" }, { transform: "translate(0px, 0px)" }], { duration: 2400, easing: "cubic-bezier(.2,.6,.3,1)", fill: "forwards" })
-      .finished.then(() => { state = "perched"; crow.setAttribute("class", "gd-crow perched"); later(leave, rnd(18000, 45000)); }, () => {});
-  };
-  scareCrow = () => { if (crow.isConnected) leave(); };
-  later(arrive, rnd(3500, 8000));
-}
+
 export function startScene(layer, helpers = {}) {
   ensureSkin();
   if (!document.getElementById("gd-bottom-css")) {
     const st = document.createElement("style"); st.id = "gd-bottom-css"; st.textContent = BOTTOM_CSS; document.head.appendChild(st);
-    document.body.insertAdjacentHTML("beforeend", STONE_FILTER);
   }
   layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="glow"></div><div class="mist"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
   const storm = layer.querySelector(".gd-storm");
+  startCity(layer);
   if (helpers.fog) helpers.fog(); // rolling smoke strips (pushed by swipes, swelling on scroll)
-  layer.insertAdjacentHTML("beforeend", `<div class="gd-rubble">${rubbleSvg()}<div class="fade"></div></div>`);
-  startCrow(layer.lastElementChild);
   // Aether lightning, far off: a double flash every so often.
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     const strike = () => {
@@ -309,7 +280,6 @@ export function startScene(layer, helpers = {}) {
 // ---------- Tap ----------
 export function grimTap(x, y, layer, force) { // every tap drops loot; force (tests only): { lucky: 0..1 }
   ensureCss();
-  if (scareCrow) scareCrow();
   if (!force && layer.querySelectorAll(".gd-fx").length >= 4) return; // don't pile up
   loot(x, y, layer, force && force.lucky);
 }
@@ -326,6 +296,7 @@ export function startRifts(layer) {
     if (!document.hidden && !spot.firstChild) {
       const x = Math.random(), kind = x < 0.4 ? "purple" : x < 0.7 ? "green" : "red";
       spot.style.setProperty("--glow", { purple: "rgba(155, 61, 240, .75)", green: "rgba(60, 240, 150, .7)", red: "rgba(190, 40, 20, .7)" }[kind]);
+      spot.style.left = `${rnd(0.16, 0.46) * 100}vw`; // somewhere along the street, clear of the ＋ button
       rift(spot, kind, rnd(5000, 10000));
     }
     setTimeout(open, rnd(20000, 40000));
