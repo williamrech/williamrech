@@ -439,8 +439,10 @@ function spawnEffect(layer, kind, scale = 1) {
     return;
   }
   if (kind === "grimdawn") { // ash + embers (taps are handled below, with the eye)
-    if (!still) loadGrimDawn().then((m) => {
+    loadGrimDawn().then((m) => {
       if (layer.dataset.fx !== "grimdawn") return;
+      if (scale >= 1) m.startSky(layer); // one devotion constellation up in the sky (it holds still, so reduced motion keeps it)
+      if (still) return;
       m.startAsh(layer, scale);
       if (scale >= 1) m.startRifts(layer); // riftgates open now and then, high up and far back
     }).catch((e) => console.warn("grimdawn", e));
