@@ -77,6 +77,7 @@ const CSS = `
 .art-frame.legendary::before, .art-frame.legendary::after { background: linear-gradient(135deg, #fff1c2, #b98d49); border-color: #5a4219; }
 .art-frame.epic::before, .art-frame.epic::after { background: linear-gradient(135deg, #ffffff, #8d939c); border-color: #4a4f57; }
 .art-frame::before { top: -2px; } .art-frame::after { top: 100%; margin-top: 2px; }
+.art-frame { display: grid; place-items: center; min-width: 150px; min-height: 150px; } /* same frame for every item; small ones sit in the middle */
 .art-frame .ico { background-repeat: no-repeat; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .8)); }
 .art-frame .msg { width: 200px; min-height: 120px; display: grid; place-items: center; text-align: center; font-size: .9rem; color: #cfc6b0; }
 .art-frame .msg b { display: block; font-size: 2.4rem; margin-bottom: 6px; }
@@ -331,8 +332,8 @@ async function getSheet(confirmed) {
     return true;
   } catch (e) { console.warn("art", e); return false; }
 }
-function icon(a, box) { // the icon scaled to fit a box (keeps its shape)
-  const k = Math.min(box / a.w, box / a.h), [W, H] = gdRef.ITEM_SHEET;
+function icon(a, box, maxK = Infinity) { // the icon scaled to fit a box (keeps its shape), never more than maxK × its own size
+  const k = Math.min(box / a.w, box / a.h, maxK), [W, H] = gdRef.ITEM_SHEET;
   return `<i class="ico" style="display:block;width:${(a.w * k).toFixed(1)}px;height:${(a.h * k).toFixed(1)}px;background-image:url('${gdRef.ITEM_SPRITE}');
     background-size:${(W * k).toFixed(1)}px ${(H * k).toFixed(1)}px;background-position:${(-a.x * k).toFixed(1)}px ${(-a.y * k).toFixed(1)}px"></i>`;
 }
@@ -363,7 +364,7 @@ async function openArt(name, confirmed) {
   }
   if (S) S.artReady = true;
   const img = new Image();
-  img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5))); if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
+  img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5), 2)); // at most 2× the original art, so small things (rings) stay sharp if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
   img.onerror = silly;
   img.src = gdRef.ITEM_SPRITE;
 }
