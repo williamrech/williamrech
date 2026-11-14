@@ -587,7 +587,7 @@ const RAVEN_SEQ = (() => { const s = []; for (let r = 0; r < 3; r++) for (let i 
 export function raven(spot) {
   if (!spot.isConnected || document.hidden) return;
   const fabEl = document.getElementById("fab"), P = (fabEl && fabEl.offsetWidth) || 56;
-  const w = P * rnd(0.8, 0.9), h = w * RAVEN_ASPECT;      // nearly the portal's width, never wider
+  const w = P * 1.1, h = w * RAVEN_ASPECT;                // always 110% of the portal's width
   const b = document.createElement("i");
   b.className = "gd-raven";
   b.style.cssText = `width:${w}px;height:${h}px;margin:${-h / 2}px 0 0 ${-w / 2}px`;
