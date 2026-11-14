@@ -1068,7 +1068,9 @@ function loot(x, y, layer, forceLucky) {
   const lucky = forceLucky ?? Math.random();
   if (lucky < 0.035) { const [name, kind] = pick(REAL.legendary); items.push({ name, col: COLOR.legendary, art: KIND_ART[kind], beam: "legendary" }); }
   else if (lucky < 0.13) { const [name, kind] = pick(REAL.epic); items.push({ name, col: COLOR.epic, art: KIND_ART[kind], beam: "epic" }); }
-  const iron = Math.random() < 0.35 ? Math.round(rnd(2, 25)) : 0; // rarer and smaller since iron is kept and traded
+  // Iron is kept and traded, so it's scarce: ~1 tap in 10 gives 1-3, ~1 in 250 a rare chunk of 10-20
+  // (about 2 iron per epic/legendary found, on average).
+  const ir = Math.random(), iron = ir < 0.004 ? 10 + Math.floor(Math.random() * 11) : ir < 0.104 ? 1 + Math.floor(Math.random() * 3) : 0;
   if (lootHook) try { // the grail: report what is worth keeping (epics, legendaries, iron)
     for (const it of items) if (it.beam) lootHook({ name: it.name, rarity: it.beam });
     if (iron) lootHook({ iron });
