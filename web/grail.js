@@ -5,8 +5,13 @@ import { doc, setDoc, onSnapshot, collection, query, where, increment, deleteFie
 
 const RAR = { legendary: { pt: "Lendário", pl: "Lendários", col: "#c86bff" }, epic: { pt: "Épico", pl: "Épicos", col: "#4f9dff" } };
 const IRON_COL = "#a7a7a3";
-const KINDS = [["sword", "Espadas"], ["axe", "Machados"], ["mace", "Maças e martelos"], ["pistol", "Armas de fogo"], ["scepter", "Mão secundária"],
-  ["shield", "Escudos"], ["helm", "Elmos"], ["chest", "Armaduras"], ["gloves", "Luvas"], ["boots", "Botas"], ["ring", "Anéis"], ["amulet", "Amuletos"]];
+const KINDS = [["sword", "Espadas"], ["sword2h", "Espadas de duas mãos"], ["axe", "Machados"], ["axe2h", "Machados de duas mãos"], ["mace", "Maças"],
+  ["mace2h", "Maças de duas mãos"], ["spear2h", "Lanças"], ["dagger", "Adagas"], ["scepter", "Cetros"], ["gun1h", "Armas de fogo"], ["gun2h", "Armas de fogo de duas mãos"],
+  ["shield", "Escudos"], ["focus", "Mão secundária"], ["head", "Elmos"], ["shoulder", "Ombreiras"], ["chest", "Peitorais"], ["hands", "Luvas"], ["waist", "Cintos"],
+  ["legs", "Calças"], ["feet", "Botas"], ["ring", "Anéis"], ["amulet", "Amuletos"], ["medal", "Medalhas"]];
+// When the icon art can't show (no Wi-Fi yet, or GrimTools changed its picture): a silly line instead.
+const NO_ART = ["A arte deste item se perdeu no Vazio. Reclama com o admin.", "O pintor de Cairn ainda não pintou esse. Vai falar com o admin.",
+  "Uma fenda engoliu a imagem. Claramente culpa do admin.", "Sem arte por enquanto. O admin sabe o porquê (ou finge que sabe)."];
 const fmt = (n) => Number(n || 0).toLocaleString("pt-BR");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -54,6 +59,29 @@ const CSS = `
 #dlg-grail .grow { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: .84rem; }
 #dlg-grail .grow .nm { flex: 1; min-width: 0; }
 #dlg-grail .close-link { display: block; margin: 10px auto 0; }
+#dlg-grail .gi.has { cursor: pointer; }
+#dlg-grail .gi .mini { width: 26px; height: 26px; flex: none; position: relative; overflow: hidden; }
+#dlg-grail .gi .mini i { position: absolute; left: 50%; top: 50%; background-repeat: no-repeat; }
+#dlg-art { padding: 0; border: 0; background: none; box-shadow: none; overflow: visible; width: auto; max-width: 92vw; }
+#dlg-art::backdrop { background: rgba(0, 0, 0, .72); }
+.art-wrap { display: grid; justify-items: center; gap: 12px; padding: 18px; }
+.art-frame { position: relative; padding: 18px; border: 3px solid transparent; border-radius: 2px; outline-offset: 4px; }
+.art-frame.legendary { background: radial-gradient(circle at 50% 45%, rgba(170, 70, 255, .28), transparent 70%) padding-box, linear-gradient(#0d0a10, #070508) padding-box,
+  linear-gradient(135deg, #fff1c2, #d8b06a 22%, #7a5524 48%, #f0d48a 72%, #8a6330) border-box;
+  outline: 1px solid #8a6330; box-shadow: 0 0 22px rgba(240, 200, 90, .35), 0 0 2px #000 inset; }
+.art-frame.epic { background: radial-gradient(circle at 50% 45%, rgba(70, 140, 255, .26), transparent 70%) padding-box, linear-gradient(#090b10, #050608) padding-box,
+  linear-gradient(135deg, #ffffff, #c9ced6 22%, #646a73 48%, #e6e9ee 72%, #7d848d) border-box;
+  outline: 1px solid #7d848d; box-shadow: 0 0 22px rgba(200, 215, 240, .3), 0 0 2px #000 inset; }
+.art-frame::before, .art-frame::after { content: ""; position: absolute; left: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%) rotate(45deg);
+  background: inherit; border: 2px solid; }
+.art-frame.legendary::before, .art-frame.legendary::after { background: linear-gradient(135deg, #fff1c2, #b98d49); border-color: #5a4219; }
+.art-frame.epic::before, .art-frame.epic::after { background: linear-gradient(135deg, #ffffff, #8d939c); border-color: #4a4f57; }
+.art-frame::before { top: -2px; } .art-frame::after { top: 100%; margin-top: 2px; }
+.art-frame .ico { background-repeat: no-repeat; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .8)); }
+.art-frame .msg { width: 200px; min-height: 120px; display: grid; place-items: center; text-align: center; font-size: .9rem; color: #cfc6b0; }
+.art-frame .msg b { display: block; font-size: 2.4rem; margin-bottom: 6px; }
+.art-name { font-family: "GD Cinzel", Georgia, serif; font-weight: 700; letter-spacing: .04em; text-align: center; max-width: 80vw; }
+.art-name.legendary { color: #c86bff; } .art-name.epic { color: #4f9dff; }
 `;
 
 let S = null; // the running grail (one per app open while the occasion is live)
@@ -61,12 +89,15 @@ let S = null; // the running grail (one per app open while the occasion is live)
 export function startGrail(o) {
   if (S) return S.stop;
   // o: { db, uid, api(action, data) → Promise, gd (grimdawn module), isAdmin(), people() → [[uid, name]], toast(msg) }
+  gdRef = o.gd;
   const st = { o, data: { items: {}, iron: 0 }, pend: { items: {}, iron: 0 }, gin: [], gout: [], allPend: [], tab: "legendary", filt: "all", open: null, pick: null, fam: null };
   S = st;
   if (!document.getElementById("grail-css")) { const c = document.createElement("style"); c.id = "grail-css"; c.textContent = CSS; document.head.appendChild(c); }
   const cat = o.gd.grailCatalog();
   st.rar = {}; for (const r of ["epic", "legendary"]) for (const [n] of cat[r]) st.rar[n] = r;
   st.cat = cat;
+  st.artReady = false; // GrimTools' icon sheet saved on this phone?
+  hasSheet().then((ok) => { st.artReady = ok; });
 
   // Footer line
   const line = document.createElement("button");
@@ -112,6 +143,7 @@ export function startGrail(o) {
   document.addEventListener("visibilitychange", onHide);
   render();
 
+  st.rerender = renderList;
   st.stop = () => {
     flush();
     unsubs.forEach((u) => u());
@@ -218,7 +250,8 @@ export function startGrail(o) {
       h += `<h4>${label}</h4>`;
       for (const n of rows) {
         const q = c.items[n] || 0, out = st.gout.filter((g) => g.name === n).length;
-        h += `<div class="gi ${q ? "" : "miss"}"><img src="${art.src}" alt=""><span class="nm" ${q ? `style="color:${RAR[r].col}"` : ""}>${esc(n)}</span>
+        const real = q && st.artReady && o.gd.itemArt(n);
+        h += `<div class="gi ${q ? "has" : "miss"}" ${q ? `data-art="${esc(n)}"` : ""}>${real ? mini(real) : `<img src="${art.src}" alt="">`}<span class="nm" ${q ? `style="color:${RAR[r].col}"` : ""}>${esc(n)}</span>
           <span class="meta">${q > 1 ? `×${q}` : ""}${out ? `${q > 1 ? " · " : ""}${out} a caminho` : ""}</span>
           ${q > 1 ? `<button class="gbtn" data-open="${esc(n)}">Presentear</button>` : ""}</div>`;
         if (st.open === n) h += sendRow(n, esc(n));
@@ -251,6 +284,7 @@ export function startGrail(o) {
   }
   function wire(B) {
     B.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { st.filt = b.dataset.f; renderList(); });
+    B.querySelectorAll(".gi[data-art]").forEach((b) => b.onclick = (e) => { if (!e.target.closest("button")) openArt(b.dataset.art); });
     B.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => { st.open = st.open === b.dataset.open ? null : b.dataset.open; st.pick = null; renderList(); });
     B.querySelectorAll("[data-to]").forEach((b) => b.onclick = () => { st.pick = st.pick === b.dataset.to ? null : b.dataset.to; renderList(); });
     const q = B.querySelector(".gq"); if (q) q.oninput = () => { st.qty = Math.floor(Number(q.value)) || 1; const qn = B.querySelector(".qn"); if (qn) qn.textContent = fmt(st.qty); };
@@ -277,6 +311,49 @@ export function startGrail(o) {
       try { await o.api("adminGrail", { op: "reset", uid: u }); o.toast("Zerado."); loadFam(); } catch (e) { o.toast(e.message || "Não deu."); b.disabled = false; }
     });
   }
+}
+
+// ---------- Item art: GrimTools' icon sheet, saved on the phone the first time (Wi-Fi only) ----------
+const ART_CACHE = "gd-art";
+let gdRef = null;
+async function hasSheet() {
+  try { return !!(gdRef && "caches" in self && await (await caches.open(ART_CACHE)).match(gdRef.ITEM_SPRITE)); } catch { return false; }
+}
+const onWifi = () => !!(navigator.connection && navigator.connection.type === "wifi"); // phones that don't say count as not on Wi-Fi
+async function getSheet() {
+  if (await hasSheet()) return true;
+  if (!onWifi()) return false;
+  try {
+    const res = await fetch(gdRef.ITEM_SPRITE, { mode: "no-cors" }); // their server doesn't share; an opaque copy is enough to show it
+    await (await caches.open(ART_CACHE)).put(gdRef.ITEM_SPRITE, res);
+    return true;
+  } catch (e) { console.warn("art", e); return false; }
+}
+function icon(a, box) { // the icon scaled to fit a box (keeps its shape)
+  const k = Math.min(box / a.w, box / a.h), [W, H] = gdRef.ITEM_SHEET;
+  return `<i class="ico" style="display:block;width:${(a.w * k).toFixed(1)}px;height:${(a.h * k).toFixed(1)}px;background-image:url('${gdRef.ITEM_SPRITE}');
+    background-size:${(W * k).toFixed(1)}px ${(H * k).toFixed(1)}px;background-position:${(-a.x * k).toFixed(1)}px ${(-a.y * k).toFixed(1)}px"></i>`;
+}
+function mini(a) { return `<span class="mini">${icon(a, 26).replace('style="display:block;', 'style="display:block;transform:translate(-50%,-50%);')}</span>`; }
+async function openArt(name) {
+  const a = gdRef.itemArt(name);
+  let d = document.getElementById("dlg-art");
+  if (!d) {
+    d = document.createElement("dialog"); d.id = "dlg-art";
+    d.addEventListener("click", () => d.close());
+    document.body.appendChild(d);
+  }
+  const r = (a && a.r) || "epic";
+  const show = (inner) => { d.innerHTML = `<div class="art-wrap"><div class="art-frame ${r}">${inner}</div><div class="art-name ${r}">${esc(name)}</div></div>`; };
+  const silly = () => show(`<div class="msg"><div><b>❓</b>${NO_ART[Math.floor(Math.random() * NO_ART.length)]}</div></div>`);
+  show(`<div class="msg"><div>Buscando a arte…</div></div>`);
+  if (!d.open) d.showModal();
+  if (!a || !(await getSheet())) return silly();
+  if (S) S.artReady = true;
+  const img = new Image();
+  img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5))); if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
+  img.onerror = silly;
+  img.src = gdRef.ITEM_SPRITE;
 }
 
 export function stopGrail() { if (S) S.stop(); }

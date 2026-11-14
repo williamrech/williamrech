@@ -146,3 +146,11 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
+
+// ⚔️ Grim Dawn collection art: the app saves GrimTools' item icon sheet once (on Wi-Fi) in the "gd-art" cache;
+// from then on this serves it from there, so the phone never downloads it again. Nothing else is intercepted.
+self.addEventListener("fetch", (event) => {
+  const url = event.request.url;
+  if (!url.startsWith("https://www.grimtools.com/db/itemdb/itemdb.webp")) return;
+  event.respondWith(caches.open("gd-art").then((c) => c.match(url)).then((hit) => hit || fetch(event.request)));
+});

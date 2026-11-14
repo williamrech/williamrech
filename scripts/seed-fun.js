@@ -117,6 +117,18 @@ const ref = getFirestore().doc("config/fun");
     if (gd && gd.decor === "lantern.svg crow.svg crow.svg lantern.svg crow.svg") update["occasions.grim-dawn.decor"] = "";
     update.configVersion = 12;
   }
+  // configVersion 13: the Grim Dawn collection switches to the real item list (web/gd-items.js) — everyone starts clean:
+  // all collections and iron are wiped and pending gifts are cancelled (nothing is returned; there is nothing to return to).
+  if ((Number(cur.configVersion) || 0) < 13) {
+    const db = getFirestore();
+    const [grails, pend] = await Promise.all([db.collection("grail").get(), db.collection("gifts").where("status", "==", "pending").get()]);
+    const bw = db.bulkWriter();
+    for (const g of grails.docs) bw.delete(g.ref);
+    for (const g of pend.docs) bw.update(g.ref, { status: "cancelled", doneAt: Date.now(), note: "lista nova de itens" });
+    await bw.close();
+    console.log(`grail reset: ${grails.size} collections, ${pend.size} pending gifts`);
+    update.configVersion = 13;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;
