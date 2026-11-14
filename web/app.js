@@ -649,6 +649,24 @@ function runEffect(kind) {
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
   spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : kind === "grimdawn" && !bgImageId ? "grimdawn-bg" : null);
   if (auth.currentUser) renderMeChip(); // the Grim Dawn pack turns the name chip into a target bar, and back
+  syncGrail();
+}
+// ⚔️ While the Grim Dawn occasion is live: the grail (epics/legendaries/iron kept on your account, gifts) — web/grail.js
+var grailOn = null; // var: runEffect may run before this line is reached
+function syncGrail() {
+  const want = effectKey === "grimdawn" && auth.currentUser && meLoaded ? auth.currentUser.uid : null;
+  if (want === grailOn) return;
+  grailOn = want;
+  import(new URL("grail.js" + new URL(import.meta.url).search, import.meta.url).href).then(async (g) => {
+    g.stopGrail();
+    if (!want || grailOn !== want) return;
+    const gd = await loadGrimDawn();
+    if (grailOn !== want) return;
+    g.startGrail({ db, uid: want, gd, toast,
+      api: (action, data) => apiFn({ ...data, action }),
+      isAdmin: () => !!(me && me.admin === true),
+      people: () => Object.entries(family).filter(([, p]) => p && p.name).map(([u]) => [u, displayName(u)]).sort((a, b) => a[1].localeCompare(b[1], "pt-BR")) });
+  }).catch((e) => console.warn("grail", e));
 }
 // Assombrado fog: three cartoon cloud strips sliding in parallax (back: dim, small, slow → front:
 // light, big, fast, glowing) over a faint haze. Each strip repeats seamlessly and has its own
@@ -1143,6 +1161,7 @@ onAuthStateChanged(auth, async (user) => {
   subscribeAdminData(false);
   me = null;
   meLoaded = false;
+  syncGrail();
   gatePassed = false;
   templates = [];
   rounds = [];
@@ -1185,6 +1204,7 @@ onAuthStateChanged(auth, async (user) => {
     renderMeChip();
     renderNameNudge();
     applyComfort();
+    syncGrail();
     proceed();
   }));
 

@@ -1034,6 +1034,16 @@ function rollItem() {
   return { name: `${base} ${pre} ${suf}`, col: COLOR.rare, art };
 }
 
+// ---------- The grail: the app keeps count of epics, legendaries and iron (web/grail.js) ----------
+let lootHook = null;
+export function onLoot(fn) { lootHook = fn; }
+// Renamed items: "old name": "new name", so copies saved under the old name move to the new one.
+export const ALIASES = {};
+// Every epic and legendary that can drop, with its kind of item (for grouping in the list).
+export function grailCatalog() { return { epic: N.epic.map(([n, a]) => [n, a]), legendary: N.legendary.map(([n, a]) => [n, a]) }; }
+// The item picture for a kind (the same pictures the drops use; the first of each kind).
+export function grailArt(art) { const n = (SPRITE_FOR[art] || SPRITE_FOR.sword)[0], [w, h] = SPR[n]; return { src: SPRITE_URL(n), w, h }; }
+
 function loot(x, y, layer, forceLucky) {
   const g = box(layer, x, y);
   const items = [];
@@ -1043,7 +1053,11 @@ function loot(x, y, layer, forceLucky) {
   const lucky = forceLucky ?? Math.random();
   if (lucky < 0.035) { const [name, art] = pick(N.legendary); items.push({ name, col: COLOR.legendary, art, beam: "legendary" }); }
   else if (lucky < 0.13) { const [name, art] = pick(N.epic); items.push({ name, col: COLOR.epic, art, beam: "epic" }); }
-  const iron = Math.random() < 0.85 ? Math.round(rnd(4, 60)) : 0;
+  const iron = Math.random() < 0.35 ? Math.round(rnd(2, 25)) : 0; // rarer and smaller since iron is kept and traded
+  if (lootHook) try { // the grail: report what is worth keeping (epics, legendaries, iron)
+    for (const it of items) if (it.beam) lootHook({ name: it.name, rarity: it.beam });
+    if (iron) lootHook({ iron });
+  } catch (e) { console.warn("grail", e); }
 
   // Burst at the tap: a puff of dust and a flash of iron.
   flash(g, 70, "rgba(255, 200, 140, .35)", 0);

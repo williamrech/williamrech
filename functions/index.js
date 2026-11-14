@@ -1,7 +1,7 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, Timestamp, FieldValue, FieldPath } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getAuth } = require("firebase-admin/auth");
 const { randomInt, randomBytes, createHmac, timingSafeEqual } = require("crypto");
@@ -711,6 +711,9 @@ exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGI
     }
   } catch (e) { console.warn("resend", e.message); }
 
+  // 3b) ⚔️ Gifts nobody answered in 7 days go back to the sender.
+  await returnOldGifts().catch((e) => console.warn("gifts", e));
+
   // 4) Heartbeat for Admin → Backend (one small write per run).
   try {
     const fresh = await db.collection("templates").where("schedule.on", "==", true).get();
@@ -1098,6 +1101,153 @@ handlers.claimAdmin = async (req) => {
     return { admin: true, claimed: true };
   });
 };
+
+// ---------------------------------------------------------------------------
+// ⚔️ Grim Dawn grail: each person's epics, legendaries and iron (grail/{uid}), and gifts between people (gifts/{id}).
+// grail/{uid}: items { name: qty }, first { name: millis }, iron, updatedAt — the phone adds what drops (rules: only up);
+// gifts move copies through here, in transactions, so nothing is duplicated or lost.
+// gift: from, fromName, to, toName, kind "item"|"iron", name, rarity, qty, status "pending"|"accepted"|"declined"|"returned"|"cancelled",
+//   at, until (pending gifts go back to the sender after 7 days), doneAt
+// Gifts only work while the Grim Dawn occasion is live for both people.
+// ---------------------------------------------------------------------------
+const GIFT_DAYS = 7;
+const RARITY_PT = { legendary: "Lendário", epic: "Épico" };
+async function grimLiveFor(uids) {
+  const fun = (await db.doc("config/fun").get()).data() || {};
+  const sp = spParts();
+  const [y, m, d] = sp.key.split("-").map(Number);
+  const t = { y, m, d, key: sp.key, md: sp.key.slice(5), weekday: sp.weekday };
+  const pals = fun.palettes || {};
+  const live = Object.values(fun.occasions || {}).filter((o) => o && typeof o === "object" && o.enabled !== false
+    && (o.effect === "grimdawn" || (!o.effect && (pals[o.palette] || {}).effect === "grimdawn"))
+    && String(o.when || "").split(",").some((x) => matchesPattern(x, t)));
+  if (!live.length) return uids.map(() => false);
+  const open = live.some((o) => !o.adminOnly);
+  if (open) return uids.map(() => true);
+  const snaps = await Promise.all(uids.map((u) => db.doc(`users/${u}`).get()));
+  return snaps.map((sn) => sn.exists && sn.get("admin") === true);
+}
+const grailRef = (uid) => db.doc(`grail/${uid}`);
+const itemPath = (name) => new FieldPath("items", name);
+const firstPath = (name) => new FieldPath("first", name);
+// Put a gift's contents into someone's grail (inside a transaction).
+function giveTo(tx, snap, uid, g) {
+  const ref = grailRef(uid);
+  if (g.kind === "iron") return tx.set(ref, { iron: FieldValue.increment(g.qty), updatedAt: Date.now() }, { merge: true });
+  const has = snap.exists && ((snap.get("items") || {})[g.name] || 0) > 0;
+  const upd = [itemPath(g.name), FieldValue.increment(g.qty), "updatedAt", Date.now()];
+  if (!(snap.exists && (snap.get("first") || {})[g.name])) upd.push(firstPath(g.name), Date.now());
+  if (!snap.exists) return tx.set(ref, { items: { [g.name]: g.qty }, first: has ? {} : { [g.name]: Date.now() }, iron: 0, updatedAt: Date.now() });
+  return tx.update(ref, ...upd);
+}
+const giftLabel = (g) => (g.kind === "iron" ? `${g.qty} Pedaços de Ferro` : `${g.name}${g.rarity ? ` (${RARITY_PT[g.rarity] || g.rarity})` : ""}`);
+// Ends a pending gift: accept → to the recipient; anything else → back to the sender.
+async function settleGift(id, status, check) {
+  const ref = db.doc(`gifts/${id}`);
+  return db.runTransaction(async (tx) => {
+    const gs = await tx.get(ref);
+    if (!gs.exists) throw new HttpsError("not-found", "Esse presente sumiu.");
+    const g = gs.data();
+    if (check) check(g);
+    if (g.status !== "pending") throw new HttpsError("failed-precondition", "Esse presente já foi resolvido.");
+    const who = status === "accepted" ? g.to : g.from;
+    const snap = await tx.get(grailRef(who));
+    giveTo(tx, snap, who, g);
+    tx.update(ref, { status, doneAt: Date.now() });
+    return g;
+  });
+}
+
+handlers.sendGift = async (req) => {
+  const auth = requireAuth(req);
+  const d = req.data || {};
+  const to = String(d.to || ""), kind = d.kind === "iron" ? "iron" : "item";
+  if (!to || to === auth.uid) throw new HttpsError("invalid-argument", "Pra quem?");
+  const [toSnap, live] = await Promise.all([db.doc(`users/${to}`).get(), grimLiveFor([auth.uid, to])]);
+  if (!toSnap.exists) throw new HttpsError("not-found", "Essa pessoa não existe.");
+  if (!live[0]) throw new HttpsError("failed-precondition", "Só dá pra presentear durante a ocasião Grim Dawn.");
+  if (!live[1]) throw new HttpsError("failed-precondition", "Essa pessoa não está no Grim Dawn agora.");
+  const g = { from: auth.uid, to, kind, at: Date.now(), until: Date.now() + GIFT_DAYS * 864e5, status: "pending" };
+  if (kind === "iron") {
+    g.qty = Math.floor(Number(d.qty));
+    if (!(g.qty >= 1 && g.qty <= 1e7)) throw new HttpsError("invalid-argument", "Quanto ferro?");
+  } else {
+    g.name = String(d.name || "").slice(0, 80); g.qty = 1;
+    g.rarity = d.rarity === "legendary" ? "legendary" : "epic";
+    if (!g.name) throw new HttpsError("invalid-argument", "Qual item?");
+  }
+  const [me, them] = await Promise.all([profile(auth), loadUsers().then((u) => u[to] || {})]);
+  g.fromName = me.name; g.toName = them.name || "?";
+  const ref = db.collection("gifts").doc();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(grailRef(auth.uid));
+    const data = snap.exists ? snap.data() : {};
+    if (kind === "iron") {
+      if ((data.iron || 0) < g.qty) throw new HttpsError("failed-precondition", "Você não tem tanto ferro.");
+      tx.update(grailRef(auth.uid), { iron: FieldValue.increment(-g.qty), updatedAt: Date.now() });
+    } else {
+      if (((data.items || {})[g.name] || 0) < 2) throw new HttpsError("failed-precondition", "Só dá pra dar cópias extras (fica pelo menos uma com você).");
+      tx.update(grailRef(auth.uid), itemPath(g.name), FieldValue.increment(-1), "updatedAt", Date.now());
+    }
+    tx.create(ref, g);
+  });
+  await sendToUids([to], { title: `🎁 ${g.fromName} te mandou um presente`, body: `${giftLabel(g)}. Abre o app pra aceitar.` }, "", { kind: "presente", fromUid: auth.uid })
+    .catch((e) => console.warn("gift push", e));
+  return { id: ref.id };
+};
+
+handlers.answerGift = async (req) => {
+  const auth = requireAuth(req);
+  const id = String((req.data || {}).id || ""), accept = (req.data || {}).accept === true;
+  const g = await settleGift(id, accept ? "accepted" : "declined", (g) => { if (g.to !== auth.uid) throw new HttpsError("permission-denied", "Esse presente não é seu."); });
+  await sendToUids([g.from], accept
+    ? { title: `🎁 ${g.toName} aceitou`, body: `${giftLabel(g)} agora é de ${g.toName}.` }
+    : { title: `🎁 ${g.toName} recusou`, body: `${giftLabel(g)} voltou pra você.` }, "", { kind: "presente", fromUid: auth.uid }).catch((e) => console.warn("gift push", e));
+  return { ok: true };
+};
+
+// The sender (or an admin) takes back a pending gift.
+handlers.cancelGift = async (req) => {
+  const auth = requireAuth(req);
+  const id = String((req.data || {}).id || "");
+  const meSnap = await db.doc(`users/${auth.uid}`).get();
+  const admin = meSnap.exists && meSnap.get("admin") === true;
+  await settleGift(id, "cancelled", (g) => { if (g.from !== auth.uid && !admin) throw new HttpsError("permission-denied", "Só quem mandou pode cancelar."); });
+  return { ok: true };
+};
+
+// Admin: everyone's totals, and resetting one person's grail (or everyone's). Pending gifts of whoever is reset are cancelled without returning.
+handlers.adminGrail = async (req) => {
+  await requireAdmin(req);
+  const d = req.data || {};
+  if (d.op === "reset") {
+    const all = d.uid === "all";
+    const docs = all ? (await db.collection("grail").get()).docs.map((x) => x.ref) : [grailRef(String(d.uid || "x"))];
+    const pend = await db.collection("gifts").where("status", "==", "pending").get();
+    const bw = db.bulkWriter();
+    for (const r of docs) bw.delete(r);
+    for (const g of pend.docs) if (all || g.get("from") === d.uid || g.get("to") === d.uid) bw.update(g.ref, { status: "cancelled", doneAt: Date.now(), note: "zerado pelo admin" });
+    await bw.close();
+    return { ok: true, reset: docs.length };
+  }
+  const [grails, users] = await Promise.all([db.collection("grail").get(), loadUsers()]);
+  return { people: grails.docs.map((x) => {
+    const items = x.get("items") || {};
+    return { uid: x.id, name: (users[x.id] || {}).name || "?", iron: x.get("iron") || 0, items };
+  }) };
+};
+
+// Called from the 15-minute tick: unanswered gifts go back to the sender (nothing goes to waste).
+async function returnOldGifts() {
+  const pend = await db.collection("gifts").where("status", "==", "pending").get();
+  for (const g of pend.docs) {
+    if ((g.get("until") || 0) > Date.now()) continue;
+    try {
+      const data = await settleGift(g.id, "returned");
+      await sendToUids([data.from], { title: "🎁 Presente devolvido", body: `${data.toName} não abriu a tempo. ${giftLabel(data)} voltou pra você.` }, "", { kind: "presente" }).catch(() => {});
+    } catch (e) { console.warn("returnOldGifts", g.id, e.message); }
+  }
+}
 
 exports.api = onCall(opts, async (req) => {
   const action = req.data && req.data.action;

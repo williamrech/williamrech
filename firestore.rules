@@ -72,6 +72,22 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ⚔️ Grim Dawn grail: your epics/legendaries/iron. Your phone only ever adds (gifts and resets go through
+    // the functions); the admin can read everyone's.
+    match /grail/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['items', 'first', 'iron', 'updatedAt'])
+        && (!('items' in request.resource.data) || request.resource.data.items is map)
+        && (!('first' in request.resource.data) || request.resource.data.first is map)
+        && request.resource.data.get('iron', 0) is int
+        && request.resource.data.get('iron', 0) >= (resource == null ? 0 : resource.data.get('iron', 0));
+    }
+    // Gifts between people: the sender and the recipient (and admins) see them; written only by the functions.
+    match /gifts/{id} {
+      allow read: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid || isAdmin());
+    }
+
     // Rounds: visible to the people involved; written only through the functions.
     match /rounds/{id} {
       allow read: if signedIn() && request.auth.uid in resource.data.participants;
