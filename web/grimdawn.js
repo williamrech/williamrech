@@ -11,15 +11,24 @@ let seq = 0;
 
 // ---------- Styles (injected once) ----------
 const CSS = `
-.gd-ash { position: absolute; top: -10px; border-radius: 45% 55% 40% 60%; background: #bdb6ad; pointer-events: none;
-  animation: gd-ash-fall linear infinite; will-change: transform; }
+.gd-ash { position: absolute; top: -12px; pointer-events: none; will-change: translate, transform;
+  animation: gd-ash-fall linear infinite, gd-ash-flutter ease-in-out infinite alternate; }
+/* Ash drifts more than it falls: wide lazy swings, a lift now and then, and the flake turning over and over. */
 @keyframes gd-ash-fall {
-  0% { transform: translate(0, 0) rotate(0deg); }
-  25% { transform: translate(var(--sway), 27vh) rotate(90deg); }
-  50% { transform: translate(calc(var(--sway) * -0.4), 54vh) rotate(200deg); }
-  75% { transform: translate(var(--sway), 81vh) rotate(290deg); }
-  100% { transform: translate(0, 108vh) rotate(380deg); }
+  0% { translate: 0 0; }
+  20% { translate: var(--sway) 18vh; }
+  38% { translate: calc(var(--sway) * -0.7) 34vh; }
+  46% { translate: calc(var(--sway) * -0.9) 33vh; }
+  64% { translate: var(--sway2) 58vh; }
+  82% { translate: calc(var(--sway) * 0.4) 84vh; }
+  100% { translate: calc(var(--sway2) * -0.5) 108vh; }
 }
+@keyframes gd-ash-flutter {
+  from { transform: rotate(var(--r0)) rotate3d(1, .35, 0, -55deg); }
+  to { transform: rotate(calc(var(--r0) + 120deg)) rotate3d(1, .35, 0, 65deg); }
+}
+.gd-ash.hot { animation: gd-ash-fall linear infinite, gd-ash-flutter ease-in-out infinite alternate, gd-ash-cool 6s ease-in infinite; }
+@keyframes gd-ash-cool { 0%, 30% { filter: brightness(1.6); } 100% { filter: brightness(.6); } }
 .gd-ember { position: absolute; bottom: -8px; border-radius: 50%; background: #c8ffe0; pointer-events: none;
   box-shadow: 0 0 4px 1px #46ff9a, 0 0 10px 2px rgba(70, 255, 154, .35); opacity: 0; will-change: transform, opacity; }
 @keyframes gd-ember-rise {
@@ -32,7 +41,7 @@ const CSS = `
 .gd-far .gd-rift { mix-blend-mode: screen; opacity: .8; filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
 .gd-far canvas.gd-riftgl { position: absolute; pointer-events: none; mix-blend-mode: screen; }
 .gd-raven { position: absolute; left: 0; top: 0; display: block; pointer-events: none; z-index: 2;
-  filter: drop-shadow(0 0 1.5px rgba(255, 50, 20, 1)) drop-shadow(0 0 5px rgba(220, 20, 0, .8)) drop-shadow(0 0 12px rgba(160, 10, 0, .5)); }
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .7)); }
 .gd-raven .w { transform-box: fill-box; transform-origin: 50% 100%; }
 .gd-far .gd-soot { position: absolute; border-radius: 50%; pointer-events: none;
   background: radial-gradient(closest-side, rgba(0,0,0,.85) 35%, rgba(0,0,0,.5) 65%, transparent 100%); }
@@ -72,13 +81,20 @@ export function startAsh(layer, scale = 1) {
   ensureCss();
   ensureSkin();
   const k = Math.max(scale, 0.5);
-  for (let i = 0; i < Math.round(30 * scale) + 4; i++) {
+  for (let i = 0; i < Math.round(38 * scale) + 4; i++) {
     const a = document.createElement("i");
     a.className = "gd-ash";
-    const w = rnd(2, 5.5) * k, light = Math.random() < 0.3;
-    a.style.cssText = `left:${rnd(0, 100)}%;width:${w}px;height:${w * rnd(0.55, 0.9)}px;opacity:${rnd(0.25, 0.6).toFixed(2)};`
-      + `background:${light ? "#d8d2c9" : pick(["#8f8981", "#a39d95", "#6f6a64"])};--sway:${rnd(-30, 30) * scale}px;`
-      + `animation-duration:${rnd(11, 20) / Math.max(scale, 0.6)}s;animation-delay:${rnd(-20, 0)}s`;
+    // Charred flakes: dark, irregular (a ragged polygon), a few with an edge still glowing aether green.
+    const w = rnd(4, 9) * k, hot = Math.random() < 0.14;
+    const pts = []; const nP = 5 + Math.floor(rnd(0, 3));
+    for (let j = 0; j < nP; j++) { const t = (j / nP) * 6.283 + rnd(-0.3, 0.3), rr = rnd(38, 52); pts.push(`${(50 + Math.cos(t) * rr).toFixed(0)}% ${(50 + Math.sin(t) * rr).toFixed(0)}%`); }
+    const fall = rnd(16, 28) / Math.max(scale, 0.6);
+    if (hot) a.classList.add("hot");
+    a.style.cssText = `left:${rnd(0, 100)}%;width:${w}px;height:${w * rnd(0.5, 0.85)}px;opacity:${rnd(0.55, 0.9).toFixed(2)};`
+      + `clip-path:polygon(${pts.join(",")});`
+      + `background:${hot ? "radial-gradient(circle at 30% 40%, #b8ffd8 0, #3fe08c 35%, #2a2725 75%)" : pick(["#2a2725", "#3d3733", "#57504a", "#6c645c", "#7d756b", "#8c8378"])};`
+      + `--sway:${rnd(-45, 45) * scale}px;--sway2:${rnd(-45, 45) * scale}px;--r0:${rnd(0, 360).toFixed(0)}deg;`
+      + `animation-duration:${fall}s, ${rnd(1.6, 3.4).toFixed(2)}s${hot ? `, ${rnd(5, 9).toFixed(1)}s` : ""};animation-delay:${rnd(-fall, 0).toFixed(1)}s, ${rnd(-3, 0).toFixed(1)}s`;
     layer.appendChild(a);
   }
   for (let i = 0; i < Math.round(14 * scale) + 1; i++) setTimeout(() => ember(layer, k), rnd(0, 3000));
@@ -424,7 +440,8 @@ export function startScene(layer, helpers = {}) {
   layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="tint"></div><div class="glow"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
   const storm = layer.querySelector(".gd-storm");
   startCity(layer);
-  if (helpers.fog) helpers.fog(); // rolling smoke strips (pushed by swipes, swelling on scroll)
+  // (The app's rolling fog strips used to be added here; their theme-colored glow read as reddish Halloween
+  // clouds over the factories, so the city only has its own green fire now.)
   // Aether lightning, far off: a double flash every so often.
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     const strike = () => {
@@ -644,27 +661,38 @@ void main(){
 const RIFT_OPEN = 700, RIFT_CLOSE = 650;
 // A small chaos raven: a dark silhouette with a red glow and a red eye, wings beating, flying out of the
 // portal and away to the left (up or a little down), wobbling, then gone. At most a third of the portal wide.
-const RAVEN = `<svg viewBox="0 0 24 14" width="100%" height="100%"><g fill="#0b0505" stroke="#7a1208" stroke-width=".7" stroke-linejoin="round">
+const RAVEN = `<svg viewBox="0 0 24 14" width="100%" height="100%"><g fill="#0a0707">
 <path class="w" d="M11 7 C8 2 4 0 0.5 1.5 C4 2.5 6.5 5 9 8 Z"/><path class="w" d="M13 7 C15 2.5 19 0.5 23 1 C19.5 2.5 16.5 5 14 8 Z"/>
 <path d="M3.5 7.2 L1 8 L3.8 8.4 C5 10 9 10.5 13 9.6 L18 11.5 L16.8 9.2 C15 7.6 12 6.8 8 6.9 C6 6.9 4.8 6.8 3.5 7.2 Z"/>
-<circle cx="4.6" cy="7.6" r=".7" fill="#ff3a1c" stroke="none"/></g></svg>`;
+<circle cx="4.6" cy="7.6" r="1.3" fill="#ff2a14" opacity=".35" stroke="none"/><circle cx="4.6" cy="7.6" r=".6" fill="#ff4a24" stroke="none"/></g></svg>`;
 export function raven(spot) {
   if (!spot.isConnected || document.hidden) return;
   const b = document.createElement("i");
   b.className = "gd-raven";
-  const w = rnd(16, 19);
+  const fabEl = document.getElementById("fab"), P = (fabEl && fabEl.offsetWidth) || 56;
+  const w = P * rnd(0.46, 0.54);                        // about half the portal
   b.style.cssText = `width:${w}px;height:${w * 0.58}px;margin:${-w * 0.29}px 0 0 ${-w / 2}px`;
   b.innerHTML = RAVEN;
   spot.appendChild(b);
+  const beat = rnd(150, 200);
   b.querySelectorAll(".w").forEach((wg) => wg.animate([{ transform: "scaleY(1)" }, { transform: "scaleY(-.7)" }],
-    { duration: rnd(110, 150), iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
-  const ang = (rnd(150, 200) * Math.PI) / 180, dist = rnd(220, 380), dur = rnd(1700, 2600);
-  const wob = rnd(8, 18), ph = rnd(0, 6.283), frames = [];
-  for (let i = 0; i <= 14; i++) {
-    const f = i / 14, d = dist * f * (0.6 + 0.4 * f);
-    const px = Math.cos(ang) * d, py = Math.sin(ang) * d * -1 + Math.sin(ph + f * 9) * wob * f;
-    frames.push({ transform: `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) scale(${(0.35 + 0.75 * Math.min(1, f * 4)).toFixed(2)})`,
-      opacity: f < 0.08 ? f / 0.08 : f > 0.8 ? (1 - f) / 0.2 : 1 });
+    { duration: beat, iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
+  // Level or climbing, never diving. Most fly all the way off the left edge; some fly away into the city,
+  // shrinking with distance until they're specks, and only then fade.
+  const x0 = spot.getBoundingClientRect().left;
+  const ang = (rnd(160, 180) * Math.PI) / 180, away = Math.random() < 0.35;
+  const toEdge = (x0 + w + 20) / Math.abs(Math.cos(ang));
+  const dist = away ? rnd(140, Math.min(260, toEdge)) : toEdge;
+  const speed = rnd(70, 100);                             // px per second (half the old pace)
+  const dur = (dist / speed) * 1000;
+  const wob = rnd(5, 10), ph = rnd(0, 6.283), frames = [], N = 24;
+  for (let i = 0; i <= N; i++) {
+    const f = i / N, d = dist * f;
+    const px = Math.cos(ang) * d, py = -Math.sin(ang) * d - Math.abs(Math.sin(ph + f * 7)) * wob * f; // wobble only lifts
+    const grow = Math.min(1, 0.4 + f * 6);                // emerging from the portal
+    const sc = away ? grow * (1 - 0.85 * f) : grow;        // flying away into the city: shrinks to a speck
+    const op = f < 0.05 ? f / 0.05 : away && f > 0.85 ? (1 - f) / 0.15 : 1;
+    frames.push({ transform: `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) scale(${sc.toFixed(3)})`, opacity: op });
   }
   b.animate(frames, { duration: dur, easing: "linear", fill: "both" }).onfinish = () => b.remove();
 }
@@ -836,7 +864,7 @@ function loot(x, y, layer, forceLucky) {
     if (e.iron) {
       for (let k = 0; k < Math.min(9, 3 + Math.round(iron / 10)); k++) {
         const b2 = el(g, "gd-bit"), bx = dx * rnd(0.7, 1.3) + rnd(-12, 12), by = dy + rnd(-4, 4);
-        b2.animate(arc(bx, by, -rnd(40, 80), 12, rnd(-400, 400)), { duration: FLY * 0.85, delay: rnd(0, 120), easing: "linear", fill: "both" });
+        b2.animate(arc(bx, by, -rnd(40, 80), 12), { duration: FLY * 0.85, delay: rnd(0, 120), easing: "linear", fill: "both" });
         b2.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
       }
     } else {
@@ -856,11 +884,16 @@ function loot(x, y, layer, forceLucky) {
       }
       const node = el(g, "gd-item", "", spriteFor(it.art));
       // Centre items fly highest, outer ones lower and wider — the umbrella's ribs.
-      const peak = -(rnd(85, 120) - Math.abs(fan) * 35), end = rnd(-70, 70) + (Math.random() < 0.5 ? -360 : 360); // one tumble, lands at a slant
-      const fr = arc(dx, dy, peak, 18, end, 0, 0.4).map((f) => ({ ...f, offset: f.offset * 0.88 }));
-      fr.push({ transform: `translate(${dx}px, ${dy - 4}px) rotate(${end - 4}deg) scale(1)`, offset: 0.94 }); // a little bounce
-      fr.push({ transform: `translate(${dx}px, ${dy}px) rotate(${end}deg) scale(1)`, offset: 1 });
+      // A plain fountain: no spin, no bounce; the item keeps its slant and thuds down where it lands.
+      const peak = -(rnd(85, 120) - Math.abs(fan) * 35), lie = rnd(-40, 40);
+      const fr = arc(dx, dy, peak, 18).map((f) => ({ ...f, transform: f.transform.replace(/rotate\([^)]*\)/, `rotate(${lie.toFixed(0)}deg)`) }));
       node.animate(fr, { duration: FLY, delay, easing: "linear", fill: "both" });
+      for (let k = 0; k < 4; k++) { // a light puff of dust where it lands
+        const d = el(g, "gd-mote", `left:${dx}px;top:${dy + 6}px;background:#7d7468;width:3px;height:3px;opacity:0`);
+        const side = k < 2 ? -1 : 1;
+        d.animate([{ transform: "translate(0,0)", opacity: 0.6 }, { transform: `translate(${side * rnd(6, 14)}px, ${-rnd(1, 4)}px)`, opacity: 0 }],
+          { duration: rnd(300, 450), delay: delay + FLY, easing: "ease-out", fill: "both" });
+      }
       if (it.broken) node.animate([{ opacity: 1 }, { opacity: 0, filter: "blur(2px)" }], { duration: 700, delay: delay + FLY + 700, fill: "forwards" });
       else node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
       if (it.beam) beam(g, dx, dy, it.beam, delay + FLY - 80, life, y);
