@@ -1,3 +1,6 @@
 Item sprites (gd-*.png): frames of the loot sprites from Flare (https://github.com/flareteam/flare-game),
 art by the Flare team, CC-BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/).
 Cropped from the sprite sheets in mods/fantasycore/images/loot, some scaled down.
+
+City strips (gd-city-*.webp): the app owner's own painted Malmouth skyline, cut into rows and compressed.
+Raven (gd-raven.webp): drawn for this app (frames of a wingbeat, rendered from code), no third-party art.

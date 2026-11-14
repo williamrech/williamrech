@@ -1,9 +1,9 @@
 // ⚔️ Grim Dawn pack (occasion effect). Loaded only when the effect is on, so nobody else downloads it.
-// Background: ash falling and a few embers rising. Tapping empty background does one of:
-//  • a loot explosion: items fly out, land with their names in rarity colors, then vanish;
-// Tapping the empty background drops loot; riftgates open on their own in the back, above the ＋ button.
-// Item sprites are Flare's 3D-rendered loot art (CC-BY-SA, see img/CREDITS.txt); names come from the game's
-// Brazilian Portuguese community translation.
+// Behind the feed: Malmouth burning — three painted rows of the city with animated green fire between them,
+// a green-lit sky and distant lightning. In front: falling ash, green fire specks, loot dropped by tapping the
+// empty background, and riftgates that open in the ＋ button's place now and then (sometimes ravens fly out).
+// The UI is restyled like the game's. Item sprites are Flare's loot art (CC-BY-SA, see img/CREDITS.txt); item
+// names come from the game's Brazilian Portuguese community translation.
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -31,48 +31,35 @@ const CSS = `
 @keyframes gd-ash-glow { from { opacity: 1; } to { opacity: .55; } } /* the burning edge flickers (opacity only: cheap) */
 .gd-ember { position: absolute; bottom: -8px; border-radius: 50%; background: #c8ffe0; pointer-events: none;
   box-shadow: 0 0 4px 1px #46ff9a, 0 0 10px 2px rgba(70, 255, 154, .35); opacity: 0; will-change: transform, opacity; }
-@keyframes gd-ember-rise {
-  0% { transform: translate(0, 0); opacity: 0; }
-  10% { opacity: 1; } 30% { opacity: .55; } 45% { opacity: .95; } 70% { opacity: .5; }
-  100% { transform: translate(var(--sway), -70vh); opacity: 0; }
-}
 .gd-fx { position: absolute; pointer-events: none; }
 .gd-far { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
-.gd-far .gd-rift { mix-blend-mode: screen; opacity: .8; filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
 .gd-far canvas.gd-riftgl { position: absolute; pointer-events: none; mix-blend-mode: screen; }
-.gd-raven { position: absolute; left: 0; top: 0; display: block; pointer-events: none; z-index: 2;
-  filter: drop-shadow(0 0 1.5px rgba(170, 15, 15, .75)) drop-shadow(0 0 5px rgba(120, 0, 0, .45)); } /* a faint crimson aura, so they show on the dark */
-.gd-raven .w { transform-box: fill-box; transform-origin: 50% 100%; }
+.gd-raven { position: absolute; left: 0; top: 0; display: block; pointer-events: none; z-index: 2; overflow: hidden; }
+.gd-raven img { display: block; max-width: none; will-change: transform; }
 .gd-far .gd-soot { position: absolute; border-radius: 50%; pointer-events: none;
   background: radial-gradient(closest-side, rgba(0,0,0,.85) 35%, rgba(0,0,0,.5) 65%, transparent 100%); }
-.gd-portal { position: absolute; border-radius: 50%; overflow: hidden;
-  -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
-.gd-portal i { position: absolute; inset: -25%; border-radius: 50%; }
-.gd-portal .core { inset: 0; background: radial-gradient(closest-side, #000 0, rgba(0,0,0,.92) 28%, rgba(0,0,0,.35) 55%, transparent 75%); }
-.gd-rim { position: absolute; border-radius: 50%; }
 .gd-mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; }
 .gd-item { position: absolute; width: 0; height: 0; display: grid; place-items: center; will-change: transform; }
-.gd-item img { display: block; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .65)); }
+.gd-item img { display: block; }
 .gd-ground { position: absolute; width: 44px; height: 14px; border-radius: 50%; opacity: 0; }
-.gd-ground.pool { filter: blur(3px); mix-blend-mode: screen; }
-.gd-twinkle { position: absolute; width: 9px; height: 9px; margin: -4px 0 0 -4px; opacity: 0; filter: drop-shadow(0 0 3px currentColor); }
-.gd-twinkle svg { width: 100%; height: 100%; display: block; }
+.gd-twinkle { position: absolute; width: 11px; height: 11px; margin: -5px 0 0 -5px; opacity: 0;
+  background: radial-gradient(closest-side, #fff 0, currentColor 25%, transparent 70%),
+    linear-gradient(currentColor, currentColor) 50% 50% / 1.5px 100% no-repeat, linear-gradient(currentColor, currentColor) 50% 50% / 100% 1.5px no-repeat;
+  border-radius: 1px; }
 .gd-bit { position: absolute; width: 6px; height: 5px; margin: -3px 0 0 -3px; background: linear-gradient(135deg, #c9c9c4, #6d6d6a);
   border-radius: 30% 60% 40% 50%; box-shadow: 0 1px 1px rgba(0,0,0,.7); }
 .gd-label { position: absolute; transform: translateX(-50%); white-space: nowrap; font: 400 13.5px/1.2 "GD Fell", Georgia, "Times New Roman", serif;
   padding: 1px 7px 2px; color: var(--c); opacity: 0; letter-spacing: .02em; text-shadow: 0 1px 0 #000;
   background: color-mix(in srgb, var(--c) 9%, rgba(0, 0, 0, .72)); border: 0; }
 .gd-label .dia { font-style: normal; font-size: 9px; margin-right: 6px; vertical-align: 1px; text-shadow: 0 0 4px var(--c); }
-.gd-beam { position: absolute; transform-origin: 50% 100%; mix-blend-mode: screen;
-  -webkit-mask-image: linear-gradient(to top, #000 0, rgba(0,0,0,.6) 40%, transparent 100%); mask-image: linear-gradient(to top, #000 0, rgba(0,0,0,.6) 40%, transparent 100%); }
-.gd-glow { position: absolute; border-radius: 50%; }
+.gd-beam { position: absolute; transform-origin: 50% 100%; }
 .gd-flash { position: absolute; border-radius: 50%; }
 `;
 function ensureCss() {
   if (document.getElementById("gd-css")) return;
   const s = document.createElement("style");
   s.id = "gd-css";
-  s.textContent = CSS + RIFT_CSS;
+  s.textContent = CSS;
   document.head.appendChild(s);
 }
 
@@ -80,8 +67,9 @@ function ensureCss() {
 export function startAsh(layer, scale = 1) {
   ensureCss();
   ensureSkin();
+  warmSprites();
   const k = Math.max(scale, 0.5);
-  for (let i = 0; i < Math.round(38 * scale) + 4; i++) {
+  for (let i = 0; i < Math.round(28 * scale) + 4; i++) {
     const a = document.createElement("i");
     a.className = "gd-ash";
     // Charred flakes: dark grey to black, irregular (a ragged polygon); a rare one still burning red at the edge.
@@ -128,9 +116,9 @@ function ember(layer, k) {
 }
 
 // ---------- The look: a dark backdrop + the app restyled like the game's UI ----------
-// No painted scene (drawn cities looked cheap). Instead: near-black with grain, a vignette and a faint aether
-// glow from below; cards like item tooltips (bronze-rimmed, square), iron-plate buttons and tabs, an engraved
-// serif, rarity-colored titles (purple = for you, yellow = running, grey = ended), deadlines as draining bars.
+// A sky gradient for this effect only, faint grain and a vignette; cards like item tooltips (bronze-rimmed,
+// square), iron-plate buttons and tabs, an engraved serif, rarity-colored titles (purple = for you,
+// yellow = running, grey = ended), deadlines as draining bars.
 const FONT = (f) => new URL(`fonts/${f}`, import.meta.url).href;
 const GRAIN = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .9 0"/></filter><rect width="180" height="180" filter="url(#n)"/></svg>`);
 const SKIN_CSS = () => `
@@ -145,12 +133,8 @@ const SKIN_CSS = () => `
   radial-gradient(90% 70% at 50% 40%, transparent 40%, rgba(0, 0, 0, .55) 100%);
   animation: gd-breathe 7s ease-in-out infinite; will-change: opacity; }
 @keyframes gd-breathe { 0%, 100% { opacity: .8; } 50% { opacity: 1; } }
-.gd-backdrop .grain { position: absolute; inset: 0; background-image: url("${GRAIN}"); background-size: 180px; opacity: .07; mix-blend-mode: overlay; }
-.gd-backdrop .mist { position: absolute; left: -30%; right: -30%; bottom: -10%; height: 45%; filter: blur(30px); opacity: .22; will-change: transform;
-  background: radial-gradient(40% 50% at 30% 60%, color-mix(in srgb, #46ff9a 30%, var(--bg)), transparent 70%), radial-gradient(35% 45% at 75% 70%, color-mix(in srgb, #46ff9a 22%, var(--bg)), transparent 70%);
-  animation: gd-mist 38s ease-in-out infinite alternate; }
-@keyframes gd-mist { from { transform: translateX(-4%); } to { transform: translateX(4%); } }
-@media (prefers-reduced-motion: reduce) { .gd-backdrop .glow, .gd-backdrop .mist { animation: none; } }
+.gd-backdrop .grain { position: absolute; inset: 0; background-image: url("${GRAIN}"); background-size: 180px; opacity: .05; }
+@media (prefers-reduced-motion: reduce) { .gd-backdrop .glow { animation: none; } }
 
 body.gd-skin #decor { display: none; } /* theme drawings (coffee beans…) don't belong here */
 body.gd-skin #banner { text-wrap: balance; }
@@ -268,12 +252,9 @@ function sepiaEmoji() {
     .observe(document.body, { attributes: true, attributeFilter: ["class"] });
 }
 // ---------- The bottom of the screen: Malmouth burning ----------
-// The skyline rows (below), the app's fog engine tinted for rolling smoke, and aether lightning far away.
+// The skyline rows with green fire burning between them (below), and aether lightning far away.
 const BOTTOM_CSS = `
 .gd-storm { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(90% 55% at 62% 0, rgba(150, 255, 205, .55), transparent 70%); }
-body.gd-skin .fog-strip { filter: blur(14px); }
-body.gd-skin .fog-strip path { fill: color-mix(in srgb, #3fe08c 20%, #0b0f0d); }
-body.gd-skin .haunt-fog { opacity: .25 !important; }
 `;
 // ---------- Malmouth skyline ----------
 // The user's own painted strips, three of each: cathedral (back), residential (middle), industrial (front).
@@ -287,7 +268,7 @@ const CITY_CSS = `
 .gd-city .row img.lit { opacity: 0; filter: brightness(2.2) saturate(1.1); will-change: opacity; }
 .gd-city .seam { position: absolute; left: 0; width: 100%; mix-blend-mode: screen; }
 .gd-city .seam.still { background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(80, 255, 170, .35), rgba(40, 200, 130, .14) 45%, transparent 75%); }
-.gd-city .sky { position: absolute; left: -20%; right: -20%; bottom: 14vh; height: 52vh; mix-blend-mode: screen;
+.gd-city .sky { position: absolute; left: -20%; right: -20%; bottom: 14vh; height: 52vh;
   background: radial-gradient(ellipse 55% 60% at 50% 70%, rgba(60, 220, 150, .26), rgba(30, 150, 100, .1) 55%, transparent 80%); }
 .gd-city .floor { position: absolute; left: 0; right: 0; bottom: 0; height: 9vh; background: linear-gradient(to top, rgba(6, 12, 10, .85), transparent); }
 `;
@@ -348,8 +329,8 @@ function startCity(layer) {
 }
 
 // Green fire burning between the rows: flames flickering up, now and then a flash of light, something bursting,
-// or a distant lamp that sputters and goes out. One small GPU shader renders both bands at low resolution
-// (fire is soft anyway) and they're copied onto their canvases, ~30 frames a second, paused when hidden.
+// or a distant lamp that sputters and goes out. A small GPU shader draws each band straight into its own canvas
+// at low resolution (fire is soft anyway), ~24 frames a second, paused when hidden and for a moment on each touch.
 const FIRE_FS = `precision mediump float;
 uniform vec2 res; uniform float t, seed, aspect, flash, bx, bage, lx, ly, lamp;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -460,7 +441,7 @@ function seamFire(bands, w, bh) {
   return true;
 }
 
-export function startScene(layer, helpers = {}) {
+export function startScene(layer) {
   ensureSkin();
   if (!document.getElementById("gd-bottom-css")) {
     const st = document.createElement("style"); st.id = "gd-bottom-css"; st.textContent = BOTTOM_CSS; document.head.appendChild(st);
@@ -468,8 +449,6 @@ export function startScene(layer, helpers = {}) {
   layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="tint"></div><div class="glow"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
   const storm = layer.querySelector(".gd-storm");
   startCity(layer);
-  // (The app's rolling fog strips used to be added here; their theme-colored glow read as reddish Halloween
-  // clouds over the factories, so the city only has its own green fire now.)
   // Aether lightning, far off: a double flash every so often.
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     const strike = () => {
@@ -486,7 +465,7 @@ export function grimTap(x, y, layer, force) { // every tap drops loot; force (te
   ensureCss();
   // Every tap drops loot. If too many piles are lying around, the oldest one fades out early to make room.
   const piles = [...layer.querySelectorAll(":scope > .gd-fx:not(.gd-going)")];
-  if (piles.length >= 4) {
+  if (piles.length >= 3) {
     const old = piles[0]; old.classList.add("gd-going");
     old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: "forwards" }).onfinish = () => old.remove();
   }
@@ -508,10 +487,9 @@ export function startRifts(layer) {
     const shown = r && r.width > 0 && fab.contains(document.elementFromPoint(cx, cy));
     if (!document.hidden && !spot.firstChild && shown) {
       const x = Math.random(), kind = x < 0.4 ? "purple" : x < 0.7 ? "green" : "red";
-      spot.style.setProperty("--glow", { purple: "rgba(155, 61, 240, .75)", green: "rgba(60, 240, 150, .7)", red: "rgba(190, 40, 20, .7)" }[kind]);
       spot.style.left = `${cx}px`; spot.style.top = `${cy}px`; // exactly over the ＋
       const hold = rnd(5000, 10000), total = RIFT_OPEN + hold + RIFT_CLOSE;
-      rift(spot, kind, hold);
+      if (!rift(spot, kind, hold)) { setTimeout(open, rnd(20000, 40000)); return; }
       if (Math.random() < 0.45) { // sometimes a chaos raven (or two) bursts out and flees
         const k = Math.random() < 0.25 ? 2 : 1;
         for (let i = 0; i < k; i++) setTimeout(() => raven(spot), RIFT_OPEN + rnd(300, hold * 0.6) + i * rnd(150, 500));
@@ -536,114 +514,22 @@ function box(layer, x, y) {
   return g;
 }
 const el = (parent, cls, css, html) => {
-  const n = document.createElement(cls === "svg" ? "div" : "i");
-  if (cls !== "svg") n.className = cls;
+  const n = document.createElement("i");
+  n.className = cls;
   if (css) n.style.cssText = css;
   if (html) n.innerHTML = html;
   parent.appendChild(n);
   return n;
 };
 
-// Riftgates as they sit in the game: a flat ellipse on the ground seen in perspective, a wide sooty halo
-// smudging the ground around it, and a vortex of light swirling in the middle. All light and blur, no outlines.
-const RIFT_CSS = `
-.gd-rift { position: absolute; left: 0; top: 0; pointer-events: none; }
-.gd-rift .salt { position: absolute; border-radius: 50%; transform: scaleY(.32); border-style: dotted; filter: blur(.5px); }
-.gd-rift .pit { position: absolute; border-radius: 50%; transform: scaleY(.32); filter: blur(6px); }
-.gd-rift .body { position: absolute; border-radius: 50%; transform-origin: 50% 100%;
-  -webkit-mask-image: radial-gradient(closest-side, #000 54%, rgba(0,0,0,.45) 78%, transparent 100%);
-  mask-image: radial-gradient(closest-side, #000 54%, rgba(0,0,0,.45) 78%, transparent 100%); }
-.gd-rift .body i { position: absolute; inset: -18%; border-radius: 50%; display: block; }
-.gd-rift .swirl { will-change: transform; animation: gd-spin 2.6s linear infinite; filter: blur(2px); }
-.gd-rift .swirl.slow { animation-duration: 5.4s; animation-direction: reverse; filter: blur(5px); }
-.gd-rift .hole { inset: 26%; filter: blur(3px); }
-.gd-rift .hot { inset: 26%; filter: blur(6px); mix-blend-mode: screen; animation: gd-hot 1.9s ease-in-out infinite alternate; }
-.gd-rift .rim { position: absolute; border-radius: 50%; filter: blur(3px); transform-origin: 50% 100%; }
-@keyframes gd-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
-@keyframes gd-hot { from { opacity: .5; } to { opacity: 1; } }
-.gd-spark { position: absolute; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; }
-`;
-function riftColors(kind) {
-  if (kind === "purple") return { hot: "#e7c2ff", mid: "#9b3df0", dim: "#3d0a72", rim: "rgba(214, 160, 255, .8)", spark: "#ffd27a" };
-  if (kind === "green") return { hot: "#b6ffe4", mid: "#19c79a", dim: "#06352c", rim: "rgba(150, 255, 200, .8)", spark: "" };
-  return { hot: "#ff7a42", mid: "#c4240f", dim: "#450904", rim: "rgba(255, 120, 70, .75)", spark: "" }; // the small chthonic tear
-}
-// An upright oval of swirling light standing on the ground; a riftgate also has a ring of salt poured flat
-// around its foot. The layer's own point is where it meets the ground. Opens, holds, closes.
+// Opens a riftgate (purple, red or green) at the layer's point. Returns false if the phone can't draw it
+// (no WebGL), so the caller leaves the ＋ alone.
 export function rift(layer, kind, hold = 3400) {
-  if (riftGL(layer, kind, hold)) return;
-  const c = riftColors(kind), red = kind === "red";
-  const W = red ? rnd(22, 30) : rnd(74, 92);          // width of the oval
-  const H = red ? W * rnd(3.4, 4.1) : W * 1.5;        // upright: taller than wide
-  const g = document.createElement("div");
-  g.className = "gd-rift gd-fx";
-  layer.appendChild(g);
-  const add = (cls, css, html = "") => {
-    const n = document.createElement(cls === "salt" || cls === "pit" || cls === "rim" ? "div" : "div");
-    n.className = cls; n.style.cssText = css; n.innerHTML = html; g.appendChild(n); return n;
-  };
-  // The ground: a scorched smudge, and for a riftgate the ring of salt around the foot.
-  const sw = W * 2.1;
-  const pit = add("pit", `left:${-sw / 2}px;top:${-sw / 2}px;width:${sw}px;height:${sw}px;background:radial-gradient(closest-side, rgba(0,0,0,.85) 30%, rgba(0,0,0,.45) 60%, transparent 85%)`);
-  let salt = null;
-  if (!red) {
-    const rw = W * 1.9;
-    salt = add("salt", `left:${-rw / 2}px;top:${-rw / 2}px;width:${rw}px;height:${rw}px;border-width:${Math.max(2.5, W * 0.045)}px;border-color:rgba(238, 232, 214, .9);opacity:0`);
-  }
-  // The oval of light, standing on that point.
-  const body = add("body", `left:${-W / 2}px;top:${-H * 0.9}px;width:${W}px;height:${H}px`);
-  const arms = (n) => {
-    let st = "";
-    for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * 100;
-      st += `, transparent ${a0}%, ${c.dim} ${a0 + 2}%, ${c.mid} ${a0 + 6}%, ${c.hot} ${a0 + 9}%, ${c.mid} ${a0 + 13}%, ${c.dim} ${a0 + 18}%, transparent ${a0 + 24}%`;
-    }
-    return `conic-gradient(from 0deg${st})`;
-  };
-  const inner = (cls, css) => { const n = document.createElement("i"); n.className = cls; n.style.cssText = css; body.appendChild(n); };
-  inner("swirl slow", `background:${arms(2)};opacity:.55`);
-  inner("swirl", `background:${arms(3)};opacity:.95`);
-  inner("hole", `background:radial-gradient(closest-side, #000 38%, rgba(0,0,0,.62) 64%, transparent 90%);opacity:.6`);
-  inner("hot", `background:radial-gradient(closest-side, ${c.hot}, color-mix(in srgb, ${c.mid} 60%, transparent) 45%, transparent 75%)`);
-  const rim = add("rim", `left:${-W / 2}px;top:${-H * 0.9}px;width:${W}px;height:${H}px;border:1px solid ${c.rim};box-shadow:0 0 14px 3px ${c.rim}, inset 0 0 18px 4px ${c.rim};opacity:${red ? 0.4 : 0.5}`);
-  // Gold motes drifting off a riftgate.
-  if (c.spark) for (let i = 0; i < 9; i++) {
-    const sp = document.createElement("i");
-    sp.className = "gd-spark";
-    sp.style.cssText = `background:${c.spark};box-shadow:0 0 5px 1px ${c.spark};opacity:0`;
-    g.appendChild(sp);
-    const ang = rnd(0, 6.283), r0 = W * rnd(0.3, 0.7);
-    sp.animate([
-      { transform: `translate(${Math.cos(ang) * r0}px, ${-H * 0.45 + Math.sin(ang) * r0}px)`, opacity: 0 },
-      { opacity: 1, offset: 0.25 },
-      { transform: `translate(${Math.cos(ang) * r0 * 1.4}px, ${-H * 0.45 + Math.sin(ang) * r0 - rnd(20, 50)}px)`, opacity: 0 },
-    ], { duration: rnd(1600, 2600), delay: 500 + rnd(0, hold), easing: "ease-out", fill: "both" });
-  }
-  // Open: the salt is poured, the oval grows up out of the ground. Then it holds, then it shuts.
-  const OPEN_MS = 650, CLOSE_MS = 700, TOTAL = OPEN_MS + hold + CLOSE_MS;
-  const t1 = OPEN_MS / TOTAL, t2 = (OPEN_MS + hold) / TOTAL;
-  for (const n of [body, rim]) {
-    n.animate([
-      { transform: "scale(.1, .02)", opacity: 0 },
-      { transform: "scale(1.05, 1.03)", opacity: 1, offset: t1 * 0.8 },
-      { transform: "scale(1)", opacity: 1, offset: t1 },
-      { transform: "scale(1)", opacity: 1, offset: t2 },
-      { transform: "scale(.06, .02)", opacity: 0 },
-    ], { duration: TOTAL, easing: "ease-in-out", fill: "both" });
-  }
-  pit.animate([{ opacity: 0 }, { opacity: 1, offset: t1 }, { opacity: 1, offset: t2 }, { opacity: 0 }], { duration: TOTAL, fill: "both" });
-  if (salt) salt.animate([
-    { opacity: 0, transform: "scaleY(.32) scale(.5)" },
-    { opacity: .85, transform: "scaleY(.32) scale(1)", offset: t1 },
-    { opacity: .85, offset: t2 },
-    { opacity: 0 },
-  ], { duration: TOTAL, easing: "ease-out", fill: "both" });
-  setTimeout(() => g.remove(), TOTAL + 200);
+  return riftGL(layer, kind, hold);
 }
 
-// The riftgate as the game draws it: a narrow upright tear of smoky light, swirling around a hot magenta
-// core, ragged dark edges, standing on a scorched patch with gold motes. Drawn by a small GPU shader
-// (pure light, no outlines). Returns false where WebGL isn't available, and the CSS version runs instead.
+// The riftgate: a round swirl of smoky light the size of the ＋, hot core, ragged rim with flames licking out,
+// glimmers orbiting outside. Drawn by a small GPU shader (pure light, no outlines), screen-blended.
 const RIFT_FS = `precision highp float;
 uniform vec2 res; uniform float t, o, fade; uniform vec3 cHot, cMid, cDim; uniform vec2 sz; uniform float foot, gold, dpr, fire; uniform vec3 cSpeck;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -692,38 +578,40 @@ void main(){
   gl_FragColor = vec4(min(col, vec3(a)), a);
 }`;
 const RIFT_OPEN = 700, RIFT_CLOSE = 650;
-// A small chaos raven: a dark silhouette with a red glow and a red eye, wings beating, flying out of the
-// portal and away to the left (up or a little down), wobbling, then gone. At most a third of the portal wide.
-const RAVEN = `<svg viewBox="0 0 24 14" width="100%" height="100%"><g fill="#0a0707">
-<path class="w" d="M11 7 C8 2 4 0 0.5 1.5 C4 2.5 6.5 5 9 8 Z"/><path class="w" d="M13 7 C15 2.5 19 0.5 23 1 C19.5 2.5 16.5 5 14 8 Z"/>
-<path d="M3.5 7.2 L1 8 L3.8 8.4 C5 10 9 10.5 13 9.6 L18 11.5 L16.8 9.2 C15 7.6 12 6.8 8 6.9 C6 6.9 4.8 6.8 3.5 7.2 Z"/>
-<circle cx="4.6" cy="7.6" r="1.3" fill="#ff2a14" opacity=".35" stroke="none"/><circle cx="4.6" cy="7.6" r=".6" fill="#ff4a24" stroke="none"/></g></svg>`;
+// Chaos ravens: a pre-rendered sprite sheet (web/img/gd-raven.webp, 21 frames of 150×231 px, drawn for this app):
+// frames 0–15 one wingbeat, 16 the glide pose, 17–18 easing into the glide, 19–20 back out of it. Black, a faint
+// crimson rim and a red eye are baked in. The frame shown is stepped by moving the strip inside a clipping box.
+const RAVEN_FRAMES = 21, RAVEN_ASPECT = 231 / 150;
+const RAVEN_SEQ = (() => { const s = []; for (let r = 0; r < 3; r++) for (let i = 0; i < 16; i++) s.push(i);
+  s.push(17, 18); for (let i = 0; i < 10; i++) s.push(16); s.push(19, 20); return s; })(); // flap, flap, flap, glide
 export function raven(spot) {
   if (!spot.isConnected || document.hidden) return;
+  const fabEl = document.getElementById("fab"), P = (fabEl && fabEl.offsetWidth) || 56;
+  const w = P * rnd(0.8, 0.9), h = w * RAVEN_ASPECT;      // nearly the portal's width, never wider
   const b = document.createElement("i");
   b.className = "gd-raven";
-  const fabEl = document.getElementById("fab"), P = (fabEl && fabEl.offsetWidth) || 56;
-  const w = P * rnd(0.8, 0.9);                          // nearly the portal's size, never bigger
-  b.style.cssText = `width:${w}px;height:${w * 0.58}px;margin:${-w * 0.29}px 0 0 ${-w / 2}px`;
-  b.innerHTML = RAVEN;
+  b.style.cssText = `width:${w}px;height:${h}px;margin:${-h / 2}px 0 0 ${-w / 2}px`;
+  const strip = new Image();
+  strip.src = new URL("img/gd-raven.webp", import.meta.url).href; strip.alt = "";
+  strip.style.cssText = `width:${w * RAVEN_FRAMES}px;height:${h}px`;
+  b.appendChild(strip);
   spot.appendChild(b);
-  const beat = rnd(150, 200);
-  b.querySelectorAll(".w").forEach((wg) => wg.animate([{ transform: "scaleY(1)" }, { transform: "scaleY(-.7)" }],
-    { duration: beat, iterations: Infinity, direction: "alternate", easing: "ease-in-out" }));
+  // Step through the wingbeat (45 ms a frame); each hold is a hard cut, so it reads as frames, not a slide.
+  const start = Math.floor(rnd(0, 16)), seq = RAVEN_SEQ.slice(start).concat(RAVEN_SEQ.slice(0, start));
+  strip.animate(seq.map((f, k) => ({ transform: `translateX(${-f * w}px)`, offset: k / seq.length, easing: "steps(1, end)" }))
+    .concat([{ transform: `translateX(${-seq[0] * w}px)`, offset: 1 }]), { duration: seq.length * 45, iterations: Infinity });
   // Level or climbing, never diving. Most fly all the way off the left edge; some fly away into the city,
   // shrinking with distance until they're specks, and only then fade.
   const x0 = spot.getBoundingClientRect().left;
   const ang = (rnd(160, 180) * Math.PI) / 180, away = Math.random() < 0.35;
   const toEdge = (x0 + w + 20) / Math.abs(Math.cos(ang));
   const dist = away ? rnd(140, Math.min(260, toEdge)) : toEdge;
-  const speed = rnd(70, 100);                             // px per second (half the old pace)
-  const dur = (dist / speed) * 1000;
+  const dur = (dist / rnd(70, 100)) * 1000;
   const wob = rnd(5, 10), ph = rnd(0, 6.283), frames = [], N = 24;
   for (let i = 0; i <= N; i++) {
     const f = i / N, d = dist * f;
-    const px = Math.cos(ang) * d, py = -Math.sin(ang) * d - Math.abs(Math.sin(ph + f * 7)) * wob * f; // wobble only lifts
-    const grow = Math.min(1, 0.4 + f * 6);                // emerging from the portal
-    const sc = away ? grow * (1 - 0.85 * f) : grow;        // flying away into the city: shrinks to a speck
+    const px = Math.cos(ang) * d, py = -Math.sin(ang) * d - Math.abs(Math.sin(ph + f * 7)) * wob * f;
+    const grow = Math.min(1, 0.4 + f * 6), sc = away ? grow * (1 - 0.85 * f) : grow;
     const op = f < 0.05 ? f / 0.05 : away && f > 0.85 ? (1 - f) / 0.15 : 1;
     frames.push({ transform: `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) scale(${sc.toFixed(3)})`, opacity: op });
   }
@@ -860,7 +748,7 @@ function loot(x, y, layer, forceLucky) {
 
   // Burst at the tap: a puff of dust and a flash of iron.
   flash(g, 70, "rgba(255, 200, 140, .35)", 0);
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 5; i++) {
     const d = el(g, "gd-mote", "background:#9b8f80;width:4px;height:4px;opacity:0");
     const a = rnd(0, Math.PI * 2), r = rnd(14, 34);
     d.animate([{ transform: "translate(0,0)", opacity: 0.8 }, { transform: `translate(${Math.cos(a) * r}px, ${Math.sin(a) * r * 0.5 - 6}px)`, opacity: 0 }],
@@ -888,6 +776,7 @@ function loot(x, y, layer, forceLucky) {
     return fr;
   };
   const FLY = 720, life = items.some((it) => it.beam === "legendary") ? 6000 : items.some((it) => it.beam) ? 5000 : 3800;
+  const plates = [];
   entries.forEach((e, i) => {
     const { it } = e, delay = i * 45;
     // Where it lands (relative to the tap).
@@ -895,7 +784,7 @@ function loot(x, y, layer, forceLucky) {
     const dx = Math.max(26 - x, Math.min(W - 26 - x, fan * 110 + rnd(-14, 14))), dy = pileY - y + rnd(-14, 14) + Math.abs(fan) * 10;
     const glowCol = it.col && it.col !== COLOR.common && it.col !== COLOR.broken && it.col !== COLOR.iron ? it.col : null;
     if (e.iron) {
-      for (let k = 0; k < Math.min(9, 3 + Math.round(iron / 10)); k++) {
+      for (let k = 0; k < Math.min(6, 2 + Math.round(iron / 15)); k++) {
         const b2 = el(g, "gd-bit"), bx = dx * rnd(0.7, 1.3) + rnd(-12, 12), by = dy + rnd(-4, 4);
         b2.animate(arc(bx, by, -rnd(40, 80), 12), { duration: FLY * 0.85, delay: rnd(0, 120), easing: "linear", fill: "both" });
         b2.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
@@ -909,8 +798,8 @@ function loot(x, y, layer, forceLucky) {
         const pool = el(g, "gd-ground pool", `left:${dx - 30}px;top:${dy - 10}px;width:60px;height:26px;background:radial-gradient(closest-side, ${glowCol}, transparent);`);
         pool.animate([{ opacity: 0 }, { opacity: it.beam ? 0.6 : 0.3 }], { duration: 250, delay: delay + FLY * 0.85, fill: "both" });
         pool.animate([{ opacity: it.beam ? 0.6 : 0.3 }, { opacity: 0 }], { duration: 400, delay: life - 450, fill: "forwards" });
-        for (let k = 0; k < (it.beam ? 6 : 3); k++) { // sparkles twinkling on the item
-          const sp = el(g, "gd-twinkle", `left:${dx + rnd(-16, 16)}px;top:${dy + rnd(-12, 8)}px;color:${glowCol}`, TWINKLE);
+        for (let k = 0; k < (it.beam ? 3 : 1); k++) { // sparkles twinkling on the item
+          const sp = el(g, "gd-twinkle", `left:${dx + rnd(-16, 16)}px;top:${dy + rnd(-12, 8)}px;color:${glowCol}`);
           sp.animate([{ transform: "scale(0) rotate(0deg)", opacity: 0 }, { transform: "scale(1) rotate(40deg)", opacity: 1 }, { transform: "scale(0) rotate(90deg)", opacity: 0 }],
             { duration: rnd(700, 1200), delay: delay + FLY + rnd(0, 900), iterations: Math.max(1, Math.floor((life - FLY - 1200) / 1000)), easing: "ease-in-out", fill: "both" });
         }
@@ -921,9 +810,9 @@ function loot(x, y, layer, forceLucky) {
       const peak = -(rnd(85, 120) - Math.abs(fan) * 35), lie = rnd(-40, 40);
       const fr = arc(dx, dy, peak, 18).map((f) => ({ ...f, transform: f.transform.replace(/rotate\([^)]*\)/, `rotate(${lie.toFixed(0)}deg)`) }));
       node.animate(fr, { duration: FLY, delay, easing: "linear", fill: "both" });
-      for (let k = 0; k < 4; k++) { // a light puff of dust where it lands
+      for (let k = 0; k < 2; k++) { // a light puff of dust where it lands
         const d = el(g, "gd-mote", `left:${dx}px;top:${dy + 6}px;background:#7d7468;width:3px;height:3px;opacity:0`);
-        const side = k < 2 ? -1 : 1;
+        const side = k ? 1 : -1;
         d.animate([{ transform: "translate(0,0)", opacity: 0.6 }, { transform: `translate(${side * rnd(6, 14)}px, ${-rnd(1, 4)}px)`, opacity: 0 }],
           { duration: rnd(300, 450), delay: delay + FLY, easing: "ease-out", fill: "both" });
       }
@@ -935,7 +824,12 @@ function loot(x, y, layer, forceLucky) {
     const t = el(g, "gd-label", `--c:${it.col};visibility:hidden`);
     if (it.col === COLOR.rare && Math.random() < 0.45) t.insertAdjacentHTML("beforeend", `<i class="dia">◆</i>`);
     t.appendChild(document.createTextNode(it.name));
-    const w = t.offsetWidth;
+    plates.push({ t, i, delay, it });
+  });
+  // Measure all the plates in one go (one layout), then place and show them.
+  const widths = plates.map((pl) => pl.t.offsetWidth);
+  plates.forEach(({ t, i, delay, it }, k) => {
+    const w = widths[k];
     const lx = Math.max(w / 2 + 6 - x, Math.min(W - w / 2 - 6 - x, rnd(-34, 34)));
     t.style.left = `${lx}px`; t.style.top = `${baseY - i * ROW - y}px`; t.style.visibility = "";
     const show = delay + FLY - 150, end = it.broken ? show + 1450 : life;
@@ -962,12 +856,21 @@ const SPRITE_FOR = {
   scepter: ["rod", "wand", "staff"], scroll: ["scroll", "book"], crystal: ["crystal", "gem", "pouch", "potion"],
 };
 const SPRITE_URL = (n) => new URL(`img/gd-${n}.png`, import.meta.url).href;
+// Decode every item picture ahead of time, while the phone is idle, so the first drop doesn't hitch.
+let spritesWarm = false;
+function warmSprites() {
+  if (spritesWarm) return; spritesWarm = true;
+  const names = Object.keys(SPR), idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+  const next = () => { const n = names.shift(); if (!n) return;
+    const im = new Image(); im.src = n === "__raven" ? new URL("img/gd-raven.webp", import.meta.url).href : SPRITE_URL(n); (im.decode ? im.decode() : Promise.resolve()).catch(() => {}).finally(() => idle(next)); };
+  names.push("__raven");
+  idle(next);
+}
 function spriteFor(art) {
   const n = pick(SPRITE_FOR[art] || SPRITE_FOR.sword), [w, h] = SPR[n];
   const big = Math.max(w, h), disp = Math.max(22, Math.min(45, big * 0.55)), k = disp / big;
   return `<img src="${SPRITE_URL(n)}" alt="" width="${Math.round(w * k)}" height="${Math.round(h * k)}">`;
 }
-const TWINKLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C12.6 8.5 15.5 11.4 24 12C15.5 12.6 12.6 15.5 12 24C11.4 15.5 8.5 12.6 0 12C8.5 11.4 11.4 8.5 12 0Z" fill="currentColor"/></svg>`;
 
 // A pillar of light over an epic (blue) or legendary (purple): thin bright core, wide soft halo, up past the top of the screen.
 function beam(g, x, y, kind, delay, life, tapY) {
@@ -975,14 +878,15 @@ function beam(g, x, y, kind, delay, life, tapY) {
   const col = leg ? "170, 80, 255" : "70, 130, 255";
   const H = Math.max(260, tapY + y + 40);
   const end = life - delay;
-  const mk = (w, bg, blur, op) => {
-    const b = el(g, "gd-beam", `left:${x}px;top:${y - H}px;height:${H}px;width:${w}px;margin-left:${-w / 2}px;background:${bg};filter:blur(${blur}px);opacity:0`);
+  // One radial gradient anchored at the foot fades the pillar both sideways and upward (no mask, blur or blend).
+  const mk = (w, bg, op) => {
+    const b = el(g, "gd-beam", `left:${x}px;top:${y - H}px;height:${H}px;width:${w}px;margin-left:${-w / 2}px;background:${bg};opacity:0`);
     b.animate([{ opacity: 0, transform: "scaleY(.05)" }, { opacity: op, transform: "scaleY(1)", offset: 0.07 }, { opacity: op * 0.8, offset: 0.5 }, { opacity: op, offset: 0.8 }, { opacity: 0, transform: "scaleY(1)" }],
       { duration: end, delay, fill: "both" });
   };
-  mk(leg ? 46 : 36, `linear-gradient(90deg, transparent, rgba(${col}, .5), transparent)`, 6, 0.55);
-  mk(leg ? 12 : 9, `linear-gradient(90deg, transparent, rgba(${col}, .95) 35%, rgba(235,240,255,.95) 50%, rgba(${col}, .95) 65%, transparent)`, 1.2, 0.9);
-  if (leg) for (let i = 0; i < 14; i++) {
+  mk(leg ? 56 : 44, `radial-gradient(ellipse 50% 100% at 50% 100%, rgba(${col}, .45) 0, rgba(${col}, .22) 45%, transparent 100%)`, 0.6);
+  mk(leg ? 12 : 9, `radial-gradient(ellipse 50% 100% at 50% 100%, rgba(240, 244, 255, .95) 0, rgba(${col}, .85) 30%, rgba(${col}, .35) 65%, transparent 100%)`, 0.9);
+  if (leg) for (let i = 0; i < 8; i++) {
     const s2 = el(g, "gd-mote", `left:${x + rnd(-12, 12)}px;top:${y}px;background:#f1dcff;box-shadow:0 0 5px 1px rgba(${col}, .9);opacity:0`);
     s2.animate([{ transform: "translate(0,0)", opacity: 0 }, { opacity: 1, offset: 0.2 }, { transform: `translate(${rnd(-16, 16)}px, ${-rnd(80, 240)}px)`, opacity: 0 }],
       { duration: rnd(1200, 2200), delay: delay + rnd(0, Math.max(200, end - 2200)), easing: "ease-out", fill: "both" });

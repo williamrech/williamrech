@@ -434,8 +434,8 @@ function spawnEffect(layer, kind, scale = 1) {
     startFog(layer, scale, still);
     if (kind === "haunted-bg") return;
   }
-  if (kind === "grimdawn-bg") { // ruins on the horizon, behind the feed (still, with a tiny scroll parallax)
-    loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn-bg") m.startScene(layer, { fog: () => startFog(layer, 1, still) }); }).catch((e) => console.warn("grimdawn", e));
+  if (kind === "grimdawn-bg") { // the burning city behind the feed
+    loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn-bg") m.startScene(layer); }).catch((e) => console.warn("grimdawn", e));
     return;
   }
   if (kind === "grimdawn") { // ash + embers (taps are handled below, with the eye)
@@ -745,14 +745,14 @@ function startFog(layer, scale, still) {
 let fogTouchX = null;
 addEventListener("touchstart", (e) => { fogTouchX = e.touches[0] ? e.touches[0].clientX : null; }, { passive: true });
 addEventListener("touchmove", (e) => {
-  if ((effectKey !== "haunted" && effectKey !== "grimdawn") || fogTouchX === null || !e.touches[0]) return;
+  if (effectKey !== "haunted" || fogTouchX === null || !e.touches[0]) return;
   const x = e.touches[0].clientX;
   fogPush.vx = Math.max(-700, Math.min(700, fogPush.vx + (x - fogTouchX) * 9));
   fogTouchX = x;
 }, { passive: true });
 let fogLastY = scrollY;
 addEventListener("scroll", () => {
-  if (effectKey === "haunted" || effectKey === "grimdawn") fogPush.swell = Math.min(0.8, fogPush.swell + Math.abs(scrollY - fogLastY) / 400);
+  if (effectKey === "haunted") fogPush.swell = Math.min(0.8, fogPush.swell + Math.abs(scrollY - fogLastY) / 400);
   fogLastY = scrollY;
 }, { passive: true });
 
@@ -775,7 +775,7 @@ document.addEventListener("click", (e) => {
   if ((effectKey !== "haunted" && effectKey !== "grimdawn") || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (tapWasClosing || !(e.target instanceof Element) || tapDoesSomething(e.target)) return;
   if (document.querySelector("dialog[open]")) return;
-  if (effectKey === "grimdawn") { // ⚔️ loot explosion or a rift (see grimdawn.js)
+  if (effectKey === "grimdawn") { // ⚔️ a loot drop (see grimdawn.js)
     const x = e.clientX, y = e.clientY;
     loadGrimDawn().then((m) => { if (effectKey === "grimdawn") m.grimTap(x, y, document.getElementById("fx")); }).catch((err) => console.warn("grimdawn", err));
     return;
