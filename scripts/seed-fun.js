@@ -225,6 +225,19 @@ const ref = getFirestore().doc("config/fun");
       for (const k of Object.keys(update)) if (k.startsWith("palettes.") && !(cur.palettes || {})[k.slice(9)] || /^occasions\.[^.]+\.(tema|palette|own)$/.test(k)) delete update[k];
     } else update.configVersion = 16;
   }
+  // configVersion 17: one birthday tema for everyone — Mamãe's birthday uses "Aniver" too; "Aniver mama" is deleted.
+  if ((Number(cur.configVersion) || 0) < 17 && Number(update.configVersion || cur.configVersion) >= 16) {
+    const pals = cur.palettes || {}, occs = cur.occasions || {};
+    if (pals["festa-aniver-william"]) {
+      for (const [id, o] of Object.entries(occs)) if (o && (o.tema === "festa-aniver-mama" || o.palette === "festa-aniver-mama")) {
+        update[`occasions.${id}.tema`] = "festa-aniver-william";
+        update[`occasions.${id}.palette`] = "festa-aniver-william";
+        console.log(`step 5: ${id} → tema "festa-aniver-william"`);
+      }
+      if (pals["festa-aniver-mama"]) update["palettes.festa-aniver-mama"] = FieldValue.delete();
+    }
+    update.configVersion = 17;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

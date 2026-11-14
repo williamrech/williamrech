@@ -1145,49 +1145,6 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .round-corner { display: flex; align-items: center; gap: 2px; }
 .round-age { border: 0; background: none; padding: 2px 4px; min-height: 0; font-size: 0.72rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-/* ---------- Assombrado ---------- */
-.haunt-web { position: absolute; top: 0; left: 0; width: 160px; height: 160px; color: var(--fg); opacity: .22; }
-.haunt-web svg { width: 100%; height: 100%; display: block; }
-.haunt-fog {
-  position: absolute; left: 0; bottom: -6vh; border-radius: 50%; font-style: normal; will-change: transform; transform-origin: 50% 100%;
-  background: radial-gradient(ellipse at 50% 65%, color-mix(in srgb, var(--fg) 30%, transparent), transparent 70%);
-  filter: blur(18px);
-}
-.spider-rig { position: absolute; top: 0; left: 62px; width: 34px; transform-origin: 50% 0; --len: 56px; --t: 0s; }
-.spider-rig.down { animation: spider-swing 2.6s ease-in-out infinite alternate; }
-@keyframes spider-swing { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
-.spider-thread { position: absolute; left: 50%; top: 0; width: 1px; height: var(--len); background: color-mix(in srgb, var(--fg) 45%, transparent); transition: height var(--t) ease-in-out; }
-.spider { position: absolute; left: 0; top: calc(var(--len) - 6px); width: 34px; height: 34px; padding: 0; border: 0; background: none; min-height: 0;
-  color: color-mix(in srgb, var(--fg) 30%, #0b0b0b); pointer-events: auto; cursor: pointer; transition: top var(--t) ease-in-out; }
-.spider svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0 2px color-mix(in srgb, var(--fg) 40%, transparent)); }
-.spider-rig.moving .legs { animation: legs 0.35s ease-in-out infinite alternate; transform-origin: 20px 22px; }
-@keyframes legs { to { transform: scaleX(.9) rotate(3deg); } }
-.haunt-eye { position: absolute; pointer-events: none; opacity: 0; transform: scaleY(0); animation: eye-life var(--dur, 3000ms) ease-in-out forwards;
-  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 55%, transparent 100%); mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 55%, transparent 100%); }
-.haunt-eye svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.haunt-eye .iris { animation: eye-drift var(--dur, 3000ms) ease-in-out forwards; }
-.haunt-eye .pupil { transform-box: fill-box; transform-origin: center; animation: pupil-tight var(--dur, 3000ms) ease-out forwards; filter: drop-shadow(0 0 3px #ff2a1a); }
-@keyframes eye-life {
-  0% { transform: scaleY(0); opacity: 0; }
-  16% { transform: scaleY(1); opacity: .72; }
-  64% { transform: scaleY(1); opacity: .72; }
-  68% { transform: scaleY(.08); opacity: .72; }
-  72% { transform: scaleY(1); opacity: .72; }
-  88% { transform: scaleY(1); opacity: .72; }
-  100% { transform: scaleY(0); opacity: 0; }
-}
-@keyframes eye-drift { 0%, 25% { transform: translate(0, 0); } 60% { transform: translate(var(--dx), var(--dy)); } 100% { transform: translate(var(--dx), var(--dy)); } }
-@keyframes pupil-tight { 0% { transform: scale(1.5); } 30% { transform: scale(.75); } 100% { transform: scale(.8); } }
-.mini-fx .haunt-web { width: 64px; height: 64px; }
-.mini-fx .haunt-fog { filter: blur(8px); bottom: -10%; }
-.mini-fx .spider-rig { left: 26px; transform: scale(.55); transform-origin: 50% 0; }
-
-/* Assombrado cloud strips (parallax): soft cartoon clouds in theme colors with a glow on top */
-.fog-strip { position: absolute; left: 0; bottom: -2vh; transform-origin: 50% 100%; will-change: transform; pointer-events: none; }
-.fog-strip svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.fog-strip path { fill: color-mix(in srgb, var(--fg) var(--mix), var(--bg)); }
-.mini-fx .fog-strip { bottom: -4%; }
-
 /* Seu nome: the name chip is the button to change it */
 .style-preview { position: relative; cursor: pointer; padding-right: 44px; padding-left: 44px; }
 .style-preview:active { transform: scale(.99); }
