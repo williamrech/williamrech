@@ -21,7 +21,7 @@ const CSS = `
   100% { transform: translate(0, 108vh) rotate(380deg); }
 }
 .gd-ember { position: absolute; bottom: -8px; border-radius: 50%; background: #c8ffe0; pointer-events: none;
-  box-shadow: 0 0 4px 1px #46ff9a, 0 0 10px 2px rgba(70, 255, 154, .35); animation: gd-ember-rise ease-out infinite; will-change: transform, opacity; }
+  box-shadow: 0 0 4px 1px #46ff9a, 0 0 10px 2px rgba(70, 255, 154, .35); opacity: 0; will-change: transform, opacity; }
 @keyframes gd-ember-rise {
   0% { transform: translate(0, 0); opacity: 0; }
   10% { opacity: 1; } 30% { opacity: .55; } 45% { opacity: .95; } 70% { opacity: .5; }
@@ -78,14 +78,34 @@ export function startAsh(layer, scale = 1) {
       + `animation-duration:${rnd(11, 20) / Math.max(scale, 0.6)}s;animation-delay:${rnd(-20, 0)}s`;
     layer.appendChild(a);
   }
-  for (let i = 0; i < Math.round(14 * scale) + 1; i++) {
-    const e = document.createElement("i");
-    e.className = "gd-ember";
-    const w = rnd(1.6, 3.2) * k;
-    e.style.cssText = `left:${rnd(3, 97)}%;width:${w}px;height:${w}px;--sway:${rnd(-40, 40) * scale}px;`
-      + `animation-duration:${rnd(6, 11)}s;animation-delay:${rnd(-11, 0)}s`;
-    layer.appendChild(e);
+  for (let i = 0; i < Math.round(14 * scale) + 1; i++) setTimeout(() => ember(layer, k), rnd(0, 3000));
+}
+// One fire speck: random size and brightness, rises a short way while its path jinks left and right,
+// flickers, and goes out. Then another one starts somewhere else.
+function ember(layer, k) {
+  if (!layer.isConnected) return;
+  if (document.hidden) { setTimeout(() => ember(layer, k), 1500); return; }
+  const e = document.createElement("i");
+  e.className = "gd-ember";
+  const big = Math.random() < 0.15;
+  const w = (big ? rnd(3, 4.5) : rnd(1.3, 2.6)) * k, peak = rnd(0.5, 1);
+  const hot = Math.random() < 0.35; // a few burn almost white, most are green
+  e.style.cssText = `left:${rnd(3, 97)}%;width:${w}px;height:${w}px;background:${hot ? "#eafff3" : pick(["#9dffc9", "#6ff2a8", "#4fd98c"])}`;
+  layer.appendChild(e);
+  const life = rnd(1100, 2800), rise = innerHeight * rnd(0.06, 0.24);
+  const steps = 4 + Math.floor(rnd(0, 3)), frames = [];
+  let x = 0, vx = rnd(-14, 14);
+  for (let i = 0; i <= steps; i++) {
+    const f = i / steps;
+    if (i) { if (Math.random() < 0.55) vx = rnd(-22, 22); x += vx * rnd(0.6, 1.4); } // change course mid-flight
+    const fl = i === 0 ? 0 : i === steps ? 0 : peak * rnd(0.45, 1);              // flicker
+    frames.push({ transform: `translate(${x.toFixed(1)}px, ${(-rise * (1 - Math.pow(1 - f, 1.6))).toFixed(1)}px) scale(${(1 - f * 0.6).toFixed(2)})`, opacity: fl, offset: f });
   }
+  frames[1].opacity = peak;
+  e.animate(frames, { duration: life, easing: "linear", fill: "both" }).onfinish = () => {
+    e.remove();
+    setTimeout(() => ember(layer, k), rnd(100, 1400));
+  };
 }
 
 // ---------- The look: a dark backdrop + the app restyled like the game's UI ----------
@@ -304,9 +324,9 @@ export function startRifts(layer) {
   const open = () => {
     if (!spot.isConnected) return;
     if (!document.hidden && !spot.firstChild) {
-      const purple = Math.random() < 0.55;
-      spot.style.setProperty("--glow", purple ? "rgba(155, 61, 240, .75)" : "rgba(190, 40, 20, .7)");
-      rift(spot, purple ? "purple" : "red", rnd(3400, 5200));
+      const x = Math.random(), kind = x < 0.4 ? "purple" : x < 0.7 ? "green" : "red";
+      spot.style.setProperty("--glow", { purple: "rgba(155, 61, 240, .75)", green: "rgba(60, 240, 150, .7)", red: "rgba(190, 40, 20, .7)" }[kind]);
+      rift(spot, kind, rnd(5000, 10000));
     }
     setTimeout(open, rnd(20000, 40000));
   };
@@ -430,7 +450,7 @@ export function rift(layer, kind, hold = 3400) {
 // core, ragged dark edges, standing on a scorched patch with gold motes. Drawn by a small GPU shader
 // (pure light, no outlines). Returns false where WebGL isn't available, and the CSS version runs instead.
 const RIFT_FS = `precision highp float;
-uniform vec2 res; uniform float t, o, fade; uniform vec3 cHot, cMid, cDim; uniform vec2 sz; uniform float foot, gold, dpr;
+uniform vec2 res; uniform float t, o, fade; uniform vec3 cHot, cMid, cDim; uniform vec2 sz; uniform float foot, gold, dpr, fire; uniform vec3 cSpeck;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
   return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
@@ -449,14 +469,17 @@ void main(){
   float sm = fbm(wp*2.4 + warp*1.8 - vec2(0., t*.6));
   float wisp = fbm(rot(-t*.7 + 1.6*(1. - r))*q*3.1 + warp);
   // Ragged edge.
-  float edge = 1. - smoothstep(.62, 1., r + (fbm(q*2.7 + t*.5) - .5)*.55);
+  float fl = fbm(vec2(q.x*3.2, q.y*1.4 - t*2.4)) * fbm(vec2(q.x*4.2 + 3., q.y*2.2 - t*3.4));
+  float rr = r - fire * fl * 1.6 * smoothstep(-.6, 1.1, q.y);     // tongues of fire lick up off the top
+  float edge = 1. - smoothstep(.62, 1., rr + (fbm(q*2.7 + t*.5) - .5)*.55);
   // Hot core: a vertical streak, brightest low in the middle.
   float streak = exp(-q.x*q.x*14.) * smoothstep(1., .1, abs(q.y + .15));
   float core = exp(-r*r*3.2);
   vec3 col = cDim * edge * 1.4;
   col += cMid * edge * smoothstep(.35, .8, sm) * 1.6;
   col += cHot * edge * (streak*.9 + core*.5) * (.55 + .7*sm);
-  col *= mix(.25, 1.1, smoothstep(.3, .65, wisp));   // dark smoke threads through it
+  col *= mix(.25, 1.1, smoothstep(.3, .65, wisp));
+  col += fire * cHot * edge * smoothstep(.45, .75, fl*1.8) * smoothstep(-.2, .8, q.y) * .6;  // bright flame cores   // dark smoke threads through it
   // Soft halo of light around the tear.
   float hr = max(r - .8, 0.); col += cMid * .2 * exp(-hr*hr*9.) * (1. - edge*.6);
   // Light pooled on the ground at its foot, and a faint ring of glimmers around it.
@@ -469,7 +492,7 @@ void main(){
     vec2 sp = vec2(res.x*.5, foot) + vec2(cos(a)*sz.x*1.25, sin(a)*sz.x*.36) * (.9 + .25*h(vec2(fk, 9.)));
     float d = length(px - sp) / dpr;
     float tw = .35 + .65*smoothstep(.2, .9, n(vec2(fk*7.3, t*1.7)));
-    col += gold * vec3(1., .78, .38) * exp(-d*d*.35) * tw * 1.3 * o;
+    col += gold * cSpeck * exp(-d*d*.35) * tw * 1.3 * o;
   }
   vec2 uv = px / res; col *= fade * smoothstep(0., .12, uv.x) * smoothstep(1., .88, uv.x) * smoothstep(0., .08, uv.y) * smoothstep(1., .85, uv.y);
   float a = clamp(max(col.r, max(col.g, col.b)), 0., 1.);
@@ -478,13 +501,13 @@ void main(){
 const RIFT_GL_COL = {
   purple: { hot: [1.0, 0.55, 1.0], mid: [0.62, 0.2, 1.0], dim: [0.2, 0.03, 0.42] },
   red: { hot: [1.0, 0.62, 0.3], mid: [0.85, 0.16, 0.05], dim: [0.3, 0.03, 0.01] },
-  green: { hot: [0.7, 1.0, 0.88], mid: [0.1, 0.8, 0.6], dim: [0.02, 0.22, 0.17] },
+  green: { hot: [0.66, 1.0, 0.8], mid: [0.18, 0.92, 0.58], dim: [0.02, 0.3, 0.22] },
 };
 function riftGL(layer, kind, hold) {
   const red = kind === "red";
   const W = red ? rnd(22, 28) : rnd(48, 58);          // narrow and tall, like the game's
   const H = red ? W * rnd(3.6, 4.2) : W * rnd(2.3, 2.6);
-  const CW = Math.round(W * (red ? 4 : 3.2)), CH = Math.round(H * 1.3 + W * 0.75);
+  const CW = Math.round(W * (red ? 4 : 3.2)), CH = Math.round(H * (kind === "green" ? 1.6 : 1.3) + W * 0.75);
   const footY = W * 0.75;                              // canvas pixels from the bottom to the foot
   const cv = document.createElement("canvas");
   const dpr = Math.min(2, devicePixelRatio || 1);
@@ -507,7 +530,7 @@ function riftGL(layer, kind, hold) {
   const col = RIFT_GL_COL[kind] || RIFT_GL_COL.purple;
   gl.uniform2f(U("res"), cv.width, cv.height);
   gl.uniform2f(U("sz"), W * dpr, H * dpr);
-  gl.uniform1f(U("foot"), footY * dpr); gl.uniform1f(U("gold"), kind === "purple" ? 1 : 0); gl.uniform1f(U("dpr"), dpr);
+  gl.uniform1f(U("foot"), footY * dpr); gl.uniform1f(U("gold"), red ? 0 : 1); gl.uniform1f(U("fire"), kind === "green" ? 1 : 0); gl.uniform3fv(U("cSpeck"), kind === "green" ? [0.55, 1, 0.75] : [1, 0.78, 0.38]); gl.uniform1f(U("dpr"), dpr);
   gl.uniform3fv(U("cHot"), col.hot); gl.uniform3fv(U("cMid"), col.mid); gl.uniform3fv(U("cDim"), col.dim);
   const uT = U("t"), uO = U("o"), uF = U("fade");
   // A scorched patch under it (drawn normally, so it darkens what's behind).
@@ -518,10 +541,11 @@ function riftGL(layer, kind, hold) {
   layer.appendChild(soot); layer.appendChild(cv);
   // Gold motes drifting up off a riftgate.
   const motes = [];
-  if (kind === "purple") for (let i = 0; i < 10; i++) {
+  if (!red) for (let i = 0; i < 10; i++) {
     const sp = document.createElement("i");
     sp.className = "gd-spark";
-    sp.style.cssText = "background:#ffd27a;box-shadow:0 0 5px 1px #ffb640;opacity:0;mix-blend-mode:screen";
+    sp.style.cssText = kind === "green" ? "background:#d6ffe8;box-shadow:0 0 5px 1px #3cf096;opacity:0;mix-blend-mode:screen"
+      : "background:#ffd27a;box-shadow:0 0 5px 1px #ffb640;opacity:0;mix-blend-mode:screen";
     layer.appendChild(sp); motes.push(sp);
     const x0 = rnd(-W * 1.1, W * 1.1), y0 = rnd(-W * 0.25, W * 0.15) - rnd(0, H * 0.5) * (Math.abs(x0) < W * 0.5 ? 1 : 0);
     sp.animate([
