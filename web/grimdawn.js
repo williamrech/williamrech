@@ -259,8 +259,9 @@ const BOTTOM_CSS = `
 // ---------- Malmouth skyline ----------
 // The user's own painted strips, three of each: cathedral (back), residential (middle), industrial (front).
 // Each app open picks one strip per row, a zoom, a slice and maybe a mirror, then it stays put.
-// Numbers per strip: natural width, height, and the x range whose ground is solid (so a slice never has gaps).
-const CITY = {"gd-city-c1":[1406,307,4,1385],"gd-city-r1":[1740,252,15,1736],"gd-city-i1":[1698,288,17,1667],"gd-city-c2":[1522,313,12,1514],"gd-city-r2":[1616,292,6,1601],"gd-city-i2":[1651,301,2,1648],"gd-city-i3":[1648,316,2,1645],"gd-city-r3":[1644,293,1,1642],"gd-city-c3":[1643,284,1,1641]};
+// Numbers per strip: natural width, height, and the x range whose ground is solid (so a slice never has gaps);
+// cathedral strips also carry the x range of the cathedral itself, which every slice keeps in view.
+const CITY = {"gd-city-c1":[1406,307,4,1385,640,890],"gd-city-r1":[1740,252,15,1736],"gd-city-i1":[1698,288,17,1667],"gd-city-c2":[1522,313,12,1514,860,1100],"gd-city-r2":[1616,292,6,1601],"gd-city-i2":[1651,301,2,1648],"gd-city-i3":[1648,316,2,1645],"gd-city-r3":[1644,293,1,1642],"gd-city-c3":[1643,284,1,1641,810,1090]};
 const CITY_CSS = `
 .gd-city { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .gd-city .row { position: absolute; left: 0; right: 0; overflow: hidden; }
@@ -292,9 +293,20 @@ function startCity(layer) {
   const seams = [];
   rows.forEach((r, i) => {
     const name = pick(Object.keys(CITY).filter((n) => n[8] === r.k)), [w, h, x0, x1] = CITY[name];
+    const cath = CITY[name].length > 4 ? CITY[name].slice(4) : null;
     let H = r.h * vh, sc = H / h;
     if ((x1 - x0) * sc < vw) { sc = vw / (x1 - x0); H = h * sc; } // always wide enough: no gaps
-    const off = x0 * sc + rnd(0, (x1 - x0) * sc - vw);
+    if (cath && (cath[1] - cath[0]) * sc > vw * 0.9) {               // zoomed so far the cathedral can't fit: zoom out,
+      sc = Math.max(vw / (x1 - x0), (vw * 0.9) / (cath[1] - cath[0])); H = h * sc;
+      r.base = Math.max(r.base, 0.53 - H / vh);                       // and lift the row so it still reaches past half
+    }
+    let lo = x0 * sc, hi = x0 * sc + (x1 - x0) * sc - vw;             // slices with solid ground all the way across
+    if (cath) {                                                       // ...that also keep the whole cathedral in view
+      const m = 12, clo = cath[1] * sc + m - vw, chi = cath[0] * sc - m;
+      const a = Math.max(lo, clo), b = Math.min(hi, chi);
+      if (a <= b) { lo = a; hi = b; } else { lo = hi = Math.max(lo, Math.min(hi, ((cath[0] + cath[1]) / 2) * sc - vw / 2)); }
+    }
+    const off = lo + rnd(0, Math.max(0, hi - lo));
     const row = document.createElement("div");
     row.className = "row";
     const fade = i < 2 ? "-webkit-mask-image:linear-gradient(to top, transparent, #000 14%);mask-image:linear-gradient(to top, transparent, #000 14%);" : "";
