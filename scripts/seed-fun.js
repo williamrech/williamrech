@@ -156,6 +156,20 @@ const ref = getFirestore().doc("config/fun");
     }
     update.configVersion = 18;
   }
+  // configVersion 19: test gift for the new item sets (14.11) — the admin gets the 3-piece epic set "Paramentos do
+  // Arauto" (Máscara do Arauto, Jaqueta do Arauto, Proteção do Arauto: GrimTools set is10), one of each piece he lacks.
+  if ((Number(cur.configVersion) || 0) < 19) {
+    const db = getFirestore();
+    const admins = await db.collection("users").where("admin", "==", true).get();
+    const pieces = ["Máscara do Arauto", "Jaqueta do Arauto", "Proteção do Arauto"];
+    for (const u of admins.docs) {
+      const g = await db.doc(`grail/${u.id}`).get(), items = (g.exists && g.data().items) || {};
+      const add = {}; for (const n of pieces) if (!(items[n] > 0)) add[n] = 1;
+      if (Object.keys(add).length) await db.doc(`grail/${u.id}`).set({ items: add, updatedAt: Date.now() }, { merge: true });
+      console.log(`set test: ${Object.keys(add).length} pieces for one admin`);
+    }
+    update.configVersion = 19;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

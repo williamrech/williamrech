@@ -9,6 +9,8 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // Every real epic and legendary (web/gd-items.js), loaded with the same cache-busting as this file.
 const GDI = await import(new URL("gd-items.js" + new URL(import.meta.url).search, import.meta.url).href);
+// Every item set whose pieces are in that list (web/gd-sets.js).
+const GDS = await import(new URL("gd-sets.js" + new URL(import.meta.url).search, import.meta.url).href);
 const REAL = { epic: [], legendary: [] }, ART = {};
 for (const row of GDI.ITEMS.trim().split("\n")) {
   const [r, kind, x, y, w, h, name] = row.split("|");
@@ -1084,6 +1086,7 @@ export const ALIASES = {};
 // Every epic and legendary that can drop, with its kind of item (for grouping in the list).
 export function grailCatalog() { return { epic: REAL.epic.map((x) => x.slice()), legendary: REAL.legendary.map((x) => x.slice()) }; }
 // The real icon of an item: its place in GrimTools' icon sheet (see web/gd-items.js), or null.
+export function grailSets() { return GDS.SETS.map((x) => ({ ...x, pieces: x.pieces.slice() })); }
 export function itemArt(name) { return ART[name] || null; }
 export const ITEM_SPRITE = GDI.SPRITE, ITEM_SHEET = GDI.SHEET;
 // The item picture for a kind (the same pictures the drops use; the first of each kind).

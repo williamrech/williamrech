@@ -9,6 +9,9 @@ const KINDS = [["sword", "Espadas"], ["sword2h", "Espadas de duas mãos"], ["axe
   ["mace2h", "Maças de duas mãos"], ["spear2h", "Lanças"], ["dagger", "Adagas"], ["scepter", "Cetros"], ["gun1h", "Armas de fogo"], ["gun2h", "Armas de fogo de duas mãos"],
   ["shield", "Escudos"], ["focus", "Mão secundária"], ["head", "Elmos"], ["shoulder", "Ombreiras"], ["chest", "Peitorais"], ["hands", "Luvas"], ["waist", "Cintos"],
   ["legs", "Calças"], ["feet", "Botas"], ["ring", "Anéis"], ["amulet", "Amuletos"], ["medal", "Medalhas"]];
+const KIND1 = { sword: "Espada", sword2h: "Espada 2 mãos", axe: "Machado", axe2h: "Machado 2 mãos", mace: "Maça", mace2h: "Maça 2 mãos", spear2h: "Lança",
+  dagger: "Adaga", scepter: "Cetro", gun1h: "Arma de fogo", gun2h: "Arma de fogo 2 mãos", shield: "Escudo", focus: "Mão secundária", head: "Elmo",
+  shoulder: "Ombreira", chest: "Peitoral", hands: "Luvas", waist: "Cinto", legs: "Calças", feet: "Botas", ring: "Anel", amulet: "Amuleto", medal: "Medalha" };
 // When the icon art can't show (no Wi-Fi yet, or GrimTools changed its picture): a silly line instead.
 const NO_ART = ["A arte deste item se perdeu no Vazio. Reclama com o admin.", "O pintor de Cairn ainda não pintou esse. Vai falar com o admin.",
   "Uma fenda engoliu a imagem. Claramente culpa do admin.", "Sem arte por enquanto. O admin sabe o porquê (ou finge que sabe)."];
@@ -27,6 +30,8 @@ const CSS = `
 .gift-card button, #dlg-grail .gbtn { padding: 6px 10px; font-size: .8rem; border-radius: 3px; border: 1px solid #6e5832; background: linear-gradient(180deg, #2b2519, #16130d); color: #e9dcb8; }
 .gift-card button.no, #dlg-grail .gbtn.no { background: none; color: #a59d8a; }
 #dlg-grail { padding: 16px 14px 12px; }
+#dlg-grail[open] { height: min(88dvh, 760px); display: flex; flex-direction: column; } /* same height on every tab and filter: nothing jumps */
+#dlg-grail .gbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 #dlg-grail h2 { margin: 0 0 8px; font-family: "GD Cinzel", Georgia, serif; letter-spacing: .06em; }
 #dlg-grail .gtabs { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 3px; margin: 0 0 8px; }
 #dlg-grail .gtabs button { padding: 6px 2px; font-size: .78rem; border: 1px solid #3c3221; background: #0e0f0e; color: #8d877a; border-radius: 2px; }
@@ -37,7 +42,24 @@ const CSS = `
 #dlg-grail .gfilt { display: flex; gap: 4px; margin: 0 0 6px; }
 #dlg-grail .gfilt button { padding: 3px 8px; font-size: .74rem; border: 1px solid #3c3221; border-radius: 10px; background: none; color: #8d877a; }
 #dlg-grail .gfilt button.on { color: #f0d79a; border-color: #8a6f3e; }
-#dlg-grail .glist { max-height: 56dvh; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+#dlg-grail .glist { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+#dlg-grail .gset { font-size: .7rem; padding: 1px 6px; border-radius: 8px; border: 1px solid #3d5a3f; color: #8fbf92; white-space: nowrap; }
+#dlg-grail .gset.done, #dlg-grail .sdone .gset { border-color: #5fe08a; color: #b9ffcb; box-shadow: 0 0 8px rgba(95, 224, 138, .45); }
+#dlg-grail .sdone .nm, .art-set.done b { text-shadow: 0 0 8px rgba(95, 224, 138, .75), 0 0 2px rgba(95, 224, 138, .9); }
+#dlg-grail .srow { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: .86rem; cursor: pointer; }
+#dlg-grail .srow .nm { flex: 1; min-width: 0; }
+#dlg-grail .srow .prog { width: 54px; height: 4px; border-radius: 2px; background: #1c1c1a; overflow: hidden; flex: none; }
+#dlg-grail .srow .prog i { display: block; height: 100%; background: #5fe08a; }
+#dlg-grail .spieces { margin: 0 0 6px 10px; border-left: 1px solid #3c3221; padding-left: 8px; }
+#dlg-grail .spieces .gi { font-size: .8rem; }
+#dlg-grail details.snot > summary { cursor: pointer; margin: 12px 0 4px; font-size: .78rem; color: var(--muted); }
+.art-set { max-width: min(320px, 86vw); font-size: .8rem; color: #cfc6b0; text-align: left; }
+.art-set .t { display: block; text-align: center; margin: 0 0 6px; font-family: "GD Cinzel", Georgia, serif; }
+.art-set.done .t { color: #b9ffcb; }
+.art-set ul { list-style: none; margin: 0; padding: 0; }
+.art-set li { display: flex; gap: 8px; justify-content: space-between; padding: 2px 0; }
+.art-set li.miss { color: #6b675e; }
+.art-set li .k { color: #8d877a; font-size: .72rem; white-space: nowrap; }
 #dlg-grail h4 { margin: 10px 0 4px; font: 700 .7rem/1 "GD Cinzel", Georgia, serif; letter-spacing: .12em; text-transform: uppercase; color: #9a8256; }
 #dlg-grail .gi { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,.04); font-size: .86rem; }
 #dlg-grail .gi img { width: 26px; height: 26px; object-fit: contain; flex: none; }
@@ -99,6 +121,11 @@ export function startGrail(o) {
   const cat = o.gd.grailCatalog();
   st.rar = {}; for (const r of ["epic", "legendary"]) for (const [n] of cat[r]) st.rar[n] = r;
   st.cat = cat;
+  // Item sets: which set each piece belongs to (from the game's data, see gd-sets.js).
+  st.sets = o.gd.grailSets ? o.gd.grailSets() : [];
+  st.setOf = {}; for (const x of st.sets) for (const n of x.pieces) st.setOf[n] = x;
+  st.kindOf = {}; for (const r of ["epic", "legendary"]) for (const [n, k] of cat[r]) st.kindOf[n] = k;
+  st.sopen = null;
   st.artReady = false; // GrimTools' icon sheet saved on this phone?
   hasSheet().then((ok) => { st.artReady = ok; });
 
@@ -147,6 +174,7 @@ export function startGrail(o) {
   render();
 
   st.rerender = renderList;
+  st.counts = counts;
   st.stop = () => {
     flush();
     unsubs.forEach((u) => u());
@@ -223,14 +251,14 @@ export function startGrail(o) {
   }
   function renderList() {
     const d = document.getElementById("dlg-grail"); if (!d) return;
-    const tabs = [["legendary", "Lendários"], ["epic", "Épicos"], ["iron", "Ferro" + (st.gout.length ? ` · ${st.gout.length}` : "")]];
+    const tabs = [["legendary", "Lendários"], ["epic", "Épicos"], ["sets", "Conjuntos"], ["iron", "Ferro" + (st.gout.length ? ` · ${st.gout.length}` : "")]];
     if (o.isAdmin()) tabs.push(["fam", "Família"]);
     const T = d.querySelector(".gtabs");
     T.style.setProperty("--n", tabs.length);
     T.innerHTML = tabs.map(([k, l]) => `<button class="${st.tab === k ? "on" : ""}" data-k="${k}">${l}</button>`).join("");
     T.querySelectorAll("button").forEach((b) => b.onclick = () => { st.tab = b.dataset.k; st.open = null; st.pick = null; if (st.tab === "fam") loadFam(); renderList(); });
     const B = d.querySelector(".gbody"), keep = B.querySelector(".glist"), top = keep ? keep.scrollTop : 0;
-    B.innerHTML = st.tab === "iron" ? ironTab() : st.tab === "fam" ? famTab() : itemTab(st.tab);
+    B.innerHTML = st.tab === "iron" ? ironTab() : st.tab === "fam" ? famTab() : st.tab === "sets" ? setsTab() : itemTab(st.tab);
     const L = B.querySelector(".glist"); if (L) L.scrollTop = top;
     wire(B);
   }
@@ -254,13 +282,38 @@ export function startGrail(o) {
       for (const n of rows) {
         const q = c.items[n] || 0, out = st.gout.filter((g) => g.name === n).length;
         const real = q && st.artReady && o.gd.itemArt(n);
-        h += `<div class="gi ${q ? "has" : "miss"}" ${q ? `data-art="${esc(n)}"` : ""}>${real ? mini(real) : `<img src="${art.src}" alt="">`}<span class="nm" ${q ? `style="color:${RAR[r].col}"` : ""}>${esc(n)}</span>
+        const set = st.setOf[n], sp = set && setProgress(set, c), done = sp && sp.have === sp.of;
+        h += `<div class="gi ${q ? "has" : "miss"}${done ? " sdone" : ""}" ${q ? `data-art="${esc(n)}"` : ""}>${real ? mini(real) : `<img src="${art.src}" alt="">`}<span class="nm" ${q ? `style="color:${RAR[r].col}"` : ""}>${esc(n)}</span>
+          ${set ? `<span class="gset${done ? " done" : ""}" title="${esc(set.name)}">${done ? "✦ " : ""}${sp.have}/${sp.of}</span>` : ""}
           <span class="meta">${q > 1 ? `×${q}` : ""}${out ? `${q > 1 ? " · " : ""}${out} a caminho` : ""}</span>
           ${q > 1 ? `<button class="gbtn" data-open="${esc(n)}">Presentear</button>` : ""}</div>`;
         if (st.open === n) h += sendRow(n, esc(n));
       }
     }
     return h + (st.filt !== "miss" && !owned ? `<p class="gnote">Nada ainda. Toque no vazio e reze. 🙏</p>` : "") + "</div>";
+  }
+  function setProgress(set, c) { return { have: set.pieces.filter((n) => c.items[n] > 0).length, of: set.pieces.length }; }
+  // Conjuntos: sets you've started (most complete first; complete ones glow), then the rest folded away.
+  // Tap a set: its pieces, what you have (tap for the art) and what's missing, with the slot.
+  function setsTab() {
+    const c = counts(), all = st.sets.map((x) => ({ x, ...setProgress(x, c) }));
+    const started = all.filter((s) => s.have).sort((a, b) => b.have / b.of - a.have / a.of || b.have - a.have || a.x.name.localeCompare(b.x.name, "pt-BR"));
+    const rest = all.filter((s) => !s.have).sort((a, b) => a.x.name.localeCompare(b.x.name, "pt-BR"));
+    const done = started.filter((s) => s.have === s.of).length;
+    const row = (s) => {
+      const isDone = s.have === s.of, col = RAR[s.x.r].col;
+      let h = `<div class="srow${isDone ? " sdone" : ""}" data-set="${esc(s.x.name)}"><span class="nm" style="color:${s.have ? col : "#8d877a"}">${isDone ? "✦ " : ""}${esc(s.x.name)}</span>
+        <span class="prog"><i style="width:${(s.have / s.of * 100).toFixed(0)}%"></i></span><span class="gset${isDone ? " done" : ""}">${s.have}/${s.of}</span></div>`;
+      if (st.sopen === s.x.name) h += `<div class="spieces">${s.x.pieces.map((n) => {
+        const q = c.items[n] || 0, real = q && st.artReady && o.gd.itemArt(n), art = o.gd.grailArt(st.kindOf[n]);
+        return `<div class="gi ${q ? "has" : "miss"}" ${q ? `data-art="${esc(n)}"` : ""}>${real ? mini(real) : `<img src="${art.src}" alt="">`}<span class="nm" ${q ? `style="color:${col}"` : ""}>${esc(n)}</span><span class="meta">${q ? (q > 1 ? `×${q}` : "✓") : esc(KIND1[st.kindOf[n]] || "")}</span></div>`;
+      }).join("")}</div>`;
+      return h;
+    };
+    let h = `<div class="gbar"><span>Conjuntos completos <b style="color:#5fe08a">${done}</b> / ${all.length}</span><span class="prog"><i style="width:${(done / all.length * 100).toFixed(1)}%;background:#5fe08a"></i></span></div><div class="glist">`;
+    h += started.length ? started.map(row).join("") : `<p class="gnote">Nenhuma peça de conjunto ainda.</p>`;
+    h += `<details class="snot"${st.sopenRest ? " open" : ""}><summary>Ainda sem nenhuma peça (${rest.length})</summary>${rest.map(row).join("")}</details>`;
+    return h + "</div>";
   }
   function ironTab() {
     const c = counts();
@@ -285,6 +338,8 @@ export function startGrail(o) {
   }
   function wire(B) {
     B.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { st.filt = b.dataset.f; renderList(); });
+    B.querySelectorAll("[data-set]").forEach((b) => b.onclick = () => { st.sopen = st.sopen === b.dataset.set ? null : b.dataset.set; renderList(); });
+    const sn = B.querySelector("details.snot"); if (sn) sn.ontoggle = () => { st.sopenRest = sn.open; };
     B.querySelectorAll(".gi[data-art]").forEach((b) => b.onclick = (e) => { if (!e.target.closest("button")) openArt(b.dataset.art); });
     B.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => { st.open = st.open === b.dataset.open ? null : b.dataset.open; st.pick = null; renderList(); });
     B.querySelectorAll("[data-to]").forEach((b) => b.onclick = () => { st.pick = st.pick === b.dataset.to ? null : b.dataset.to; renderList(); });
@@ -339,7 +394,7 @@ async function openArt(name, confirmed) {
     document.body.appendChild(d);
   }
   const r = (a && a.r) || "epic";
-  const show = (inner) => { d.innerHTML = `<div class="art-wrap"><div class="art-frame ${r}">${inner}</div><div class="art-name ${r}">${esc(name)}</div></div>`; };
+  const show = (inner) => { d.innerHTML = `<div class="art-wrap"><div class="art-frame ${r}">${inner}</div><div class="art-name ${r}">${esc(name)}</div>${setBlock(name)}</div>`; };
   const silly = () => show(`<div class="msg"><div><b>❓</b>${NO_ART[Math.floor(Math.random() * NO_ART.length)]}</div></div>`);
   show(`<div class="msg"><div>Buscando a arte…</div></div>`);
   if (!d.open) d.showModal();
@@ -360,6 +415,17 @@ async function openArt(name, confirmed) {
   img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5), 2)); if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
   img.onerror = silly;
   img.src = gdRef.ITEM_SPRITE;
+}
+
+// On the art card: the item's set, every piece with ✓ or its slot; a complete set glows.
+function setBlock(name) {
+  const set = S && S.setOf && S.setOf[name];
+  if (!set) return "";
+  const c = S.counts(), have = set.pieces.filter((n) => c.items[n] > 0).length, done = have === set.pieces.length;
+  return `<div class="art-set${done ? " done" : ""}"><span class="t">${done ? "✦ Conjunto completo · " : "Conjunto · "}<b>${esc(set.name)}</b> ${have}/${set.pieces.length}</span><ul>${set.pieces.map((n) => {
+    const q = c.items[n] > 0;
+    return `<li class="${q ? "" : "miss"}"><span>${q ? "✓ " : "· "}${esc(n)}</span><span class="k">${esc(KIND1[S.kindOf[n]] || "")}</span></li>`;
+  }).join("")}</ul></div>`;
 }
 
 export function stopGrail() { if (S) S.stop(); }
