@@ -331,41 +331,49 @@ const el = (parent, cls, css, html) => {
 // smudging the ground around it, and a vortex of light swirling in the middle. All light and blur, no outlines.
 const RIFT_CSS = `
 .gd-rift { position: absolute; left: 0; top: 0; pointer-events: none; }
-.gd-rift .disc { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%) scaleY(.62); }
-.gd-rift i { position: absolute; left: 0; top: 0; border-radius: 50%; display: block; }
-.gd-rift .soot { filter: blur(8px); }
-.gd-rift .swirl { will-change: transform; animation: gd-spin 2.8s linear infinite; filter: blur(2.2px);
-  -webkit-mask-image: radial-gradient(closest-side, #000 48%, rgba(0,0,0,.4) 74%, transparent 100%);
-  mask-image: radial-gradient(closest-side, #000 48%, rgba(0,0,0,.4) 74%, transparent 100%); }
-.gd-rift .swirl.slow { animation-duration: 5.5s; animation-direction: reverse; filter: blur(5px); }
-.gd-rift .hole { filter: blur(3px); }
-.gd-rift .hot { filter: blur(6px); mix-blend-mode: screen; animation: gd-hot 1.9s ease-in-out infinite alternate; }
-@keyframes gd-spin { from { transform: translate(-50%, -50%) rotate(0); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+.gd-rift .salt { position: absolute; border-radius: 50%; transform: scaleY(.32); border-style: dotted; filter: blur(.5px); }
+.gd-rift .pit { position: absolute; border-radius: 50%; transform: scaleY(.32); filter: blur(6px); }
+.gd-rift .body { position: absolute; border-radius: 50%; transform-origin: 50% 100%;
+  -webkit-mask-image: radial-gradient(closest-side, #000 54%, rgba(0,0,0,.45) 78%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 54%, rgba(0,0,0,.45) 78%, transparent 100%); }
+.gd-rift .body i { position: absolute; inset: -18%; border-radius: 50%; display: block; }
+.gd-rift .swirl { will-change: transform; animation: gd-spin 2.6s linear infinite; filter: blur(2px); }
+.gd-rift .swirl.slow { animation-duration: 5.4s; animation-direction: reverse; filter: blur(5px); }
+.gd-rift .hole { inset: 26%; filter: blur(3px); }
+.gd-rift .hot { inset: 26%; filter: blur(6px); mix-blend-mode: screen; animation: gd-hot 1.9s ease-in-out infinite alternate; }
+.gd-rift .rim { position: absolute; border-radius: 50%; filter: blur(3px); transform-origin: 50% 100%; }
+@keyframes gd-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
 @keyframes gd-hot { from { opacity: .5; } to { opacity: 1; } }
 .gd-spark { position: absolute; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; }
 `;
 function riftColors(kind) {
-  if (kind === "purple") return { hot: "#e7c2ff", mid: "#9b3df0", dim: "#3d0a72", soot: "rgba(10, 2, 20, .92)", spark: "#ffd27a" };
-  if (kind === "green") return { hot: "#b6ffe4", mid: "#19c79a", dim: "#06352c", soot: "rgba(3, 16, 12, .92)", spark: "" };
-  return { hot: "#ff7a42", mid: "#c4240f", dim: "#450904", soot: "rgba(16, 4, 2, .9)", spark: "" }; // the small chthonic tear
+  if (kind === "purple") return { hot: "#e7c2ff", mid: "#9b3df0", dim: "#3d0a72", rim: "rgba(214, 160, 255, .8)", spark: "#ffd27a" };
+  if (kind === "green") return { hot: "#b6ffe4", mid: "#19c79a", dim: "#06352c", rim: "rgba(150, 255, 200, .8)", spark: "" };
+  return { hot: "#ff7a42", mid: "#c4240f", dim: "#450904", rim: "rgba(255, 120, 70, .75)", spark: "" }; // the small chthonic tear
 }
-// kind: "purple" | "green" | "red". Opens, holds open for `hold` ms, then closes.
+// An upright oval of swirling light standing on the ground; a riftgate also has a ring of salt poured flat
+// around its foot. The layer's own point is where it meets the ground. Opens, holds, closes.
 export function rift(layer, kind, hold = 3400) {
   const c = riftColors(kind), red = kind === "red";
-  const D = red ? rnd(30, 40) : rnd(62, 80); // diameter on the ground
+  const W = red ? rnd(22, 30) : rnd(74, 92);          // width of the oval
+  const H = red ? W * rnd(3.4, 4.1) : W * 1.5;        // upright: taller than wide
   const g = document.createElement("div");
   g.className = "gd-rift gd-fx";
-  const disc = document.createElement("div");
-  disc.className = "disc";
-  g.appendChild(disc);
-  const ring = (cls, size, bg, extra = "") => {
-    const n = document.createElement("i");
-    n.className = cls;
-    n.style.cssText = `width:${size}px;height:${size}px;margin:${-size / 2}px 0 0 ${-size / 2}px;background:${bg};${extra}`;
-    disc.appendChild(n);
-    return n;
+  layer.appendChild(g);
+  const add = (cls, css, html = "") => {
+    const n = document.createElement(cls === "salt" || cls === "pit" || cls === "rim" ? "div" : "div");
+    n.className = cls; n.style.cssText = css; n.innerHTML = html; g.appendChild(n); return n;
   };
-  ring("soot", D * (red ? 2.0 : 1.8), `radial-gradient(closest-side, ${c.soot} 26%, color-mix(in srgb, ${c.soot} 55%, transparent) 55%, transparent 82%)`);
+  // The ground: a scorched smudge, and for a riftgate the ring of salt around the foot.
+  const sw = W * 2.1;
+  const pit = add("pit", `left:${-sw / 2}px;top:${-sw / 2}px;width:${sw}px;height:${sw}px;background:radial-gradient(closest-side, rgba(0,0,0,.85) 30%, rgba(0,0,0,.45) 60%, transparent 85%)`);
+  let salt = null;
+  if (!red) {
+    const rw = W * 1.9;
+    salt = add("salt", `left:${-rw / 2}px;top:${-rw / 2}px;width:${rw}px;height:${rw}px;border-width:${Math.max(2.5, W * 0.045)}px;border-color:rgba(238, 232, 214, .9);opacity:0`);
+  }
+  // The oval of light, standing on that point.
+  const body = add("body", `left:${-W / 2}px;top:${-H * 0.9}px;width:${W}px;height:${H}px`);
   const arms = (n) => {
     let st = "";
     for (let i = 0; i < n; i++) {
@@ -374,34 +382,45 @@ export function rift(layer, kind, hold = 3400) {
     }
     return `conic-gradient(from 0deg${st})`;
   };
-  ring("swirl slow", D * 1.25, arms(2), `opacity:${red ? 0.5 : 0.55}`);
-  ring("swirl", D, arms(3), "opacity:.95");
-  ring("hole", D * 0.62, `radial-gradient(closest-side, #000 42%, rgba(0,0,0,.72) 68%, transparent 92%)`, `opacity:${red ? 0.8 : 0.8}`);
-  ring("hot", D * (red ? 0.42 : 0.5), `radial-gradient(closest-side, ${c.hot}, color-mix(in srgb, ${c.mid} 60%, transparent) 45%, transparent 75%)`, red ? "opacity:.8" : "");
-  layer.appendChild(g);
+  const inner = (cls, css) => { const n = document.createElement("i"); n.className = cls; n.style.cssText = css; body.appendChild(n); };
+  inner("swirl slow", `background:${arms(2)};opacity:.55`);
+  inner("swirl", `background:${arms(3)};opacity:.95`);
+  inner("hole", `background:radial-gradient(closest-side, #000 38%, rgba(0,0,0,.62) 64%, transparent 90%);opacity:.6`);
+  inner("hot", `background:radial-gradient(closest-side, ${c.hot}, color-mix(in srgb, ${c.mid} 60%, transparent) 45%, transparent 75%)`);
+  const rim = add("rim", `left:${-W / 2}px;top:${-H * 0.9}px;width:${W}px;height:${H}px;border:1px solid ${c.rim};box-shadow:0 0 14px 3px ${c.rim}, inset 0 0 18px 4px ${c.rim};opacity:${red ? 0.4 : 0.5}`);
   // Gold motes drifting off a riftgate.
   if (c.spark) for (let i = 0; i < 9; i++) {
     const sp = document.createElement("i");
     sp.className = "gd-spark";
     sp.style.cssText = `background:${c.spark};box-shadow:0 0 5px 1px ${c.spark};opacity:0`;
     g.appendChild(sp);
-    const ang = rnd(0, 6.283), r0 = D * rnd(0.3, 0.6);
+    const ang = rnd(0, 6.283), r0 = W * rnd(0.3, 0.7);
     sp.animate([
-      { transform: `translate(${Math.cos(ang) * r0}px, ${Math.sin(ang) * r0 * 0.5}px)`, opacity: 0 },
+      { transform: `translate(${Math.cos(ang) * r0}px, ${-H * 0.45 + Math.sin(ang) * r0}px)`, opacity: 0 },
       { opacity: 1, offset: 0.25 },
-      { transform: `translate(${Math.cos(ang) * r0 * 1.5}px, ${Math.sin(ang) * r0 * 0.5 - rnd(18, 42)}px)`, opacity: 0 },
+      { transform: `translate(${Math.cos(ang) * r0 * 1.4}px, ${-H * 0.45 + Math.sin(ang) * r0 - rnd(20, 50)}px)`, opacity: 0 },
     ], { duration: rnd(1600, 2600), delay: 500 + rnd(0, hold), easing: "ease-out", fill: "both" });
   }
-  // Open, stay open, close.
-  const OPEN_MS = 650, CLOSE_MS = 750;
-  g.animate([
-    { transform: "scale(.12)", opacity: 0 },
-    { transform: "scale(1.06)", opacity: 1, offset: OPEN_MS / (OPEN_MS + hold + CLOSE_MS) * 0.85 },
-    { transform: "scale(1)", opacity: 1, offset: OPEN_MS / (OPEN_MS + hold + CLOSE_MS) },
-    { transform: "scale(1)", opacity: 1, offset: (OPEN_MS + hold) / (OPEN_MS + hold + CLOSE_MS) },
-    { transform: "scale(.1)", opacity: 0 },
-  ], { duration: OPEN_MS + hold + CLOSE_MS, easing: "ease-in-out", fill: "both" });
-  setTimeout(() => g.remove(), OPEN_MS + hold + CLOSE_MS + 200);
+  // Open: the salt is poured, the oval grows up out of the ground. Then it holds, then it shuts.
+  const OPEN_MS = 650, CLOSE_MS = 700, TOTAL = OPEN_MS + hold + CLOSE_MS;
+  const t1 = OPEN_MS / TOTAL, t2 = (OPEN_MS + hold) / TOTAL;
+  for (const n of [body, rim]) {
+    n.animate([
+      { transform: "scale(.1, .02)", opacity: 0 },
+      { transform: "scale(1.05, 1.03)", opacity: 1, offset: t1 * 0.8 },
+      { transform: "scale(1)", opacity: 1, offset: t1 },
+      { transform: "scale(1)", opacity: 1, offset: t2 },
+      { transform: "scale(.06, .02)", opacity: 0 },
+    ], { duration: TOTAL, easing: "ease-in-out", fill: "both" });
+  }
+  pit.animate([{ opacity: 0 }, { opacity: 1, offset: t1 }, { opacity: 1, offset: t2 }, { opacity: 0 }], { duration: TOTAL, fill: "both" });
+  if (salt) salt.animate([
+    { opacity: 0, transform: "scaleY(.32) scale(.5)" },
+    { opacity: .85, transform: "scaleY(.32) scale(1)", offset: t1 },
+    { opacity: .85, offset: t2 },
+    { opacity: 0 },
+  ], { duration: TOTAL, easing: "ease-out", fill: "both" });
+  setTimeout(() => g.remove(), TOTAL + 200);
 }
 
 function flash(g, size, color, delay) {
