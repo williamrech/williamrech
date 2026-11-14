@@ -177,30 +177,157 @@ p|105,240 125,0 -45,-170 85,-240 -125,-20 -125,230*|0-1 1-2 2-3 2-4 4-5
 e|-270,310 -200,110 -40,100 270,-50 10,-280 -170,-310*|0-1 1-2 2-3 2-4 4-5`;
 const DEV_COL = { a: "#a47cf3", c: "#ef3f4f", e: "#7fdc5c", o: "#f0c95a", p: "#58a0ff" }; // ascendant, chaos, eldritch, order, primordial
 let devPick = null; // the same constellation, in the same spot, for the whole visit
-// Just stars: each glows in its affinity's colour (the celestial-power star red), joined by barely-there lines.
-// It sits in the upper sky, drawn on the front layer so nothing in the app hides it; it never takes taps.
-export function startSky(layer) {
-  ensureCss();
+// Just stars, far away: the lines and the stars themselves sit at the very back of the sky (behind the skyline and
+// the whole app); only each star's glow is drawn in front, so a star covered by a card still shines through as a glow.
+// Each glows in its affinity's colour, the celestial-power star red. Nothing here takes taps.
+function devEl(glow) {
   const rows = DEV.split("\n");
-  devPick ||= { row: rows[Math.floor(Math.random() * rows.length)], x: rnd(45, 51), y: rnd(30, 35) };
+  devPick ||= { row: rows[Math.floor(Math.random() * rows.length)], x: rnd(45, 51), y: rnd(31, 35), tw: Array.from({ length: 8 }, () => [rnd(3, 6.5), -rnd(0, 6)]) };
   const [aff, s, l] = devPick.row.split("|"), col = DEV_COL[aff];
   const st = s.split(" ").map((t) => { const [x, y] = t.replace("*", "").split(",").map(Number); return { x, y, p: t.endsWith("*") }; });
   const xs = st.map((p) => p.x), ys = st.map((p) => p.y), x0 = Math.min(...xs), y0 = Math.min(...ys);
   const w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
-  const W = layer.clientWidth || innerWidth, H = layer.clientHeight || innerHeight;
+  const W = innerWidth, H = innerHeight; // both layers are fixed and full-screen, so the two halves line up
   // big constellations stay bigger than small ones, within what fits the patch of sky
-  const k = Math.min(Math.max(0.6 * W / 369, 0.42 * W / Math.max(w, h)), 0.7 * W / Math.max(w, 1), 0.3 * H / Math.max(h, 1));
-  const pad = 12, f = (n) => n.toFixed(1), P = st.map((p) => ({ x: (p.x - x0) * k + pad, y: (p.y - y0) * k + pad, p: p.p }));
-  const seg = l.split(" ").map((t) => { const [a, b] = t.split("-"); return `M${f(P[a].x)} ${f(P[a].y)}L${f(P[b].x)} ${f(P[b].y)}`; }).join("");
-  const stars = P.map((p, i) => `<g style="--t:${f(rnd(3, 6.5))}s;--d:${f(-rnd(0, 6))}s"><circle cx="${f(p.x)}" cy="${f(p.y)}" r="${p.p ? 8 : 6.5}" fill="url(#gd-dv${p.p ? "r" : "s"})"/><circle cx="${f(p.x)}" cy="${f(p.y)}" r="${p.p ? 1.5 : 1.25}" fill="${p.p ? "#ffd9d0" : "#f3f6ff"}"/></g>`).join("");
+  const k = Math.min(Math.max(0.6 * W / 369, 0.42 * W / Math.max(w, h)), 0.7 * W / Math.max(w, 1), 0.28 * H / Math.max(h, 1));
+  const pad = 20, f = (n) => n.toFixed(1), P = st.map((p) => ({ x: (p.x - x0) * k + pad, y: (p.y - y0) * k + pad, p: p.p }));
+  const tw = (i) => `style="--t:${f(devPick.tw[i][0])}s;--d:${f(devPick.tw[i][1])}s"`;
+  let body;
+  if (glow) {
+    body = `<defs>
+<radialGradient id="gd-dvs"><stop offset="0" stop-color="${col}" stop-opacity=".6"/><stop offset=".14" stop-color="${col}" stop-opacity=".34"/><stop offset=".45" stop-color="${col}" stop-opacity=".1"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient>
+<radialGradient id="gd-dvr"><stop offset="0" stop-color="#ff4a3a" stop-opacity=".7"/><stop offset=".14" stop-color="#ff2a1f" stop-opacity=".4"/><stop offset=".45" stop-color="#ff2a1f" stop-opacity=".12"/><stop offset="1" stop-color="#ff2a1f" stop-opacity="0"/></radialGradient>
+</defs>` + P.map((p, i) => `<g ${tw(i)}><circle cx="${f(p.x)}" cy="${f(p.y)}" r="${p.p ? 16 : 14}" fill="url(#gd-dv${p.p ? "r" : "s"})"/></g>`).join("");
+  } else {
+    const seg = l.split(" ").map((t) => { const [a, b] = t.split("-"); return `M${f(P[a].x)} ${f(P[a].y)}L${f(P[b].x)} ${f(P[b].y)}`; }).join("");
+    body = `<path d="${seg}" fill="none" stroke="${col}" stroke-width=".8" stroke-linecap="round" opacity=".09"/>` +
+      P.map((p, i) => `<g ${tw(i)}><circle cx="${f(p.x)}" cy="${f(p.y)}" r="${p.p ? 1.5 : 1.25}" fill="${p.p ? "#ffd9d0" : "#f3f6ff"}"/></g>`).join("");
+  }
   const el = document.createElement("div");
   el.className = "gd-dev";
   el.style.cssText = `left:${f(devPick.x)}%;top:${f(devPick.y)}%`;
-  el.innerHTML = `<svg width="${f(w * k + pad * 2)}" height="${f(h * k + pad * 2)}" aria-hidden="true"><defs>
-<radialGradient id="gd-dvs"><stop offset="0" stop-color="${col}" stop-opacity=".9"/><stop offset=".32" stop-color="${col}" stop-opacity=".3"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient>
-<radialGradient id="gd-dvr"><stop offset="0" stop-color="#ff4a3a" stop-opacity=".95"/><stop offset=".32" stop-color="#ff2a1f" stop-opacity=".36"/><stop offset="1" stop-color="#ff2a1f" stop-opacity="0"/></radialGradient>
-</defs><path d="${seg}" fill="none" stroke="${col}" stroke-width=".8" stroke-linecap="round" opacity=".17"/>${stars}</svg>`;
-  layer.prepend(el);
+  el.innerHTML = `<svg width="${f(w * k + pad * 2)}" height="${f(h * k + pad * 2)}" aria-hidden="true">${body}</svg>`;
+  return el;
+}
+export function startSky(layer) {
+  ensureCss();
+  layer.prepend(devEl(true));
+  // With the burning city on, startScene() puts the stars in its backdrop; with a photo background they go straight on the back layer.
+  const back = document.getElementById("fx-back");
+  if (back && back.dataset.fx !== "grimdawn-bg" && !back.querySelector(".gd-dev")) back.appendChild(devEl(false));
+}
+
+// ---------- Target bar: the name chip becomes a monster's nameplate ----------
+// Name above, a gold frame with a blood-red fill and the level in its crest, the monster race below.
+// The frame was redrawn by hand as vectors from measurements of a game screenshot (it is not the game's texture).
+// Geometry is in "screenshot pixels": centre x = 269.5, bar y = 83..101; the viewBox crops to 360 x 136.
+const RACES = ["Morto-vivo", "Bestial", "Etéreo", "Ctônico", "Corrupção Etérea", "Jurassangue", "Feérico", "Insetoide", "Humano", "Construção", "Progênie Abissal", "Fera", "Mágico", "Celestial", "Aracnídeo", "Planta"]; // the game's races, in its PT-BR translation
+const barSVG = (() => {
+const C = 269.5;
+// Paths are written in pixels of enlarged screenshot crops and converted to coords relative to the centre.
+const conv = (ox, oy, k) => (s) => s.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (_, a, b) => `${(ox + a / k - C).toFixed(2)},${(oy + b / k).toFixed(2)}`);
+const T = conv(265, 45, 9), T2 = conv(278, 48, 18), T3 = conv(392, 62, 18);
+const flipY = (s, mid) => s.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (_, a, b) => `${a},${(2 * mid - b).toFixed(1)}`);
+
+// ---- right half, crest tracery (T2) ----
+const CROOK = "M338,152 C334,96 290,68 248,84 C198,103 168,166 196,216 C218,252 302,290 346,350 C386,406 384,500 334,584";
+const LEG   = "M214,242 C246,300 250,400 226,470 C206,526 170,566 118,584";
+const XBAR  = "M244,375 L380,375";
+const ARCH  = "M150,570 C196,500 250,463 300,465 C362,468 432,520 486,582";
+const CURL1 = "M560,294 C580,240 550,204 505,205 C450,206 414,256 420,322 C426,420 482,520 582,570 C642,592 722,586 770,546 C796,520 810,470 832,441";
+const STEP1 = "M478,366 L650,366 L772,502";
+const STEP2 = "M832,441 L1160,441 L1250,560 C1274,584 1300,590 1338,592";
+const CURL2 = "M962,354 C976,326 1020,318 1056,340 C1096,366 1104,430 1076,496 C1050,548 990,586 900,586 C860,586 826,570 800,546";
+const TICK2 = "M1108,582 L1184,528";
+// ---- right end (T: 9x half crop, T3: 18x end crop) ----
+const HOOK  = "M1128,210 C1104,196 1072,206 1066,236 C1060,266 1090,284 1128,274 L1186,322";
+const FOOT  = "M938,559 L986,601 L1078,601 C1112,601 1136,611 1132,629 C1129,640 1114,640 1110,630";
+const TICK  = "M1001,561 L1001,600";
+const TIPCURL = "M172,234 C180,200 226,186 256,216 C290,250 286,330 246,386 C226,412 196,432 166,446";
+const RING  = "M286,372 C372,362 462,430 466,525 C462,620 372,688 286,678";
+const STEM  = "M466,525 L498,525";
+const DIAMS = "M152,525 L258,414 L388,525 L258,636 Z";
+const thinR = [CROOK, LEG, XBAR, ARCH, CURL1, STEP1, STEP2, CURL2, TICK2].map(T2).concat([HOOK, FOOT, TICK].map(T), [TIPCURL, flipY(TIPCURL, 525), RING, STEM, DIAMS].map(T3)).join(" ");
+// ---- right half, rails ----
+const railR = T("M43,323 L1064,323 M742,273 L1128,273 M52,521 L1064,521 M52,559 L1160,559 L1186,528");
+const HEAD = T3("M494,442 L668,525 L494,608 Q520,525 494,442 Z");
+// clasp that grips the end of the bar (solid)
+const CLASP = "M112.2,79.5 L122.6,79.5 L131.2,86.6 L128.5,92 L131.2,97.4 L122.6,104.4 L112.2,104.4 L112.2,101.3 L121.3,101.3 L126,97 L124.5,92 L126,87 L121.3,82.6 L112.2,82.6 Z";
+const CLASP_HI = "M112.6,80.2 L122.3,80.2 L130.2,86.7 M112.6,101.9 L121.6,101.9 L126.6,97.2";
+// full-width pieces
+const FILL = "M-126,84.5 L-113.6,84.5 L-113.6,82.9 L113.6,82.9 L113.6,84.5 L126,84.5 L126,99.5 L113.6,99.5 L113.6,101.1 L-113.6,101.1 L-113.6,99.5 L-126,99.5 Z";
+const NOTCH = "M-5.6,80.9 C-2.6,81.4 -0.9,83.6 0,87.6 C0.9,83.6 2.6,81.4 5.6,80.9 Z";
+const GEM = "M-6.2,104.8 Q-1.6,103.4 0,99.2 Q1.6,103.4 6.2,104.8 Q1.6,106.2 0,110.4 Q-1.6,106.2 -6.2,104.8 Z";
+const GEM_IN = "M-2.4,104.8 L0,102.6 L2.4,104.8 L0,107 Z";
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let uid = 0;
+/** name: text above; level: number in the crest; fill: 0..100; race: text below. Returns an SVG string (viewBox 0 0 360 136). */
+function barSVG({ name, level, fill, race }) {
+  const id = "tb" + (uid++), pct = Math.max(0, Math.min(100, fill)) / 100;
+  const both = (inner) => `<g>${inner}</g><g transform="scale(-1,1)">${inner}</g>`;
+  const stroke = (d, w) =>
+    `<path d="${d}" fill="none" stroke="#120803" stroke-width="${w + 1.25}" stroke-linecap="round" stroke-linejoin="round" opacity=".92"/>` +
+    `<path d="${d}" fill="none" stroke="url(#${id}g)" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="#fff1c2" stroke-width="${(w * 0.3).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" opacity=".5" transform="translate(0,-.22)"/>`;
+  const solid = (d, extra = "") => `<path d="${d}" fill="url(#${id}g)" stroke="#120803" stroke-width=".7" stroke-linejoin="round"${extra}/>`;
+  const n = [...String(name)].length, fs = Math.min(27.5, 346 / Math.max(n, 1) / 0.64);
+  const rl = [...String(race)].length, rs = Math.min(17.5, 320 / Math.max(rl, 1) / 0.66);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="89.5 8 360 136" class="gd-tbar" role="img" aria-label="${esc(name)}">
+<defs>
+<linearGradient id="${id}g" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="0" y2="114"><stop offset="0" stop-color="#f3dc9c"/><stop offset=".35" stop-color="#d8b06a"/><stop offset=".62" stop-color="#b98d49"/><stop offset=".85" stop-color="#8a6330"/><stop offset="1" stop-color="#b08a4a"/></linearGradient>
+<linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e99aab"/><stop offset=".26" stop-color="#dc748a"/><stop offset=".37" stop-color="#b41a33"/><stop offset=".62" stop-color="#9b0f22"/><stop offset="1" stop-color="#830a18"/></linearGradient>
+<linearGradient id="${id}n" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6418"/><stop offset=".55" stop-color="#ff4a08"/><stop offset="1" stop-color="#e83404"/></linearGradient>
+<filter id="${id}m" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency=".03 .19" numOctaves="3" seed="11"/><feColorMatrix values="0 0 0 0 .3  0 0 0 0 0  0 0 0 0 .03  5 0 0 0 -2.0"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+<filter id="${id}v" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency=".045 .26" numOctaves="2" seed="4"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 .62  0 0 0 0 .68  0 4.6 0 0 -2.5"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+<filter id="${id}s" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur in="SourceAlpha" stdDeviation="1.6"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.5 0"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<filter id="${id}k" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.2"/></filter>
+<clipPath id="${id}c"><path d="${FILL}"/></clipPath>
+<clipPath id="${id}h"><rect x="-126" y="80" width="${(252 * pct).toFixed(1)}" height="24"/></clipPath>
+</defs>
+<text data-fit="346" x="${C}" y="43.4" text-anchor="middle" font-family="'GD Risque',serif" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.115).toFixed(2)}" word-spacing="${(fs * 0.22).toFixed(1)}" fill="url(#${id}n)" stroke="#2a0700" stroke-width="2.6" stroke-linejoin="round" paint-order="stroke" filter="url(#${id}s)">${esc(name)}</text>
+<text data-fit="346" x="${C}" y="43.4" text-anchor="middle" font-family="'GD Risque',serif" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.115).toFixed(2)}" word-spacing="${(fs * 0.22).toFixed(1)}" fill="url(#${id}n)" stroke="#ff4a08" stroke-width=".55" stroke-linejoin="round">${esc(name)}</text>
+<g transform="translate(${C},0)">
+<ellipse cx="0" cy="68" rx="20" ry="10" fill="#000" opacity=".75" filter="url(#${id}k)"/>
+${both(`<path d="M78,75.6 H121 L127,80.9 H78 Z M5,102.9 H113 L124,104 L124,107 H5 Z" fill="#050302" opacity=".95"/>`)}<rect x="-114" y="80.9" width="228" height="22" fill="#050302"/>
+<path d="${FILL}" fill="#170306"/>
+<g clip-path="url(#${id}c)"><g clip-path="url(#${id}h)">
+<rect x="-127" y="82" width="254" height="20" fill="url(#${id}b)"/>
+<rect x="-127" y="86.5" width="254" height="15" fill="#000" filter="url(#${id}m)" opacity=".8"/><rect x="-127" y="82" width="254" height="20" fill="#000" filter="url(#${id}v)" opacity=".16"/>
+<rect x="-127" y="83.2" width="254" height="4.4" fill="#ffd9e2" opacity=".22"/>
+</g></g>
+<path d="${FILL}" fill="none" stroke="#070201" stroke-width="1.1"/>
+${both(stroke(railR, 1.4))}
+${both(stroke(thinR, 1.2))}
+${both(solid(CLASP) + `<path d="${CLASP_HI}" fill="none" stroke="#fff1c2" stroke-width=".5" opacity=".65"/>`)}
+${both(`<path d="${HEAD}" fill="#0a0503" stroke="#120803" stroke-width="2.6" stroke-linejoin="round"/><path d="${HEAD}" fill="#0a0503" stroke="url(#${id}g)" stroke-width="1.35" stroke-linejoin="round"/>`)}
+<path d="${NOTCH}" fill="#070302" stroke="url(#${id}g)" stroke-width="1.15" stroke-linejoin="round"/>
+${solid(GEM)}<path d="${GEM_IN}" fill="#0a0503"/>
+<text x="0" y="74.6" text-anchor="middle" font-family="'GD Cinzel',serif" font-weight="700" font-size="16.6" letter-spacing="1" fill="#f1d24a" stroke="#1c1002" stroke-width="1.1" paint-order="stroke">${esc(level)}</text>
+</g>
+<text data-fit="320" x="${C}" y="135" text-anchor="middle" font-family="'GD Risque',serif" font-size="${rs.toFixed(1)}" letter-spacing="${(rs * 0.11).toFixed(2)}" word-spacing="${(rs * 0.45).toFixed(1)}" fill="#ececec" stroke="#0b0b0b" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke" filter="url(#${id}s)">${esc(race)}</text>
+<text data-fit="320" x="${C}" y="135" text-anchor="middle" font-family="'GD Risque',serif" font-size="${rs.toFixed(1)}" letter-spacing="${(rs * 0.11).toFixed(2)}" word-spacing="${(rs * 0.45).toFixed(1)}" fill="#ececec" stroke="#ececec" stroke-width=".45" stroke-linejoin="round">${esc(race)}</text>
+</svg>`;
+}
+return barSVG;
+})();
+let barPick = null; // level (= how full the bar is) and race: rolled once per app open
+export function targetBar(chip, name) {
+  ensureSkin();
+  barPick ||= { level: 18 + Math.floor(Math.random() * 83), race: RACES[Math.floor(Math.random() * RACES.length)] };
+  if (chip.dataset.gdBar === name && chip.querySelector(".gd-tbar")) return;
+  chip.dataset.gdBar = name;
+  chip.classList.add("gd-bar");
+  chip.innerHTML = barSVG({ name, level: barPick.level, fill: barPick.level, race: barPick.race });
+  // Long names shrink to fit (measured, and again once the font has arrived).
+  const fit = () => chip.querySelectorAll("text[data-fit]").forEach((t) => {
+    const len = t.getComputedTextLength(), max = +t.dataset.fit;
+    if (!(len > max)) return;
+    const r = max / len;
+    for (const a of ["font-size", "letter-spacing", "word-spacing"]) t.setAttribute(a, (parseFloat(t.getAttribute(a)) * r).toFixed(2));
+  });
+  fit();
+  if (document.fonts && document.fonts.load) document.fonts.load('27px "GD Risque"').then(() => { if (chip.dataset.gdBar === name) fit(); }).catch(() => {});
 }
 
 // ---------- Ash & embers ----------
@@ -264,6 +391,7 @@ const GRAIN = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www
 const SKIN_CSS = () => `
 @font-face { font-family: "GD Cinzel"; src: url("${FONT("cinzel.woff")}") format("woff"); font-weight: 400 900; font-display: swap; }
 @font-face { font-family: "GD Fell"; src: url("${FONT("fell.woff")}") format("woff"); font-display: swap; }
+@font-face { font-family: "GD Risque"; src: url("${FONT("risque.woff")}") format("woff"); font-display: swap; }
 .gd-backdrop { position: absolute; inset: 0; pointer-events: none; }
 /* The sky for this effect only (the palette stays as it is), like the Malmouth wallpaper: the burning city
    lights the sky just above its roofs in aether green, fading to a deep green-black at the top of the screen.
@@ -317,6 +445,11 @@ body.gd-skin #topbar h1 { font-family: "GD Cinzel", Georgia, serif; font-style: 
 body.gd-skin .me-chip { border-radius: 2px; border: 1px solid var(--gd-bronze); background: linear-gradient(180deg, #1b1d1c, #0b0c0c);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 230, 170, .08); }
 body.gd-skin .me-chip .uname { font-family: "GD Fell", Georgia, serif; }
+body.gd-skin .me-chip.gd-bar { display: block; width: min(340px, 94vw); max-width: none; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; animation: none; }
+.gd-tbar { display: block; width: 100%; height: auto; overflow: visible; }
+body.gd-skin .me-chip.gd-bar.nudge .gd-tbar { animation: gd-bar-nudge 1.6s ease-in-out infinite alternate; }
+@keyframes gd-bar-nudge { from { opacity: .6; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { body.gd-skin .me-chip.gd-bar.nudge .gd-tbar { animation: none; } }
 /* Banner: quest text between two bronze rules */
 body.gd-skin #occ-card.banner-occ { background: none; border: 0; box-shadow: none; }
 body.gd-skin #banner { font-family: "GD Fell", Georgia, serif; font-style: italic; color: #d8cfb8; position: relative; padding: 8px 6px; }
@@ -600,6 +733,7 @@ export function startScene(layer) {
   }
   layer.insertAdjacentHTML("beforeend", `<div class="gd-backdrop"><div class="tint"></div><div class="glow"></div><div class="grain"></div><div class="gd-storm"></div></div>`);
   const storm = layer.querySelector(".gd-storm");
+  layer.querySelector(".gd-backdrop .grain").before(devEl(false)); // the devotion stars: in the sky, behind the skyline
   startCity(layer);
   // Aether lightning, far off: a double flash every so often.
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {

@@ -338,6 +338,7 @@ const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subin
 const OCCASION_ONLY_FX = ["grimdawn"];
 // The Grim Dawn pack lives in its own file, fetched only when the effect is on (same version as app.js).
 let gdModule = null;
+let gdLoaded = null; // the Grim Dawn pack, once it has arrived (the name chip needs it without waiting)
 const loadGrimDawn = () => (gdModule ||= import(new URL("grimdawn.js" + new URL(import.meta.url).search, import.meta.url).href));
 // Assombrado: corner web, a spider on its thread, fog along the bottom, and an eye where you tap the background.
 const WEB_SVG = `<svg viewBox="0 0 160 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round">
@@ -647,6 +648,7 @@ function runEffect(kind) {
   const behind = kind === "smoke";
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
   spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : kind === "grimdawn" && !bgImageId ? "grimdawn-bg" : null);
+  if (auth.currentUser) renderMeChip(); // the Grim Dawn pack turns the name chip into a target bar, and back
 }
 // Assombrado fog: three cartoon cloud strips sliding in parallax (back: dim, small, slow → front:
 // light, big, fast, glowing) over a faint haze. Each strip repeats seamlessly and has its own
@@ -1488,8 +1490,15 @@ function nameHtml(uid, fallback) {
 function renderMeChip() {
   const chip = $("me-chip");
   if (!chip || !auth.currentUser) return;
-  const p = family[auth.currentUser.uid] || me || {};
-  chip.innerHTML = p.name || curseOf(auth.currentUser.uid) ? nameHtml(auth.currentUser.uid, p.name) : "…";
+  const uid = auth.currentUser.uid, p = family[uid] || me || {};
+  const plain = curseOf(uid) || p.name;
+  if (effectKey === "grimdawn" && plain) { // ⚔️ the chip becomes a monster's target bar: just the word, no style or icon
+    if (gdLoaded) { gdLoaded.targetBar(chip, plain); renderCurseBanner(); return; }
+    loadGrimDawn().then((m) => { gdLoaded = m; if (effectKey === "grimdawn") renderMeChip(); }).catch((e) => console.warn("grimdawn", e));
+  }
+  chip.classList.remove("gd-bar");
+  delete chip.dataset.gdBar;
+  chip.innerHTML = plain ? nameHtml(uid, p.name) : "…";
   renderCurseBanner();
 }
 // The cursed person gets a small banner (tap: who did it).

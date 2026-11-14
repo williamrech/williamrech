@@ -4,3 +4,8 @@ Cropped from the sprite sheets in mods/fantasycore/images/loot, some scaled down
 
 City strips (gd-city-*.webp): the app owner's own painted Malmouth skyline, cut into rows and compressed.
 Raven (gd-raven.webp): drawn for this app (frames of a wingbeat, rendered from code), no third-party art.
+
+Fonts (web/fonts): Cinzel, IM Fell and Risque (risque.woff, a Latin subset renamed "GD Bar"), all under the SIL Open
+Font License; see the OFL-*.txt files there.
+Target bar and devotion constellations: the bar's gold frame was drawn for this app as vectors (not the game's texture);
+the constellations are star coordinates and links from Grim Dawn's game data (no game artwork).
