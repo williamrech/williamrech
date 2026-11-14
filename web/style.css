@@ -1302,7 +1302,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .occ-tema-links { display: flex; gap: 16px; margin: 0 0 12px; }
 
 /* Admin: the three groups, the Ocasiões view switch, the drawing library */
-.adm-groups { display: flex; gap: 8px; margin: 0 0 10px; }
+.adm-groups { position: sticky; top: 0; z-index: 3; display: flex; gap: 8px; padding: 2px 0 10px; background: transparent; } /* pinned while scrolling; no box, the chips are solid */
 .adm-groups .chip { flex: 1; justify-content: center; }
 .occ-view { display: flex; gap: 8px; margin: 2px 0 10px; }
 .ag-list li[data-occ] { cursor: pointer; }
