@@ -364,7 +364,8 @@ async function openArt(name, confirmed) {
   }
   if (S) S.artReady = true;
   const img = new Image();
-  img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5), 2)); // at most 2× the original art, so small things (rings) stay sharp if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
+  // At most 2× the original art, so small things (rings) stay sharp.
+  img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5), 2)); if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
   img.onerror = silly;
   img.src = gdRef.ITEM_SPRITE;
 }
