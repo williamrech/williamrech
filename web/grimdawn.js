@@ -27,8 +27,8 @@ const CSS = `
   from { transform: rotate(var(--r0)) rotate3d(1, .35, 0, -55deg); }
   to { transform: rotate(calc(var(--r0) + 120deg)) rotate3d(1, .35, 0, 65deg); }
 }
-.gd-ash.hot { animation: gd-ash-fall linear infinite, gd-ash-flutter ease-in-out infinite alternate, gd-ash-cool 6s ease-in infinite; }
-@keyframes gd-ash-cool { 0%, 30% { filter: brightness(1.6); } 100% { filter: brightness(.6); } }
+.gd-ash.hot { animation: gd-ash-fall linear infinite, gd-ash-flutter ease-in-out infinite alternate, gd-ash-glow ease-in-out infinite alternate; }
+@keyframes gd-ash-glow { from { opacity: 1; } to { opacity: .55; } } /* the burning edge flickers (opacity only: cheap) */
 .gd-ember { position: absolute; bottom: -8px; border-radius: 50%; background: #c8ffe0; pointer-events: none;
   box-shadow: 0 0 4px 1px #46ff9a, 0 0 10px 2px rgba(70, 255, 154, .35); opacity: 0; will-change: transform, opacity; }
 @keyframes gd-ember-rise {
@@ -41,7 +41,7 @@ const CSS = `
 .gd-far .gd-rift { mix-blend-mode: screen; opacity: .8; filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
 .gd-far canvas.gd-riftgl { position: absolute; pointer-events: none; mix-blend-mode: screen; }
 .gd-raven { position: absolute; left: 0; top: 0; display: block; pointer-events: none; z-index: 2;
-  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, .7)); }
+  filter: drop-shadow(0 0 1.5px rgba(170, 15, 15, .75)) drop-shadow(0 0 5px rgba(120, 0, 0, .45)); } /* a faint crimson aura, so they show on the dark */
 .gd-raven .w { transform-box: fill-box; transform-origin: 50% 100%; }
 .gd-far .gd-soot { position: absolute; border-radius: 50%; pointer-events: none;
   background: radial-gradient(closest-side, rgba(0,0,0,.85) 35%, rgba(0,0,0,.5) 65%, transparent 100%); }
@@ -84,17 +84,17 @@ export function startAsh(layer, scale = 1) {
   for (let i = 0; i < Math.round(38 * scale) + 4; i++) {
     const a = document.createElement("i");
     a.className = "gd-ash";
-    // Charred flakes: dark, irregular (a ragged polygon), a few with an edge still glowing aether green.
-    const w = rnd(4, 9) * k, hot = Math.random() < 0.14;
+    // Charred flakes: dark grey to black, irregular (a ragged polygon); a rare one still burning red at the edge.
+    const w = rnd(4, 9) * k, hot = Math.random() < 0.06;
     const pts = []; const nP = 5 + Math.floor(rnd(0, 3));
     for (let j = 0; j < nP; j++) { const t = (j / nP) * 6.283 + rnd(-0.3, 0.3), rr = rnd(38, 52); pts.push(`${(50 + Math.cos(t) * rr).toFixed(0)}% ${(50 + Math.sin(t) * rr).toFixed(0)}%`); }
     const fall = rnd(16, 28) / Math.max(scale, 0.6);
     if (hot) a.classList.add("hot");
     a.style.cssText = `left:${rnd(0, 100)}%;width:${w}px;height:${w * rnd(0.5, 0.85)}px;opacity:${rnd(0.55, 0.9).toFixed(2)};`
       + `clip-path:polygon(${pts.join(",")});`
-      + `background:${hot ? "radial-gradient(circle at 30% 40%, #b8ffd8 0, #3fe08c 35%, #2a2725 75%)" : pick(["#2a2725", "#3d3733", "#57504a", "#6c645c", "#7d756b", "#8c8378"])};`
+      + `background:${hot ? "radial-gradient(circle closest-side, #171311 55%, #7a1a0a 72%, #ff4a1a 88%, #ffa060 100%)" : pick(["#141211", "#1c1917", "#26221f", "#312c28", "#3d3733", "#4a443f"])};`
       + `--sway:${rnd(-45, 45) * scale}px;--sway2:${rnd(-45, 45) * scale}px;--r0:${rnd(0, 360).toFixed(0)}deg;`
-      + `animation-duration:${fall}s, ${rnd(1.6, 3.4).toFixed(2)}s${hot ? `, ${rnd(5, 9).toFixed(1)}s` : ""};animation-delay:${rnd(-fall, 0).toFixed(1)}s, ${rnd(-3, 0).toFixed(1)}s`;
+      + `animation-duration:${fall}s, ${rnd(1.6, 3.4).toFixed(2)}s${hot ? `, ${rnd(0.35, 0.8).toFixed(2)}s` : ""};animation-delay:${rnd(-fall, 0).toFixed(1)}s, ${rnd(-3, 0).toFixed(1)}s`;
     layer.appendChild(a);
   }
   for (let i = 0; i < Math.round(14 * scale) + 1; i++) setTimeout(() => ember(layer, k), rnd(0, 3000));
@@ -221,6 +221,7 @@ function ensureSkin() {
 const EMO = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\uFE0F|\u20E3|\p{Emoji_Modifier}|\u200D(?:\p{Extended_Pictographic}|\p{Regional_Indicator}))*/gu;
 const EMO_SKIP = "input, textarea, select, script, style, svg, [contenteditable], #fx, #fx-back, .gd-emo, .ubadge, .cursed, .emoji-grid";
 function wrapEmoji(root) {
+  if (!root) return;
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const hits = [];
   for (let t = walk.nextNode(); t; t = walk.nextNode()) {
@@ -242,11 +243,29 @@ function wrapEmoji(root) {
   }
 }
 function sepiaEmoji() {
-  let queued = false;
-  const run = () => { queued = false; if (document.body.classList.contains("gd-skin")) wrapEmoji(document.body); };
-  new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(run); } })
-    .observe(document.body, { childList: true, subtree: true, characterData: true });
-  run();
+  // Only look at what changed, and never at the effect layers (sparks and ash change many times a second).
+  let pending = new Set(), queued = false;
+  const fxLayer = (n) => { const e = n.nodeType === 1 ? n : n.parentElement; return !e || !!e.closest("#fx, #fx-back, .gd-emo"); };
+  const run = () => {
+    queued = false;
+    const list = [...pending]; pending = new Set();
+    if (!document.body.classList.contains("gd-skin")) return;
+    for (const n of list) {
+      if (!n.isConnected || fxLayer(n)) continue;
+      wrapEmoji(n.nodeType === 3 ? n.parentElement : n);
+    }
+  };
+  new MutationObserver((recs) => {
+    for (const r of recs) {
+      if (fxLayer(r.target)) continue;
+      if (r.type === "characterData") pending.add(r.target);
+      else r.addedNodes.forEach((n) => { if (n.nodeType === 1 || n.nodeType === 3) pending.add(n); });
+    }
+    if (pending.size && !queued) { queued = true; requestAnimationFrame(run); }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  if (document.body.classList.contains("gd-skin")) wrapEmoji(document.body);
+  else new MutationObserver((_, o) => { if (document.body.classList.contains("gd-skin")) { o.disconnect(); wrapEmoji(document.body); } })
+    .observe(document.body, { attributes: true, attributeFilter: ["class"] });
 }
 // ---------- The bottom of the screen: Malmouth burning ----------
 // The skyline rows (below), the app's fog engine tinted for rolling smoke, and aether lightning far away.
@@ -265,6 +284,7 @@ const CITY_CSS = `
 .gd-city { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .gd-city .row { position: absolute; left: 0; right: 0; overflow: hidden; }
 .gd-city .row img { position: absolute; top: 0; max-width: none; user-select: none; -webkit-user-drag: none; }
+.gd-city .row img.lit { opacity: 0; filter: brightness(2.2) saturate(1.1); will-change: opacity; }
 .gd-city .seam { position: absolute; left: 0; width: 100%; mix-blend-mode: screen; }
 .gd-city .seam.still { background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(80, 255, 170, .35), rgba(40, 200, 130, .14) 45%, transparent 75%); }
 .gd-city .sky { position: absolute; left: -20%; right: -20%; bottom: 14vh; height: 52vh; mix-blend-mode: screen;
@@ -303,6 +323,12 @@ function startCity(layer) {
     img.alt = ""; img.decoding = "async";
     img.style.cssText = `left:${-off}px;width:${w * sc}px;height:${H}px`;
     row.appendChild(img);
+    if (i < 2) { // a lit copy for lightning and bursts, hidden until then
+      const lit = img.cloneNode();
+      lit.className = "lit";
+      row.appendChild(lit);
+      r.lit = lit;
+    }
     city.appendChild(row);
     r.H = H; r.el = row;
     // Between this row and the next one in front: a band of green fire, its foot hidden behind the front row.
@@ -313,7 +339,7 @@ function startCity(layer) {
       const bh = vh * 0.24, bottom = next.base * vh + next.h * vh * 0.12;
       band.style.cssText = `bottom:${bottom}px;height:${bh}px`;
       city.appendChild(band);
-      seams.push(band); band.backRow = row; band.tone = r.tone;
+      seams.push(band); band.lit = r.lit;
     }
   });
   city.insertAdjacentHTML("beforeend", `<div class="floor"></div>`);
@@ -355,67 +381,71 @@ void main(){
   float a = clamp(max(col.r, max(col.g, col.b)), 0., 1.);
   gl_FragColor = vec4(min(col, vec3(a)), a);
 }`;
+// Light falling on the buildings: a pre-brightened copy of the row fades in and out (opacity only — cheap).
 const lightUp = (band, steps, ms) => {
-  const row = band.backRow; if (!row) return;
-  row.animate(steps.map(([o, b]) => ({ offset: o, filter: `${band.tone} brightness(${b})` })), { duration: ms, easing: "ease-out" });
+  const lit = band.lit; if (!lit) return;
+  lit.animate(steps.map(([o, v]) => ({ offset: o, opacity: v })), { duration: ms, easing: "ease-out" });
 };
 function seamFire(bands, w, bh) {
   if (!bands.length) return true;
-  const Q = 0.5, cw = Math.round(w * Q), ch = Math.round(bh * Q);
-  const glc = document.createElement("canvas");
-  glc.width = cw; glc.height = ch;
-  const gl = glc.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: false });
-  if (!gl) return false;
-  const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
-  const vs = sh(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }"), fs = sh(gl.FRAGMENT_SHADER, FIRE_FS);
-  if (!vs || !fs) return false;
-  const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr);
-  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return false;
-  gl.useProgram(pr);
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = {}; for (const k of ["res", "t", "seed", "aspect", "flash", "bx", "bage", "lx", "ly", "lamp"]) U[k] = gl.getUniformLocation(pr, k);
-  gl.uniform2f(U.res, cw, ch); gl.uniform1f(U.aspect, w / bh);
-  gl.viewport(0, 0, cw, ch);
-  const S = bands.map((c, i) => {
+  // Each band draws straight into its own canvas (no copying pixels back, which stalled the phone), at 0.4×
+  // resolution (fire is soft anyway) and ~24 frames a second.
+  const Q = 0.4, cw = Math.round(w * Q), ch = Math.round(bh * Q);
+  const S = [];
+  for (const [i, c] of bands.entries()) {
     c.width = cw; c.height = ch;
-    return { band: c, ctx: c.getContext("2d"), seed: rnd(0, 90) + i * 37, flash: null, burst: null, lamp: { x: rnd(0.1, 0.9), y: rnd(0.38, 0.55), next: performance.now() + rnd(1000, 6000), on: 0, phase: "off" } };
-  });
+    const gl = c.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: false, powerPreference: "low-power" });
+    if (!gl) return false;
+    const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
+    const vs = sh(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }"), fs = sh(gl.FRAGMENT_SHADER, FIRE_FS);
+    if (!vs || !fs) return false;
+    const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return false;
+    gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = {}; for (const k of ["res", "t", "seed", "aspect", "flash", "bx", "bage", "lx", "ly", "lamp"]) U[k] = gl.getUniformLocation(pr, k);
+    gl.uniform2f(U.res, cw, ch); gl.uniform1f(U.aspect, w / bh);
+    gl.viewport(0, 0, cw, ch);
+    S.push({ band: c, gl, U, seed: rnd(0, 90) + i * 37, flash: null, burst: null, lamp: { x: rnd(0.1, 0.9), y: rnd(0.38, 0.55), next: performance.now() + rnd(1000, 6000), on: 0, phase: "off" } });
+  }
   const now0 = performance.now();
-  // Events.
   const FLASH = [[0, 0], [0.05, 1], [0.16, 0.12], [0.26, 0.75], [0.45, 0.18], [1, 0]];
   const env = (k) => { for (let i = 1; i < FLASH.length; i++) if (k <= FLASH[i][0]) { const [a, va] = FLASH[i - 1], [b, vb] = FLASH[i]; return va + (vb - va) * (k - a) / (b - a); } return 0; };
   let nextFlash = now0 + rnd(4000, 9000), nextBurst = now0 + rnd(7000, 14000);
-  const lampLevel = (L, t) => {
-    if (t < L.next) return L.on;
+  const lampStep = (L, t) => {
+    if (t < L.next) return;
     if (L.phase === "off") { L.phase = "on"; L.x = rnd(0.08, 0.92); L.y = rnd(0.38, 0.55); L.t0 = t; L.next = t + rnd(6000, 12000); }
     else if (L.phase === "on") { L.phase = "sputter"; L.t0 = t; L.next = t + rnd(1400, 2400); }
     else { L.phase = "off"; L.next = t + rnd(3000, 9000); }
-    return L.on;
   };
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let last = 0;
+  let last = 0, quietUntil = 0;
+  // A touch gets the phone's full attention: the fire holds still for a moment while the tap is handled.
+  const onTouch = () => { quietUntil = performance.now() + 350; };
+  document.addEventListener("pointerdown", onTouch, { passive: true, capture: true });
   const frame = (t) => {
-    if (!bands[0].isConnected) { const lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); return; }
+    if (!bands[0].isConnected) { document.removeEventListener("pointerdown", onTouch, { capture: true }); for (const s of S) { const lose = s.gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); } return; }
     if (!still) requestAnimationFrame(frame);
-    if (document.hidden || t - last < 32) return;
+    if (document.hidden || t - last < 40 || t < quietUntil) return;
     last = t;
     if (t > nextFlash) {
       const s = pick(S); s.flash = t; nextFlash = t + rnd(6000, 16000);
-      lightUp(s.band, [[0, 1], [0.05, 2.1], [0.16, 1.15], [0.26, 1.8], [0.45, 1.2], [1, 1]], 750); // lightning shows the buildings
+      lightUp(s.band, [[0, 0], [0.05, 1], [0.16, 0.15], [0.26, 0.8], [0.45, 0.2], [1, 0]], 750); // lightning shows the buildings
     }
     if (t > nextBurst) {
       const s = pick(S); s.burst = { t0: t, x: rnd(0.1, 0.9) }; nextBurst = t + rnd(9000, 22000);
-      lightUp(s.band, [[0, 1], [0.08, 1.6], [1, 1]], 1600);
+      lightUp(s.band, [[0, 0], [0.08, 0.6], [1, 0]], 1600);
     }
     for (const s of S) {
+      const { gl, U } = s;
       const fk = s.flash == null ? 1 : (t - s.flash) / 750;
       const fl = fk >= 0 && fk < 1 ? env(fk) * 0.8 : 0;
       if (fk >= 1) s.flash = null;
       let bage = -1;
       if (s.burst) { bage = (t - s.burst.t0) / 1600; if (bage > 1) { s.burst = null; bage = -1; } }
-      const L = s.lamp; lampLevel(L, t);
+      const L = s.lamp; lampStep(L, t);
       if (L.phase === "on") L.on = Math.min(1, (t - L.t0) / 400) * (0.9 + 0.1 * Math.random());
       else if (L.phase === "sputter") { const k = (t - L.t0) / (L.next - L.t0); L.on = Math.random() < 0.55 - k * 0.45 ? rnd(0.5, 1) * (1 - k * 0.5) : rnd(0, 0.12); }
       else L.on = 0;
@@ -424,8 +454,6 @@ function seamFire(bands, w, bh) {
       gl.uniform1f(U.lx, L.x); gl.uniform1f(U.ly, L.y); gl.uniform1f(U.lamp, L.on);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      s.ctx.clearRect(0, 0, cw, ch);
-      s.ctx.drawImage(glc, 0, 0);
     }
   };
   requestAnimationFrame(frame);
@@ -456,7 +484,12 @@ export function startScene(layer, helpers = {}) {
 // ---------- Tap ----------
 export function grimTap(x, y, layer, force) { // every tap drops loot; force (tests only): { lucky: 0..1 }
   ensureCss();
-  if (!force && layer.querySelectorAll(".gd-fx").length >= 4) return; // don't pile up
+  // Every tap drops loot. If too many piles are lying around, the oldest one fades out early to make room.
+  const piles = [...layer.querySelectorAll(":scope > .gd-fx:not(.gd-going)")];
+  if (piles.length >= 4) {
+    const old = piles[0]; old.classList.add("gd-going");
+    old.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: "forwards" }).onfinish = () => old.remove();
+  }
   loot(x, y, layer, force && force.lucky);
 }
 // Rifts open on their own and take the ＋ button's place for a while: purple riftgate, green aether-fire
@@ -670,7 +703,7 @@ export function raven(spot) {
   const b = document.createElement("i");
   b.className = "gd-raven";
   const fabEl = document.getElementById("fab"), P = (fabEl && fabEl.offsetWidth) || 56;
-  const w = P * rnd(0.46, 0.54);                        // about half the portal
+  const w = P * rnd(0.8, 0.9);                          // nearly the portal's size, never bigger
   b.style.cssText = `width:${w}px;height:${w * 0.58}px;margin:${-w * 0.29}px 0 0 ${-w / 2}px`;
   b.innerHTML = RAVEN;
   spot.appendChild(b);
