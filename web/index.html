@@ -120,30 +120,19 @@
 
       <!-- Admin tab (only for admins) -->
       <div id="tab-admin" role="tabpanel" hidden>
-        <details class="adm-sec" id="be-sec">
-          <summary>🖥️ Backend <span class="be-sum" id="be-sum"></span></summary>
-          <div id="be-body" class="be"><p class="muted small">Carregando…</p></div>
-        </details>
+        <div class="chips adm-groups" id="adm-groups" role="tablist">
+          <button type="button" class="chip" data-grp="familia">👪 Família</button>
+          <button type="button" class="chip" data-grp="visual">🎨 Visual</button>
+          <button type="button" class="chip" data-grp="sistema">⚙️ Sistema</button>
+        </div>
 
-        <details class="adm-sec" id="adm-rounds-sec">
+        <details class="adm-sec" data-grp="familia" id="adm-rounds-sec">
           <summary>📋 No ar agora <span class="be-sum" id="adm-rounds-sum"></span></summary>
           <div id="adm-rounds" class="adm-rounds"></div>
           <button type="button" id="adm-rounds-refresh" class="link small">↻ Atualizar</button>
         </details>
 
-        <details class="adm-sec">
-          <summary>🛠️ Ferramentas</summary>
-          <div class="admin-grid">
-            <button id="adm-health" class="secondary">Checar saúde</button>
-            <button id="adm-test" class="secondary">Notificação teste</button>
-            <button id="adm-btn-test" class="secondary">Testar botões</button>
-            <button id="adm-reset-me" class="secondary">Resetar só eu</button>
-            <button id="adm-nuke" class="danger">Apagar TUDO</button>
-          </div>
-          <div id="adm-out" class="adm-out"></div>
-        </details>
-
-        <details class="adm-sec">
+        <details class="adm-sec" data-grp="familia">
           <summary>👥 Pessoas</summary>
           <ul id="adm-people" class="people-list"></ul>
           <p class="muted small" id="adm-people-msg"></p>
@@ -155,42 +144,45 @@
           </form>
         </details>
 
-        <details class="adm-sec" id="adm-log-sec">
+        <details class="adm-sec" data-grp="familia" id="adm-log-sec">
           <summary>🪵 Logs</summary>
           <p class="muted small">Tudo que aconteceu nos últimos 30 dias, do mais novo pro mais antigo.</p>
           <div class="chips" id="log-filter"></div>
           <ul id="adm-log" class="log-list"></ul>
         </details>
 
-        <details class="adm-sec">
-          <summary>🎨 Temas</summary>
-          <ul id="adm-palettes" class="adm-list"></ul>
-          <button id="adm-pal-new" class="secondary wide">＋ Novo tema</button>
-        </details>
-
-        <details class="adm-sec" id="adm-agenda-sec">
-          <summary>🗓️ Agenda</summary>
-          <div id="adm-agenda"></div>
-        </details>
-
-        <details class="adm-sec">
+        <details class="adm-sec" data-grp="visual" id="adm-occ-sec">
           <summary>📅 Ocasiões</summary>
           <p class="muted small" id="adm-today"></p>
+          <div class="chips occ-view" id="adm-occ-view"><button type="button" class="chip" data-v="cal">🗓️ Calendário</button><button type="button" class="chip" data-v="list">📋 Lista</button></div>
+          <div id="adm-agenda"></div>
           <ul id="adm-occasions" class="adm-list"></ul>
           <button id="adm-occ-new" class="secondary wide">＋ Nova ocasião</button>
         </details>
 
-        <details class="adm-sec">
-          <summary>🖼️ Desenhos</summary>
-          <p class="muted small">Toque num desenho pra ver o nome. Os enviados por aqui ficam no banco e podem ser apagados.</p>
-          <div id="adm-drawings" class="drawings"></div>
-          <div class="row-buttons">
-            <label class="secondary file-btn">Enviar .svg<input type="file" id="adm-svg-file" accept=".svg,image/svg+xml" hidden></label>
-            <button id="adm-svg-paste" class="secondary">Colar código</button>
-          </div>
+        <details class="adm-sec" data-grp="visual">
+          <summary>🎨 Temas</summary>
+          <ul id="adm-palettes" class="adm-list"></ul>
+          <button id="adm-pal-new" class="secondary wide">＋ Novo tema</button>
+          <button type="button" id="adm-lib-open" class="link small">🖼️ Biblioteca de desenhos</button>
         </details>
 
-        <details class="adm-sec">
+        <details class="adm-sec" data-grp="sistema" id="be-sec">
+          <summary>🖥️ Backend <span class="be-sum" id="be-sum"></span></summary>
+          <div id="be-body" class="be"><p class="muted small">Carregando…</p></div>
+        </details>
+
+        <details class="adm-sec" data-grp="sistema">
+          <summary>🛠️ Ferramentas</summary>
+          <div class="admin-grid">
+            <button id="adm-health" class="secondary">Checar saúde</button>
+            <button id="adm-test" class="secondary">Notificação teste</button>
+            <button id="adm-btn-test" class="secondary">Testar botões</button>
+          </div>
+          <div id="adm-out" class="adm-out"></div>
+        </details>
+
+        <details class="adm-sec" data-grp="sistema">
           <summary>🔤 Versão &amp; textos</summary>
           <p class="muted small" id="adm-version-today"></p>
           <label class="field">1 em quantos dias tem piada na versão? (0 = nunca)
@@ -413,6 +405,19 @@
       </div>
       <button type="button" id="occ-cancel" class="link small close-link">fechar sem salvar</button>
     </form>
+  </dialog>
+
+  <!-- Admin: the drawing library (from Temas, and from the ＋ at the end of a tema's drawings) -->
+  <dialog id="dlg-lib">
+    <h2>🖼️ Biblioteca de desenhos</h2>
+    <p class="muted small">Toque num desenho: nome e onde é usado. Os enviados por aqui podem ser apagados.</p>
+    <div id="lib-grid" class="ps-decor lib-grid theme-scope"></div>
+    <p class="muted small" id="lib-info"></p>
+    <div class="row-buttons">
+      <label class="secondary file-btn">Enviar .svg<input type="file" id="adm-svg-file" accept=".svg,image/svg+xml" hidden></label>
+      <button type="button" id="adm-svg-paste" class="secondary">Colar código</button>
+    </div>
+    <button type="button" id="lib-close" class="link small close-link">fechar</button>
   </dialog>
 
   <!-- Admin: paste SVG code -->

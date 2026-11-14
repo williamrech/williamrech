@@ -1300,3 +1300,13 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 /* Occasion editor: the tema line and its shortcuts */
 #occ-tema-info { margin: -4px 0 2px; }
 .occ-tema-links { display: flex; gap: 16px; margin: 0 0 12px; }
+
+/* Admin: the three groups, the Ocasiões view switch, the drawing library */
+.adm-groups { position: sticky; top: 0; z-index: 3; display: flex; gap: 8px; padding: 2px 0 10px; background: var(--bg); }
+.adm-groups .chip { flex: 1; justify-content: center; }
+.occ-view { display: flex; gap: 8px; margin: 2px 0 10px; }
+.ag-list li[data-occ] { cursor: pointer; }
+.lib-grid { flex-wrap: wrap; overflow: visible; max-height: 52vh; overflow-y: auto; gap: 8px; padding: 8px; border-radius: 12px; background: var(--bg); }
+.dg.dg-more .dg-img { display: grid; place-items: center; font-size: 1.4rem; color: var(--muted); }
+.danger-link { color: #e5574f; }
+.lib-grid .dg:not(.on) .dg-img { opacity: 1; }

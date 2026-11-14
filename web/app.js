@@ -591,7 +591,6 @@ const api = {
   adminBackend: call("adminBackend"),
   joinRound: call("joinRound"),
   adminTest: call("adminTest"),
-  adminReset: call("adminReset"),
   adminListUsers: call("adminListUsers"),
   adminCreateUser: call("adminCreateUser"),
   adminSetPassword: call("adminSetPassword"),
@@ -2548,13 +2547,24 @@ function nextDates(when, n = 3) {
 }
 const fmtDate = ({ i, t }) => (i === 0 ? "hoje" : i === 1 ? "amanhã" : `${DAY_SHORT[t.weekday].toLowerCase()} ${dmy(t.d, t.m, t.y)}`);
 
+// Admin is split in three groups (chips at the top); the phone remembers the last one.
+const lsGet = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+function showAdmGroup(g) {
+  if (!["familia", "visual", "sistema"].includes(g)) g = "familia";
+  lsSet("admGroup", g);
+  document.querySelectorAll("#adm-groups [data-grp]").forEach((b) => { b.classList.toggle("selected", b.dataset.grp === g); b.setAttribute("aria-selected", String(b.dataset.grp === g)); });
+  document.querySelectorAll("#tab-admin > .adm-sec").forEach((d) => { d.hidden = d.dataset.grp !== g; });
+}
+document.querySelectorAll("#adm-groups [data-grp]").forEach((b) => b.addEventListener("click", () => showAdmGroup(b.dataset.grp)));
+showAdmGroup(lsGet("admGroup", "familia"));
 function renderAdmin() {
   if (!isAdminNow() || !$("tab-admin") || $("tab-admin").hidden) return;
   renderAdminPeople();
   renderAdminLog();
   renderAdminPalettes();
   renderAdminOccasions();
-  renderAdminDrawings();
+  if ($("dlg-lib").open) renderLibrary();
   renderAdminTexts();
 }
 
@@ -2829,48 +2839,6 @@ function renderAdminPalettes() {
 
 // Drawings picker for occasions: the same picture tiles as the palette studio, in the chosen palette's colors.
 // Tap toggles a drawing in the text field (emoji and hand-typed entries are kept); numbers show the order.
-function renderDecorPicker(pickerId, inputId, paletteSelectId) {
-  const wrap = $(pickerId), inp = $(inputId);
-  const tokens = () => inp.value.trim().split(/\s+/).filter(Boolean);
-  const paint = () => {
-    const p = getPalette(paletteSelectId && $(paletteSelectId).value) || getPalette("espresso") || DEFAULT_PALETTE;
-    const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
-    for (const [k, v] of Object.entries(vars)) if (HEX.test(String(v || ""))) wrap.style.setProperty(k, v);
-    const svgs = tokens().filter((t) => /\.svg$/.test(t));
-    wrap.querySelectorAll(".dg").forEach((t) => {
-      const i = svgs.indexOf(t.dataset.name);
-      t.classList.toggle("on", i >= 0);
-      t.setAttribute("aria-pressed", String(i >= 0));
-      t.querySelector(".dg-n").textContent = i >= 0 ? i + 1 : "";
-    });
-  };
-  wrap.innerHTML = "";
-  for (const name of allDrawingNames()) {
-    const t = document.createElement("button");
-    t.type = "button";
-    t.className = "dg";
-    t.dataset.name = name;
-    t.title = name.replace(/\.svg$/, "");
-    t.setAttribute("aria-label", t.title);
-    t.innerHTML = `<span class="dg-img"></span><span class="dg-n"></span>`;
-    loadSvg(name).then((svg) => { t.querySelector(".dg-img").innerHTML = svg; });
-    t.onclick = () => {
-      const list = tokens(), i = list.indexOf(name);
-      if (i >= 0) list.splice(i, 1); else list.push(name);
-      inp.value = list.join(" ");
-      inp.dispatchEvent(new Event("input"));
-      paint();
-    };
-    wrap.appendChild(t);
-  }
-  if (!wrap.dataset.wired) {
-    wrap.dataset.wired = "1";
-    inp.addEventListener("input", () => wrap._paint && wrap._paint());
-    if (paletteSelectId) $(paletteSelectId).addEventListener("change", () => wrap._paint && wrap._paint());
-  }
-  wrap._paint = paint;
-  paint();
-}
 
 // ===================================================================
 // Palette studio: one screen. Tap a tile (or a part of the mini-app) to edit
@@ -3130,22 +3098,20 @@ function renderStudio() {
     gal.dataset.k = names.join("|");
     gal.innerHTML = `<span class="ps-decor-label">desenhos</span>`;
     for (const name of names) {
-      const t = document.createElement("button");
-      t.type = "button";
-      t.className = "dg";
-      t.dataset.name = name;
-      t.title = name.replace(/\.svg$/, "");
-      t.setAttribute("aria-label", t.title);
-      t.innerHTML = `<span class="dg-img"></span><span class="dg-n"></span>`;
-      loadSvg(name).then((svg) => { t.querySelector(".dg-img").innerHTML = svg; });
+      const t = drawingTile(name);
       t.onclick = () => commit(() => {
         const i = st.decor.indexOf(name);
         if (i >= 0) st.decor.splice(i, 1); else st.decor.push(name);
       });
       gal.appendChild(t);
     }
+    const more = document.createElement("button"); // ＋ → the library (upload a new one)
+    more.type = "button"; more.className = "dg dg-more"; more.setAttribute("aria-label", "Biblioteca de desenhos");
+    more.innerHTML = `<span class="dg-img">＋</span>`;
+    more.onclick = openLibrary;
+    gal.appendChild(more);
   }
-  gal.querySelectorAll(".dg").forEach((t) => {
+  gal.querySelectorAll(".dg:not(.dg-more)").forEach((t) => {
     const i = st.decor.indexOf(t.dataset.name);
     t.classList.toggle("on", i >= 0);
     t.setAttribute("aria-pressed", String(i >= 0));
@@ -3283,8 +3249,19 @@ $("pal-delete").addEventListener("click", async () => {
 $("adm-pal-new").addEventListener("click", () => openPaletteEditor(null));
 
 // ---------- Occasions ----------
-function renderAdminOccasions() {
+// Ocasiões: one section, seen as a calendar (which one wins each day, and why) or as a list.
+let occView = lsGet("occView", "cal");
+function setOccView(v) {
+  occView = v === "list" ? "list" : "cal";
+  lsSet("occView", occView);
+  document.querySelectorAll("#adm-occ-view [data-v]").forEach((b) => b.classList.toggle("selected", b.dataset.v === occView));
+  show("adm-agenda", occView === "cal");
+  show("adm-occasions", occView === "list");
   renderAgenda();
+}
+document.querySelectorAll("#adm-occ-view [data-v]").forEach((b) => b.addEventListener("click", () => setOccView(b.dataset.v)));
+function renderAdminOccasions() {
+  setOccView(occView);
   const today = todaysOccasion();
   const t = spToday();
   $("adm-today").textContent = `Hoje (${DAY_SHORT[t.weekday].toLowerCase()}, ${dmy(t.d, t.m, t.y)}): ${today ? "“" + today.id + "”" : "nenhuma ocasião"}${previewOcc || previewPal ? " (prévia ativa)" : ""}`;
@@ -3317,7 +3294,7 @@ function occColor(id, o) {
 }
 function renderAgenda() {
   const box = $("adm-agenda");
-  if (!box || !$("adm-agenda-sec").open) return;
+  if (!box || !$("adm-occ-sec").open || occView !== "cal") return;
   if (!agenda.y) { const t = spToday(); agenda.y = t.y; agenda.m = t.m; }
   const { y, m } = agenda, today = spToday().key, admin = agenda.who === "adm";
   const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -3365,14 +3342,15 @@ function renderAgendaDay(key, admin) {
   const byUid = {}; for (const c of curses) byUid[c[0]] = c; // later occasions win per person
   el.innerHTML = `${head}
     <p class="small">Vale: <b>${esc(top[0])}</b>${top[1].adminOnly ? " 👑 (teste só admin: esconde as outras)" : ""}</p>
-    <p class="muted small">Ativas neste dia${list.length > 1 ? " — a de baixo ganha cada item" : ""}:</p>
-    <ol class="ag-list">${list.map(([id, o]) => `<li><i style="background:${occColor(id, o)}"></i><b>${esc(id)}</b>${o.adminOnly ? " 👑" : ""}
+    <p class="muted small">Ativas neste dia${list.length > 1 ? " — a de baixo ganha" : ""} (toque pra editar):</p>
+    <ol class="ag-list">${list.map(([id, o]) => `<li data-occ="${esc(id)}" title="Editar"><i style="background:${occColor(id, o)}"></i><b>${esc(id)}</b>${o.adminOnly ? " 👑" : ""}
       <span class="muted small">${esc(describeWhen(o.when))} · prioridade ${Number(o.priority) || 0}</span></li>`).join("")}</ol>
     <p class="muted small">De onde vem cada coisa:</p><ul class="ag-fields">${rows}</ul>
     ${Object.keys(byUid).length ? `<p class="muted small">Maldições:</p><ul class="ag-fields">${Object.values(byUid).map(([u, n, id]) =>
       `<li><span>${esc((family[u] && family[u].name) || "?")}</span><span>${esc(n)} <span class="muted small">(${esc(id)})</span></span></li>`).join("")}</ul>` : ""}`;
+  el.querySelectorAll("[data-occ]").forEach((li) => { li.onclick = () => openOccasionEditor(li.dataset.occ); });
 }
-$("adm-agenda-sec").addEventListener("toggle", renderAgenda);
+$("adm-occ-sec").addEventListener("toggle", renderAgenda);
 
 let occEditing = null;
 function readOccForm() {
@@ -3722,30 +3700,49 @@ function syncWhen() {
 $("occ-rule-add").addEventListener("click", () => { occRules.push(newRule()); renderRules(); });
 
 // ---------- Drawings ----------
-function renderAdminDrawings() {
-  const grid = $("adm-drawings");
-  grid.innerHTML = "";
-  for (const name of allDrawingNames()) {
-    const uploaded = !!uploadedSvgs[name];
-    const tile = document.createElement("div");
-    tile.className = "drawing";
-    tile.innerHTML = `<div class="drawing-img"></div><span class="small">${esc(name.replace(/\.svg$/, ""))}</span>${uploaded ? `<button class="drawing-del" aria-label="Apagar">×</button>` : ""}`;
-    loadSvg(name).then((t) => { tile.querySelector(".drawing-img").innerHTML = t || "⚠"; });
-    tile.querySelector(".drawing-img").onclick = async () => {
-      try { await navigator.clipboard.writeText(name); toast(`“${name}” copiado.`); } catch { toast(name); }
-    };
-    if (uploaded) {
-      tile.querySelector(".drawing-del").onclick = async () => {
-        const users = [
-          ...Object.entries(allPalettes()).filter(([, p]) => String((p || {}).decor || "").includes(name)).map(([id]) => "tema " + id),
-        ];
-        if (!(await confirmBox(`Apagar ${name}?`, users.length ? `Usado em: ${users.join(", ")}. Lá ele simplesmente some.` : "Não é usado em lugar nenhum.", "Apagar"))) return;
-        try { await deleteDoc(doc(db, "decor", name)); toast("Desenho apagado."); } catch (err) { toast(friendlyError(err)); }
-      };
-    }
-    grid.appendChild(tile);
-  }
+// One tile for a drawing, used by a tema's drawings row and by the library: the drawing in the colours of where it
+// sits, plus a small number badge (its order in a tema).
+function drawingTile(name) {
+  const t = document.createElement("button");
+  t.type = "button";
+  t.className = "dg";
+  t.dataset.name = name;
+  t.title = name.replace(/\.svg$/, "");
+  t.setAttribute("aria-label", t.title);
+  t.innerHTML = `<span class="dg-img"></span><span class="dg-n"></span>`;
+  loadSvg(name).then((svg) => { t.querySelector(".dg-img").innerHTML = svg || "⚠"; });
+  return t;
 }
+const temasUsing = (name) => Object.entries(allPalettes()).filter(([, p]) => String((p || {}).decor || "").split(/\s+/).includes(name)).map(([id, p]) => (p && p.name) || id);
+// The library (Admin → Temas → 🖼️, or the ＋ at the end of a tema's drawings): every drawing; tap one for its name,
+// where it's used, and (if it was uploaded here) delete. Upload a .svg or paste code.
+let libSel = null;
+function renderLibrary() {
+  const grid = $("lib-grid"), names = allDrawingNames();
+  const p = (st && $("dlg-pal").open && st.pal) || getPalette((me && me.palette) || "espresso") || DEFAULT_PALETTE;
+  const vars = { "--bg": p.bg, "--surface": p.surface, "--fg": p.text, "--muted": p.muted, "--caramel": p.accent, "--crema": p.highlight };
+  for (const [k, v] of Object.entries(vars)) if (HEX.test(String(v || ""))) grid.style.setProperty(k, v);
+  if (grid.dataset.k !== names.join("|")) {
+    grid.dataset.k = names.join("|");
+    grid.innerHTML = "";
+    for (const name of names) { const t = drawingTile(name); t.onclick = () => { libSel = libSel === name ? null : name; renderLibrary(); }; grid.appendChild(t); }
+  }
+  grid.querySelectorAll(".dg").forEach((t) => t.classList.toggle("on", t.dataset.name === libSel));
+  const info = $("lib-info");
+  if (!libSel || !names.includes(libSel)) { libSel = null; info.textContent = `${names.length} desenhos.`; return; }
+  const used = temasUsing(libSel);
+  info.innerHTML = `<b>${esc(libSel.replace(/\.svg$/, ""))}</b> · ${used.length ? "usado em: " + esc(used.join(", ")) : "não é usado em nenhum tema"}${uploadedSvgs[libSel] ? ` <button type="button" class="link small danger-link" id="lib-del">apagar</button>` : " · embutido"}`;
+  const del = $("lib-del");
+  if (del) del.onclick = async () => {
+    const name = libSel;
+    if (!(await confirmBox(`Apagar ${name}?`, used.length ? `Usado em: ${used.join(", ")}. Lá ele simplesmente some.` : "Não é usado em lugar nenhum.", "Apagar"))) return;
+    try { await deleteDoc(doc(db, "decor", name)); libSel = null; toast("Desenho apagado."); } catch (err) { toast(friendlyError(err)); }
+  };
+}
+function openLibrary() { libSel = null; $("lib-grid").dataset.k = ""; renderLibrary(); $("dlg-lib").showModal(); }
+$("adm-lib-open").addEventListener("click", openLibrary);
+$("lib-close").addEventListener("click", () => $("dlg-lib").close());
+$("dlg-lib").addEventListener("close", () => { if ($("dlg-pal").open) renderStudio(); });
 
 async function saveDrawing(rawName, text, btn) {
   let name = String(rawName || "").trim().toLowerCase().replace(/\.svg$/, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -3757,7 +3754,8 @@ async function saveDrawing(rawName, text, btn) {
   if (uploadedSvgs[name] && !(await confirmBox("Substituir?", `Já existe “${name}”. Trocar pelo novo?`, "Substituir"))) return;
   return withBusy(btn, async () => {
     await setDoc(doc(db, "decor", name), { svg, updatedAt: serverTimestamp(), by: auth.currentUser.uid });
-    toast(`Desenho “${name}” salvo. Use no campo decor. 🖼️`, 4000);
+    toast(`Desenho “${name}” salvo. 🖼️`, 4000);
+    setTimeout(() => { if ($("dlg-lib").open) { libSel = name; renderLibrary(); } }, 800);
     return true;
   }, "Enviando…");
 }
@@ -3854,35 +3852,6 @@ $("adm-test").addEventListener("click", async () => {
   const res = await withBusy($("adm-test"), () => api.adminTest(), "Mandando…");
   if (res) toast(res.data.sent ? `Enviado pra ${res.data.sent} aparelho(s) seu(s).` : "Você não tem aparelho registrado. 🤔");
 });
-
-// Clears this device (push token + service worker), then logs out and reloads.
-// Note: browsers don't let a site revoke its own notification permission —
-// to see the permission prompt again, remove it in the phone/browser settings
-// (on iPhone: delete the app from the Home Screen and add it again).
-async function wipeThisDevice() {
-  try { if (messaging) await deleteToken(messaging); } catch (e) { console.error(e); }
-  try {
-    const regs = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistrations() : [];
-    await Promise.all(regs.map((r) => r.unregister()));
-  } catch (e) { console.error(e); }
-  try { localStorage.clear(); sessionStorage.clear(); } catch {}
-  await signOut(auth);
-  location.reload();
-}
-
-async function adminReset(btn, scope, question) {
-  if (!confirm(question)) return;
-  if (scope === "all" && !confirm("Certeza MESMO? Apaga mercados, apelidos e aparelhos de TODO MUNDO.")) return;
-  const res = await withBusy(btn, () => api.adminReset({ scope }), "Apagando…");
-  if (!res) return;
-  busy(btn, true, "Limpando este aparelho…");
-  await wipeThisDevice();
-}
-
-$("adm-reset-me").addEventListener("click", () => adminReset($("adm-reset-me"), "me",
-  "Apagar seu apelido, seus mercados e seus aparelhos? Você vai ver tudo de novo como novato."));
-$("adm-nuke").addEventListener("click", () => adminReset($("adm-nuke"), "all",
-  "Apagar TUDO de todo mundo? (Só o seu status de admin fica.)"));
 
 // Coming back to the app (e.g. from a notification) — re-check permission and refresh times.
 // Coming back after being in the background: phones pause hidden pages and the live

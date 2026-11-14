@@ -928,34 +928,6 @@ handlers.adminTest = async (req) => {
   return deliver([auth.uid], { title: "Teste ☕", body: "Se você tá lendo isso, as notificações funcionam." }, "", { kind: "teste", fromUid: auth.uid });
 };
 
-handlers.adminReset = async (req) => {
-  const auth = await requireAdmin(req);
-  const scope = req.data && req.data.scope;
-
-  if (scope === "all") {
-    await Promise.all(["devices", "trips", "cooldowns", "templates", "rounds"]
-      .map((c) => db.recursiveDelete(db.collection(c))));
-    const users = await db.collection("users").get();
-    await Promise.all(users.docs.map((d) =>
-      d.get("admin") === true ? d.ref.set({ admin: true }) : d.ref.delete()));
-    return { ok: true, scope };
-  }
-
-  if (scope === "me") {
-    const [devices, templates, rounds] = await Promise.all([
-      db.collection("devices").where("uid", "==", auth.uid).get(),
-      db.collection("templates").where("ownerUid", "==", auth.uid).get(),
-      db.collection("rounds").where("ownerUid", "==", auth.uid).get(),
-    ]);
-    const writes = [...devices.docs, ...templates.docs, ...rounds.docs].map((d) => d.ref.delete());
-    writes.push(db.doc(`users/${auth.uid}`).set({ admin: true }));
-    await Promise.all(writes);
-    return { ok: true, scope };
-  }
-
-  throw new HttpsError("invalid-argument", "scope deve ser 'me' ou 'all'.");
-};
-
 // Promote / demote another person (can't remove the last admin).
 handlers.setAdmin = async (req) => {
   await requireAdmin(req);
@@ -1182,20 +1154,10 @@ handlers.cancelGift = async (req) => {
   return { ok: true };
 };
 
-// Admin: everyone's totals, and resetting one person's grail (or everyone's). Pending gifts of whoever is reset are cancelled without returning.
+// Admin: everyone's totals (resets were removed 14.11 — deletions are done in the Firebase console).
 handlers.adminGrail = async (req) => {
   await requireAdmin(req);
   const d = req.data || {};
-  if (d.op === "reset") {
-    const all = d.uid === "all";
-    const docs = all ? (await db.collection("grail").get()).docs.map((x) => x.ref) : [grailRef(String(d.uid || "x"))];
-    const pend = await db.collection("gifts").where("status", "==", "pending").get();
-    const bw = db.bulkWriter();
-    for (const r of docs) bw.delete(r);
-    for (const g of pend.docs) if (all || g.get("from") === d.uid || g.get("to") === d.uid) bw.update(g.ref, { status: "cancelled", doneAt: Date.now(), note: "zerado pelo admin" });
-    await bw.close();
-    return { ok: true, reset: docs.length };
-  }
   const [grails, users] = await Promise.all([db.collection("grail").get(), loadUsers()]);
   return { people: grails.docs.map((x) => {
     const items = x.get("items") || {};

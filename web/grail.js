@@ -279,9 +279,7 @@ export function startGrail(o) {
   function famTab() {
     if (!st.fam) return `<p class="gnote">Carregando…</p>`;
     const tot = (items, r) => Object.entries(items).reduce((s, [k, v]) => s + (st.rar[o.gd.ALIASES[k] || k] === r ? v : 0), 0);
-    let h = st.fam.map((p) => `<div class="grow"><span class="nm"><b>${esc(p.name)}</b><br><span class="meta"><b style="color:${RAR.epic.col}">${tot(p.items, "epic")}</b> épicos · <b style="color:${RAR.legendary.col}">${tot(p.items, "legendary")}</b> lendários · ${fmt(p.iron)} ferro</span></span>
-      <button class="gbtn no" data-reset="${p.uid}">${st.confirm === p.uid ? "Certeza?" : "Zerar"}</button></div>`).join("") || `<p class="gnote">Ninguém achou nada ainda.</p>`;
-    h += `<p><button class="gbtn no" data-reset="all">${st.confirm === "all" ? "Zerar TODO MUNDO? Toque de novo" : "Zerar todos"}</button></p>`;
+    let h = st.fam.map((p) => `<div class="grow"><span class="nm"><b>${esc(p.name)}</b><br><span class="meta"><b style="color:${RAR.epic.col}">${tot(p.items, "epic")}</b> épicos · <b style="color:${RAR.legendary.col}">${tot(p.items, "legendary")}</b> lendários · ${fmt(p.iron)} ferro</span></span></div>`).join("") || `<p class="gnote">Ninguém achou nada ainda.</p>`;
     h += `<h4>Presentes pendentes</h4>` + (st.allPend.length ? st.allPend.map((g) => `<div class="grow"><span class="nm">${esc(g.fromName || "?")} → ${esc(g.toName || "?")}: ${giftName(g)}</span><button class="gbtn no" data-cancel="${g.id}">Cancelar</button></div>`).join("") : `<p class="gnote">Nenhum.</p>`);
     return `<div class="glist">${h}</div>`;
   }
@@ -306,12 +304,6 @@ export function startGrail(o) {
       b.disabled = true;
       try { await o.api("cancelGift", { id: b.dataset.cancel }); o.toast("Cancelado. Voltou pra quem mandou."); if (st.tab === "fam") loadFam(); }
       catch (e) { o.toast(e.message || "Não deu."); b.disabled = false; }
-    });
-    B.querySelectorAll("[data-reset]").forEach((b) => b.onclick = async () => {
-      const u = b.dataset.reset;
-      if (st.confirm !== u) { st.confirm = u; renderList(); return; }
-      st.confirm = null; b.disabled = true;
-      try { await o.api("adminGrail", { op: "reset", uid: u }); o.toast("Zerado."); loadFam(); } catch (e) { o.toast(e.message || "Não deu."); b.disabled = false; }
     });
   }
 }
