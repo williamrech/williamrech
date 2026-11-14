@@ -1,5 +1,5 @@
 {
-  "_como_usar": "Edite à vontade no console do Firebase. versionOdds: 1 em N dias tem piada (0 = nunca). versionWords: palavras no 2º ou 3º número da versão. palettes: temas de cor (6 cores hex cada: bg, surface, text, muted, accent, highlight + name; opcional: decor; effect (confetti, snow, bubbles, smoke, sparkles ou haunted, cada pessoa pode desligar); onlyOccasions: true esconde das configurações e só aparece em ocasiões). occasions: datas especiais. Cada uma tem 'when' e pode ter version, banner, tema (id de um tema de palettes: cores, desenhos, efeito e imagem de fundo) e own (o que muda só nessa ocasião: decor = emojis e/ou desenhos .svg da pasta web/decor separados por espaço, ex: 'pumpkin.svg 🦇 👻'; effect; bgImage). Os campos antigos palette/decor/effect/bgImage ficam até a limpeza, priority (maior vence), enabled (false desliga). Formatos de 'when': 12-25 (todo ano) | 2026-11-10 (um dia) | fri-13 (sexta 13) | 2sun-05 (2º domingo de maio) | lastfri-11 (última sexta de novembro) | easter-47 (relativo à Páscoa) | 12-20..12-31 (período). Vários separados por vírgula. Para testar sem esperar a data: abra o app com ?ocasiao=ID no fim do endereço. terms: o nome do dia pros 'recados' (sorteado por dia, mesmo pra todos). weight = chance relativa; one/many = singular/plural; g = m ou f; verb = botão; ask = pergunta de confirmação ({who}); done = aviso depois de mandar ({n}). Pra testar: ?termo=ID no endereço.",
+  "_como_usar": "Edite à vontade no console do Firebase. versionOdds: 1 em N dias tem piada (0 = nunca). versionWords: palavras no 2º ou 3º número da versão. palettes: temas de cor (6 cores hex cada: bg, surface, text, muted, accent, highlight + name; opcional: decor; effect (confetti, snow, bubbles, smoke, sparkles ou haunted, cada pessoa pode desligar); onlyOccasions: true esconde das configurações e só aparece em ocasiões). occasions: datas especiais. Cada uma tem 'when' e pode ter version, banner, tema (id de um tema de palettes: cores, desenhos, efeito e imagem de fundo); a ocasião fica exatamente com a cara do tema. Os campos antigos palette/decor/effect/bgImage ficam até a limpeza, priority (maior vence), enabled (false desliga). Formatos de 'when': 12-25 (todo ano) | 2026-11-10 (um dia) | fri-13 (sexta 13) | 2sun-05 (2º domingo de maio) | lastfri-11 (última sexta de novembro) | easter-47 (relativo à Páscoa) | 12-20..12-31 (período). Vários separados por vírgula. Para testar sem esperar a data: abra o app com ?ocasiao=ID no fim do endereço. terms: o nome do dia pros 'recados' (sorteado por dia, mesmo pra todos). weight = chance relativa; one/many = singular/plural; g = m ou f; verb = botão; ask = pergunta de confirmação ({who}); done = aviso depois de mandar ({n}). Pra testar: ?termo=ID no endereço.",
   "versionOdds": 5,
   "versionWords": [
     "666",
@@ -185,22 +185,100 @@
       "accent": "#2f9e6a",
       "highlight": "#8ff0c0",
       "onlyOccasions": true
+    },
+    "champagne-ano-novo": {
+      "name": "Ano novo",
+      "bg": "#0e0d0b",
+      "surface": "#1e1c18",
+      "text": "#f7f1e3",
+      "muted": "#b8ae98",
+      "accent": "#d4af37",
+      "highlight": "#f3e3b0",
+      "decor": "firework.svg flute.svg bubbles.svg firework.svg bubbles.svg",
+      "onlyOccasions": true,
+      "effect": "confetti"
+    },
+    "espresso-mentira": {
+      "name": "Mentira",
+      "bg": "#1a1210",
+      "surface": "#30221b",
+      "text": "#f2e6d6",
+      "muted": "#b39d87",
+      "accent": "#c98b4f",
+      "highlight": "#e2c39b",
+      "decor": "fib.svg fib.svg fib.svg",
+      "effect": "smoke",
+      "onlyOccasions": true
+    },
+    "frutas-dia-das-maes": {
+      "name": "Dia das maes",
+      "bg": "#1a1014",
+      "surface": "#2e1a22",
+      "text": "#f6e4ea",
+      "muted": "#c09aa8",
+      "accent": "#e0607e",
+      "highlight": "#f5b8c8",
+      "decor": "flower.svg heart.svg flower.svg heart.svg flower.svg",
+      "onlyOccasions": true
+    },
+    "halloween-sexta-13": {
+      "name": "Sexta 13",
+      "bg": "#120c08",
+      "surface": "#241810",
+      "text": "#fbead8",
+      "muted": "#c4a78a",
+      "accent": "#ff7a1a",
+      "highlight": "#c58cff",
+      "decor": "cat.svg crystal-ball.svg candle.svg candle.svg cat.svg",
+      "effect": "haunted",
+      "onlyOccasions": true
+    },
+    "natal-natal-clima": {
+      "name": "Natal clima",
+      "bg": "#0f1611",
+      "surface": "#1d2a20",
+      "text": "#f4ece2",
+      "muted": "#b2a99a",
+      "accent": "#d63b3b",
+      "highlight": "#f2d27a",
+      "decor": "tree.svg gift.svg ornament.svg snowflake.svg candy-cane.svg",
+      "effect": "snow",
+      "onlyOccasions": true
+    },
+    "noite-teste": {
+      "name": "Teste",
+      "bg": "#0f1320",
+      "surface": "#1c2236",
+      "text": "#e6ebf7",
+      "muted": "#9aa6c4",
+      "accent": "#6c8cff",
+      "highlight": "#b8c8ff",
+      "decor": "beaker.svg star.svg beaker.svg star.svg",
+      "effect": "snow",
+      "onlyOccasions": true
+    },
+    "malmouth-grim-dawn": {
+      "name": "Grim dawn",
+      "bg": "#0c1210",
+      "surface": "#17211d",
+      "text": "#dfeae3",
+      "muted": "#8ea69a",
+      "accent": "#2f9e6a",
+      "highlight": "#8ff0c0",
+      "onlyOccasions": true,
+      "effect": "grimdawn"
     }
   },
   "occasions": {
     "ano-novo": {
       "when": "01-01",
       "version": "2.0.0-ano.novo",
-      "palette": "champagne",
+      "palette": "champagne-ano-novo",
       "decor": "firework.svg flute.svg bubbles.svg firework.svg bubbles.svg",
       "banner": "Feliz ano novo! 🥂",
       "effect": "confetti",
       "priority": 5,
-      "tema": "champagne",
-      "own": {
-        "decor": "firework.svg flute.svg bubbles.svg firework.svg bubbles.svg",
-        "effect": "confetti"
-      }
+      "tema": "champagne-ano-novo"
     },
     "carnaval": {
       "when": "easter-48,easter-47",
@@ -210,8 +288,7 @@
       "banner": "É carnaval! Ninguém faz mercado hoje. 🎭",
       "effect": "confetti",
       "priority": 5,
-      "tema": "carnaval",
-      "own": {}
+      "tema": "carnaval"
     },
     "mentira": {
       "when": "04-01",
@@ -219,21 +296,16 @@
       "banner": "Hoje tudo aqui é verdade. Confia. 🤥",
       "priority": 5,
       "decor": "fib.svg fib.svg fib.svg",
-      "tema": "",
-      "own": {
-        "decor": "fib.svg fib.svg fib.svg"
-      }
+      "tema": "espresso-mentira",
+      "palette": "espresso-mentira"
     },
     "dia-das-maes": {
       "when": "2sun-05",
-      "palette": "frutas",
+      "palette": "frutas-dia-das-maes",
       "decor": "flower.svg heart.svg flower.svg heart.svg flower.svg",
       "banner": "Feliz Dia das Mães! 💐",
       "priority": 5,
-      "tema": "frutas",
-      "own": {
-        "decor": "flower.svg heart.svg flower.svg heart.svg flower.svg"
-      }
+      "tema": "frutas-dia-das-maes"
     },
     "halloween": {
       "when": "10-31",
@@ -243,55 +315,43 @@
       "banner": "Gostosuras ou travessuras? 🎃",
       "priority": 5,
       "effect": "haunted",
-      "tema": "halloween",
-      "own": {}
+      "tema": "halloween"
     },
     "sexta-13": {
       "when": "fri-13",
       "version": "1.13.sexta",
-      "palette": "halloween",
+      "palette": "halloween-sexta-13",
       "decor": "cat.svg crystal-ball.svg candle.svg candle.svg cat.svg",
       "banner": "Sexta-feira 13. Cuidado no mercado. 🔮",
       "priority": 3,
       "effect": "haunted",
-      "tema": "halloween",
-      "own": {
-        "decor": "cat.svg crystal-ball.svg candle.svg candle.svg cat.svg"
-      }
+      "tema": "halloween-sexta-13"
     },
     "natal-clima": {
       "when": "12-20..12-26",
-      "palette": "natal",
+      "palette": "natal-natal-clima",
       "decor": "tree.svg gift.svg ornament.svg snowflake.svg candy-cane.svg",
       "banner": "Clima de Natal 🎄",
       "effect": "snow",
       "priority": 1,
-      "tema": "natal",
-      "own": {
-        "decor": "tree.svg gift.svg ornament.svg snowflake.svg candy-cane.svg"
-      }
+      "tema": "natal-natal-clima"
     },
     "natal": {
       "when": "12-25",
       "version": "1.0.0-natal",
       "banner": "Feliz Natal! 🎄🎁",
       "priority": 5,
-      "tema": "",
-      "own": {}
+      "tema": ""
     },
     "teste": {
       "when": "",
       "enabled": true,
-      "palette": "noite",
+      "palette": "noite-teste",
       "decor": "beaker.svg star.svg beaker.svg star.svg",
       "banner": "Ocasião de teste: mude o 'when' pra hoje ou use ?ocasiao=teste",
       "effect": "snow",
       "priority": 99,
-      "tema": "noite",
-      "own": {
-        "decor": "beaker.svg star.svg beaker.svg star.svg",
-        "effect": "snow"
-      }
+      "tema": "noite-teste"
     },
     "dia-dos-namorados": {
       "when": "06-12",
@@ -299,13 +359,12 @@
       "effect": "sparkles",
       "banner": "Feliz Dia dos Namorados! 💘",
       "priority": 5,
-      "tema": "namorados",
-      "own": {}
+      "tema": "namorados"
     },
     "grim-dawn": {
       "when": "",
       "adminOnly": true,
-      "palette": "malmouth",
+      "palette": "malmouth-grim-dawn",
       "effect": "grimdawn",
       "decor": "",
       "banner": "⚔️ Cairn nunca dorme. Toque no vazio e veja o que cai.",
@@ -332,14 +391,11 @@
           "Alma Penada"
         ]
       },
-      "tema": "malmouth",
-      "own": {
-        "effect": "grimdawn"
-      }
+      "tema": "malmouth-grim-dawn"
     }
   },
   "decorVersion": 2,
-  "configVersion": 15,
+  "configVersion": 16,
   "terms": {
     "recado": {
       "weight": 70,

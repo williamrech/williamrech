@@ -34,30 +34,16 @@ function matchesPattern(pat, t) {
   return false;
 }
 
-// ---------- Look: Tema + per-occasion overrides ----------
-// An occasion has `tema` (a palette id, or "" = each person's own) and `own` = { decor, effect, bgImage } overrides.
-// Occasions saved before step 3 only have the old fields (palette/decor/effect/bgImage); they are read the same way.
+// ---------- Look: an occasion's look is its Tema, whole ----------
+// An occasion has `tema` (a palette id, or "" = each person's own). Occasions from before step 3 only have the old
+// fields (palette/decor/effect/bgImage) and are read the old way by the app until the cleanup step.
 const LOOK_KEYS = ["decor", "effect", "bgImage"];
-function occLookOf(o) {
-  o = o && typeof o === "object" ? o : {};
-  const src = ("tema" in o || "own" in o) ? (o.own && typeof o.own === "object" ? o.own : {}) : o;
-  const own = {};
-  for (const k of LOOK_KEYS) if (typeof src[k] === "string" && src[k]) own[k] = src[k];
-  return { tema: String(("tema" in o || "own" in o) ? o.tema || "" : o.palette || ""), own };
+const isNewOcc = (o) => !!o && typeof o === "object" && "tema" in o;
+const occTema = (o) => String((o && typeof o === "object" ? (isNewOcc(o) ? o.tema : o.palette) : "") || "");
+// One occasion's effect: its tema's (old-shape occasions: their own effect, else their palette's).
+function occEffect(o, pals) {
+  if (!isNewOcc(o)) return (o && o.effect) || ((pals[o && o.palette] || {}).effect) || "";
+  return ((pals[occTema(o)] || {}).effect) || "";
 }
-// Layers the active occasions (merge order, last wins): a valid tema brings its whole look, "own" overrides on top.
-// Returns { m, src }: m has tema/decor/effect/bgImage only when some occasion sets them; src says which occasion did.
-function lookLayers(list, pals) {
-  const m = {}, src = {};
-  for (const [id, o] of list) {
-    const { tema, own } = occLookOf(o);
-    const T = tema && pals[tema] && typeof pals[tema] === "object" ? pals[tema] : null;
-    if (T) { m.tema = tema; src.tema = id; for (const k of LOOK_KEYS) { m[k] = typeof T[k] === "string" ? T[k] : ""; src[k] = "tema"; } }
-    for (const k of Object.keys(own)) { m[k] = own[k]; src[k] = id; }
-  }
-  return { m, src };
-}
-// One occasion's effect: its own override, else its tema's.
-function occEffect(o, pals) { const { m } = lookLayers([["", o]], pals); return m.effect || ""; }
 
-module.exports = { WDAY, easterUTC, matchesPattern, LOOK_KEYS, occLookOf, lookLayers, occEffect };
+module.exports = { WDAY, easterUTC, matchesPattern, LOOK_KEYS, isNewOcc, occTema, occEffect };

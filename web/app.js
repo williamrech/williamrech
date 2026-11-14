@@ -105,24 +105,19 @@ function occasionsOn(t, admin) {
   return sortOccasions(list);
 }
 const sortOccasions = (list) => list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (b[1].adminOnly ? 1 : 0) || (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
-// ---------- Look: Tema + what an occasion changes only for itself (same rules as functions/look.js) ----------
-// An occasion has `tema` (a tema id, or "" = each person's own) and `own` = { decor, effect, bgImage } overrides.
+// ---------- Look: an occasion's look is its Tema, whole (same rules as functions/look.js) ----------
+// An occasion has `tema` (a tema id, or "" = each person sees their own).
 const LOOK_KEYS = ["decor", "effect", "bgImage"];
-const isNewOcc = (o) => !!o && typeof o === "object" && ("tema" in o || "own" in o);
-function occLookOf(o) {
-  o = o && typeof o === "object" ? o : {};
-  const neu = isNewOcc(o), src = neu ? (o.own && typeof o.own === "object" ? o.own : {}) : o;
-  const own = {};
-  for (const k of LOOK_KEYS) if (typeof src[k] === "string" && src[k]) own[k] = src[k];
-  return { tema: String((neu ? o.tema : o.palette) || ""), own };
-}
-// The look the active occasions decide (merge order, last wins). `m` has a key only when an occasion decides it
-// (tema, decor, effect — for everyone, bgImage); `src` says which occasion ("tema" = it came with the tema).
+const isNewOcc = (o) => !!o && typeof o === "object" && "tema" in o;
+const occTema = (o) => String((o && typeof o === "object" ? (isNewOcc(o) ? o.tema : o.palette) : "") || "");
+// The look the active occasions decide: the last one with a valid tema wins, with everything in it.
+// `m` has keys only when an occasion decides (tema, decor, effect — for everyone, bgImage); `src` = which occasion.
 function resolveLook(list) {
   const m = {}, src = {}, pals = (FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : {};
   const valid = (id) => !!id && !!pals[id] && typeof pals[id] === "object";
   if (!list.some(([, o]) => isNewOcc(o))) {
     // Config from before the step-3 migration: exactly the old rules (each field from the last occasion that has it).
+    // Goes away in the cleanup step.
     const raw = {}, from = {};
     for (const [id, o] of list) for (const k of ["palette", ...LOOK_KEYS]) if (k in o) { raw[k] = o[k]; from[k] = id; }
     if (valid(raw.palette)) { m.tema = raw.palette; src.tema = from.palette; }
@@ -130,17 +125,15 @@ function resolveLook(list) {
     return { m, src };
   }
   for (const [id, o] of list) {
-    const { tema, own } = occLookOf(o);
-    if (valid(tema)) { m.tema = tema; src.tema = id; for (const k of LOOK_KEYS) { m[k] = typeof pals[tema][k] === "string" ? pals[tema][k] : ""; src[k] = "tema"; } }
-    for (const k of Object.keys(own)) { m[k] = own[k]; src[k] = id; }
+    const tema = occTema(o);
+    if (valid(tema)) { m.tema = tema; for (const k of ["tema", ...LOOK_KEYS]) src[k] = id; for (const k of LOOK_KEYS) m[k] = typeof pals[tema][k] === "string" ? pals[tema][k] : ""; }
   }
   return { m, src };
 }
 // One occasion's effect (picks a maldição's automatic name look). Old-shape occasions: only their own effect, as before.
 function occEffect(o) {
   if (!isNewOcc(o)) return (o && o.effect) || "";
-  const { tema, own } = occLookOf(o);
-  return own.effect || ((FUN.palettes || {})[tema] || {}).effect || "";
+  return ((FUN.palettes || {})[occTema(o)] || {}).effect || "";
 }
 function todaysOccasion() {
   const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
@@ -383,12 +376,25 @@ function placeDecor(spec, force = false) {
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 // One list of names, used in the palette studio, the occasion editor and Configurações.
 const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando", grimdawn: "⚔️ Grim Dawn" };
-// Effects only an occasion can use (not offered for themes).
-const OCCASION_ONLY_FX = ["grimdawn"];
-// The Grim Dawn pack lives in its own file, fetched only when the effect is on (same version as app.js).
-let gdModule = null;
-let gdLoaded = null; // the Grim Dawn pack, once it has arrived (the name chip needs it without waiting)
-const loadGrimDawn = () => (gdModule ||= import(new URL("grimdawn.js" + new URL(import.meta.url).search, import.meta.url).href));
+// ---------- Pacotes ----------
+// A pacote is a big experience in its own file, fetched only while it's on (same version as app.js). The file
+// exports `pacote` with any of:
+//   back(layer)                 the scene behind the feed (skipped while a background image is on)
+//   front(layer, scale, still)  what floats over the feed (scale < 1: the small preview; still: reduced motion)
+//   tap(x, y, layer)            a tap on empty background
+//   chip(chip, name)            takes over the name chip (returns true)
+//   start(ctx) / stop()         extras while it's on and someone is signed in (ctx: db, uid, toast, api, isAdmin, people)
+// Here: `skin` (a body class; its CSS comes with the file) and `occasionOnly` (a tema with it is occasion-only),
+// so they apply before the file arrives. A tema switches a pacote on through its effect field.
+const PACOTES = {
+  grimdawn: { file: "grimdawn.js", skin: "gd-skin", occasionOnly: true },
+  haunted: {}, // Assombrado: still inside app.js (moves to its own file in the next step)
+};
+const OCCASION_ONLY_FX = Object.keys(PACOTES).filter((k) => PACOTES[k].occasionOnly);
+const filePacote = (k) => !!(k && PACOTES[k] && PACOTES[k].file);
+const pacoteLoads = {}, pacoteMod = {}; // pacoteMod: the ones that have arrived (the name chip needs them without waiting)
+const loadPacote = (id) => (pacoteLoads[id] ||= import(new URL(PACOTES[id].file + new URL(import.meta.url).search, import.meta.url).href)
+  .then((m) => (pacoteMod[id] = m.pacote || {})));
 // Assombrado: corner web, a spider on its thread, fog along the bottom, and an eye where you tap the background.
 const WEB_SVG = `<svg viewBox="0 0 160 160" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round">
 <g stroke-width="1.3">${[0, 15, 30, 45, 60, 75, 90].map((a) => { const r = (a * Math.PI) / 180; return `<path d="M0 0 L${(160 * Math.cos(r)).toFixed(1)} ${(160 * Math.sin(r)).toFixed(1)}"/>`; }).join("")}</g>
@@ -420,7 +426,7 @@ function eyeSvg(id, slit) {
 const HEART_SVG = `<svg viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21.5 C5 16 0 12 0 6.6 C0 3 2.8 0 6.4 0 C8.8 0 10.8 1.3 12 3.3 C13.2 1.3 15.2 0 17.6 0 C21.2 0 24 3 24 6.6 C24 12 19 16 12 21.5Z" fill="currentColor"/></svg>`;
 const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor"/></svg>`;
 // Pacotes: the big ones that restyle the app or react to touch (each will become its own pacote file; see the cleanup plan).
-const PACKAGES = ["grimdawn", "haunted"];
+const PACKAGES = Object.keys(PACOTES);
 function fillEffectSelect(sel, forOccasion = false) {
   const keep = sel.value;
   sel.innerHTML = `<option value="">${forOccasion ? "Igual ao tema" : "Nenhum"}</option>`;
@@ -450,8 +456,16 @@ function spawnEffect(layer, kind, scale = 1) {
   clearTimeout(layer._fxTimer);
   layer.innerHTML = "";
   layer.dataset.fx = kind || "";
-  if (!(kind in EFFECTS) && kind !== "haunted-bg" && kind !== "grimdawn-bg") return;
+  const base = String(kind || "").replace(/-bg$/, "");
+  if (!(base in EFFECTS)) return;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (filePacote(base)) { // a pacote: "<id>-bg" is its scene behind the feed, "<id>" what floats over it
+    loadPacote(base).then((p) => {
+      if (layer.dataset.fx !== kind) return;
+      if (kind !== base) { if (p.back) p.back(layer); } else if (p.front) p.front(layer, scale, still);
+    }).catch((e) => console.warn(base, e));
+    return;
+  }
   if (kind === "smoke") {
     // The cup stays put; steam only now and then (never with reduced motion).
     const cup = document.createElement("div");
@@ -490,20 +504,6 @@ function spawnEffect(layer, kind, scale = 1) {
     layer.appendChild(web);
     startFog(layer, scale, still);
     if (kind === "haunted-bg") return;
-  }
-  if (kind === "grimdawn-bg") { // the burning city behind the feed
-    loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn-bg") m.startScene(layer); }).catch((e) => console.warn("grimdawn", e));
-    return;
-  }
-  if (kind === "grimdawn") { // ash + embers (taps are handled below, with the eye)
-    loadGrimDawn().then((m) => {
-      if (layer.dataset.fx !== "grimdawn") return;
-      if (scale >= 1) m.startSky(layer); // one devotion constellation up in the sky (it holds still, so reduced motion keeps it)
-      if (still) return;
-      m.startAsh(layer, scale);
-      if (scale >= 1) m.startRifts(layer); // riftgates open now and then, high up and far back
-    }).catch((e) => console.warn("grimdawn", e));
-    return;
   }
   if (kind === "haunted") {
     // The spider hangs from the web; now and then it drops a random distance, swings, and climbs back.
@@ -688,10 +688,6 @@ function shrinkImage(file) {
     img.src = src;
   });
 }
-function setOccBg(id) {
-  setBgField("occ", id);
-  if (typeof renderTemaInfo === "function" && $("dlg-occ").open) renderTemaInfo();
-}
 // A background-image field (occasion "occ", tema "pal"): hidden input + thumbnail + "Tirar".
 function setBgField(pre, id) {
   $(pre + "-bg").value = id;
@@ -704,30 +700,31 @@ function runEffect(kind) {
   kind = kind || null;
   if (kind === effectKey) return;
   effectKey = kind;
-  document.body.classList.toggle("gd-skin", kind === "grimdawn"); // the Grim Dawn pack restyles the app (CSS comes with grimdawn.js)
+  for (const [id, p] of Object.entries(PACOTES)) if (p.skin) document.body.classList.toggle(p.skin, kind === id); // a pacote may restyle the app
   // The steaming cup lives behind the feed (like the drawings); the rest float above it.
   const behind = kind === "smoke";
   spawnEffect(document.getElementById("fx"), behind ? null : kind);
-  spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : kind === "grimdawn" && !bgImageId ? "grimdawn-bg" : null);
-  if (auth.currentUser) renderMeChip(); // the Grim Dawn pack turns the name chip into a target bar, and back
-  syncGrail();
+  spawnEffect(document.getElementById("fx-back"), behind ? kind : kind === "haunted" ? "haunted-bg" : filePacote(kind) && !bgImageId ? kind + "-bg" : null);
+  if (auth.currentUser) renderMeChip(); // a pacote may take over the name chip (Grim Dawn: a target bar), and back
+  syncPacote();
 }
-// ⚔️ While the Grim Dawn occasion is live: the grail (epics/legendaries/iron kept on your account, gifts) — web/grail.js
-var grailOn = null; // var: runEffect may run before this line is reached
-function syncGrail() {
-  const want = effectKey === "grimdawn" && auth.currentUser && meLoaded ? auth.currentUser.uid : null;
-  if (want === grailOn) return;
-  grailOn = want;
-  import(new URL("grail.js" + new URL(import.meta.url).search, import.meta.url).href).then(async (g) => {
-    g.stopGrail();
-    if (!want || grailOn !== want) return;
-    const gd = await loadGrimDawn();
-    if (grailOn !== want) return;
-    g.startGrail({ db, uid: want, gd, toast,
+// A pacote's extras (Grim Dawn: the collection, web/grail.js) run while it's on and someone is signed in.
+var pacoteOn = null; // "id|uid" — var: runEffect may run before this line is reached
+function syncPacote() {
+  const want = filePacote(effectKey) && auth.currentUser && meLoaded ? `${effectKey}|${auth.currentUser.uid}` : null;
+  if (want === pacoteOn) return;
+  const prev = pacoteOn;
+  pacoteOn = want;
+  if (prev) { const p = pacoteMod[prev.split("|")[0]]; if (p && p.stop) p.stop(); }
+  if (!want) return;
+  const [id, uid] = want.split("|");
+  loadPacote(id).then((p) => {
+    if (pacoteOn !== want || !p.start) return;
+    p.start({ db, uid, toast,
       api: (action, data) => apiFn({ ...data, action }),
       isAdmin: () => !!(me && me.admin === true),
-      people: () => Object.entries(family).filter(([, p]) => p && p.name).map(([u]) => [u, displayName(u)]).sort((a, b) => a[1].localeCompare(b[1], "pt-BR")) });
-  }).catch((e) => console.warn("grail", e));
+      people: () => Object.entries(family).filter(([, q]) => q && q.name).map(([u]) => [u, displayName(u)]).sort((a, b) => a[1].localeCompare(b[1], "pt-BR")) });
+  }).catch((e) => console.warn(id, e));
 }
 // Assombrado fog: three cartoon cloud strips sliding in parallax (back: dim, small, slow → front:
 // light, big, fast, glowing) over a faint haze. Each strip repeats seamlessly and has its own
@@ -855,12 +852,12 @@ function tapDoesSomething(el) {
   return false;
 }
 document.addEventListener("click", (e) => {
-  if ((effectKey !== "haunted" && effectKey !== "grimdawn") || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if ((effectKey !== "haunted" && !filePacote(effectKey)) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (tapWasClosing || !(e.target instanceof Element) || tapDoesSomething(e.target)) return;
   if (document.querySelector("dialog[open]")) return;
-  if (effectKey === "grimdawn") { // ⚔️ a loot drop (see grimdawn.js)
-    const x = e.clientX, y = e.clientY;
-    loadGrimDawn().then((m) => { if (effectKey === "grimdawn") m.grimTap(x, y, document.getElementById("fx")); }).catch((err) => console.warn("grimdawn", err));
+  if (filePacote(effectKey)) { // the pacote's own tap (Grim Dawn: a loot drop)
+    const x = e.clientX, y = e.clientY, k = effectKey;
+    loadPacote(k).then((p) => { if (effectKey === k && p.tap) p.tap(x, y, document.getElementById("fx")); }).catch((err) => console.warn(k, err));
     return;
   }
   const w = Math.round(34 + Math.random() * 90);
@@ -1222,7 +1219,7 @@ onAuthStateChanged(auth, async (user) => {
   subscribeAdminData(false);
   me = null;
   meLoaded = false;
-  syncGrail();
+  syncPacote();
   gatePassed = false;
   templates = [];
   rounds = [];
@@ -1265,7 +1262,7 @@ onAuthStateChanged(auth, async (user) => {
     renderMeChip();
     renderNameNudge();
     applyComfort();
-    syncGrail();
+    syncPacote();
     proceed();
   }));
 
@@ -1576,11 +1573,12 @@ function renderMeChip() {
   if (!chip || !auth.currentUser) return;
   const uid = auth.currentUser.uid, p = family[uid] || me || {};
   const plain = curseOf(uid) || p.name;
-  if (effectKey === "grimdawn" && plain) { // ⚔️ the chip becomes a monster's target bar: just the word, no style or icon
-    if (gdLoaded) { gdLoaded.targetBar(chip, plain); renderCurseBanner(); return; }
-    loadGrimDawn().then((m) => { gdLoaded = m; if (effectKey === "grimdawn") renderMeChip(); }).catch((e) => console.warn("grimdawn", e));
+  if (filePacote(effectKey) && plain) { // a pacote may take over the chip (Grim Dawn: a monster's target bar)
+    const k = effectKey, p = pacoteMod[k];
+    if (p) { if (p.chip && p.chip(chip, plain)) { renderCurseBanner(); return; } }
+    else loadPacote(k).then(() => { if (effectKey === k) renderMeChip(); }).catch((e) => console.warn(k, e));
   }
-  chip.classList.remove("gd-bar");
+  chip.classList.remove("gd-bar"); // undo a pacote's chip
   delete chip.dataset.gdBar;
   chip.innerHTML = plain ? nameHtml(uid, p.name) : "…";
   renderCurseBanner();
@@ -3164,7 +3162,7 @@ function paletteDots(p) {
   return [p.bg, p.surface, p.accent, p.highlight].filter((c) => HEX.test(String(c))).map((c) => `<i style="background:${c}"></i>`).join("");
 }
 function usedByOccasions(palId) {
-  return Object.entries(allOccasions()).filter(([, o]) => o && occLookOf(o).tema === palId).map(([id]) => id);
+  return Object.entries(allOccasions()).filter(([, o]) => o && occTema(o) === palId).map(([id]) => id);
 }
 function renderAdminPalettes() {
   const list = $("adm-palettes");
@@ -3544,8 +3542,7 @@ $("pk-contrast").addEventListener("click", () => {
 $("pal-name").addEventListener("input", (e) => { st.pal.name = e.target.value; renderStudio(); });
 $("pal-emoji").addEventListener("input", (e) => { st.emoji = e.target.value; renderStudio(); });
 $("pal-only").addEventListener("change", (e) => commit(() => { st.only = e.target.checked; }));
-fillEffectSelect($("pal-effect"));
-fillEffectSelect($("occ-effect"), true);
+fillEffectSelect($("pal-effect"), true);
 $("pal-effect").addEventListener("change", (e) => commit(() => { st.effect = e.target.value; }));
 $("pal-undo").addEventListener("click", () => { if (!st.hist.length) return; st.fut.push(snap()); restore(st.hist.pop()); renderStudio(); });
 $("pal-redo").addEventListener("click", () => { if (!st.fut.length) return; st.hist.push(snap()); restore(st.fut.pop()); renderStudio(); });
@@ -3601,6 +3598,7 @@ function studioPalette() {
   if (decor) p.decor = decor;
   if (st.only) p.onlyOccasions = true;
   if (st.effect) p.effect = st.effect;
+  if (OCCASION_ONLY_FX.includes(st.effect)) p.onlyOccasions = true; // a pacote like Grim Dawn only runs as an occasion
   if (st.bg) p.bgImage = st.bg;
   return p;
 }
@@ -3611,7 +3609,17 @@ $("pal-save").addEventListener("click", async () => {
   if (bad) return toast(`Cor inválida em “${bad.label}”.`);
   const id = studioId();
   const ok = await withBusy($("pal-save"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), p); return true; }, "…");
-  if (ok) { $("dlg-pal").close(); toast(`Tema “${p.name}” salvo. 🎨`); }
+  if (ok) {
+    $("dlg-pal").close(); toast(`Tema “${p.name}” salvo. 🎨`);
+    if ($("dlg-occ").open) { // opened from an occasion: pick it there
+      const sel = $("occ-palette");
+      if (![...sel.options].some((o) => o.value === id)) sel.add(new Option(p.name, id));
+      else [...sel.options].find((o) => o.value === id).text = p.name;
+      sel.value = id;
+      FUN.palettes = { ...(FUN.palettes || {}), [id]: p };
+      renderTemaInfo();
+    }
+  }
 });
 $("pal-delete").addEventListener("click", async () => {
   palMenu(false);
@@ -3637,7 +3645,7 @@ function renderAdminOccasions() {
     .map(([id, o]) => ({ id, o: o || {}, next: nextDates((o || {}).when, 1)[0] }))
     .sort((a, b) => (a.next ? a.next.i : 9999) - (b.next ? b.next.i : 9999) || a.id.localeCompare(b.id))
     .forEach(({ id, o, next }) => {
-      const pal = getPalette(occLookOf(o).tema);
+      const pal = getPalette(occTema(o));
       const li = document.createElement("li");
       li.innerHTML = `<button class="adm-row"><span class="dots">${pal ? paletteDots(pal) : ""}</span>
         <span class="adm-row-text"><b>${esc(id)}${o.adminOnly ? ` <span class="badge" title="Só admin">👑 só admin</span>` : ""}${o.enabled === false ? ` <span class="badge off">desativada</span>` : ""}${next && next.i === 0 ? ` <span class="badge">hoje</span>` : ""}</b>
@@ -3653,7 +3661,7 @@ const agenda = { y: 0, m: 0, sel: null, who: "fam" }; // who: "fam" = the family
 const AG_FIELDS = [["tema", "Tema"], ["effect", "Efeito"], ["decor", "Desenhos"], ["bgImage", "Imagem de fundo"], ["banner", "Faixa"], ["version", "Versão"]];
 const agDay = (y, m, d) => spToday(new Date(Date.UTC(y, m - 1, d, 15))); // 15h UTC = midday in São Paulo
 function occColor(id, o) {
-  const p = getPalette(occLookOf(o).tema);
+  const p = getPalette(occTema(o));
   if (p && HEX.test(String(p.accent || ""))) return p.accent;
   let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
   return `hsl(${h} 55% 55%)`;
@@ -3723,13 +3731,8 @@ function readOccForm() {
   const put = (k, v) => { if (v !== "" && v !== null && v !== undefined) o[k] = v; };
   put("banner", $("occ-banner").value.trim());
   put("version", $("occ-version").value.trim());
-  // The look: a tema + what changes only here. The old fields are mirrored until the cleanup step (safe revert).
+  // The look is the tema, whole. ("palette" is mirrored until the cleanup step, for a safe revert.)
   o.tema = $("occ-palette").value;
-  o.own = {};
-  const own = (k, v) => { if (v) { o.own[k] = v; o[k] = v; } };
-  own("decor", $("occ-decor").value.trim());
-  own("effect", $("occ-effect").value);
-  own("bgImage", $("occ-bg").value);
   put("palette", o.tema);
   const curses = {};
   document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, CURSE_MAX); });
@@ -3789,9 +3792,7 @@ function openOccasionEditor(id) {
   if (!occRules.length) occRules = [newRule()];
   $("occ-banner").value = o.banner || "";
   $("occ-version").value = o.version || "";
-  const look = occLookOf(o);
-  $("occ-decor").value = look.own.decor || "";
-  $("occ-effect").value = look.own.effect || "";
+  const tema = occTema(o);
   $("occ-priority").value = o.priority ?? "";
   $("occ-enabled").checked = o.enabled !== false;
   $("occ-admin-only").checked = o.adminOnly === true;
@@ -3803,25 +3804,24 @@ function openOccasionEditor(id) {
   const sel = $("occ-palette");
   sel.innerHTML = `<option value="">(a de cada um)</option>`;
   Object.entries(allPalettes()).forEach(([pid, p]) => sel.add(new Option((p && p.name) || pid, pid)));
-  sel.value = getPalette(look.tema) ? look.tema : "";
+  sel.value = getPalette(tema) ? tema : "";
   show("occ-delete", !!id);
-  renderDecorPicker("occ-decor-picker", "occ-decor", "occ-palette");
-  setOccBg(look.own.bgImage || "");
-  $("occ-own").open = Object.keys(look.own).length > 0;
   renderTemaInfo();
   renderRules();
   $("dlg-occ").showModal();
 }
-// Under the Tema picker: what the tema brings, and how many things this occasion changes on top.
+// Under the Tema picker: what the tema brings (the occasion looks exactly like it), and a shortcut to edit it.
 function renderTemaInfo() {
   const p = getPalette($("occ-palette").value);
-  const n = [$("occ-effect").value, $("occ-decor").value.trim(), $("occ-bg").value].filter(Boolean).length;
-  $("occ-own-n").textContent = n ? `(${n} ${n === 1 ? "coisa" : "coisas"})` : "";
-  if (!p) { $("occ-tema-info").textContent = "Cada pessoa vê o tema que escolheu."; return; }
+  show("occ-tema-edit", !!p);
+  if (!p) { $("occ-tema-info").textContent = "Cada pessoa vê o tema que escolheu."; fillLookSelect(); return; }
   const bits = ["cores", p.decor ? "desenhos" : "", p.effect ? `efeito ${EFFECTS[p.effect] || p.effect}` : "", p.bgImage ? "imagem de fundo" : ""].filter(Boolean);
   $("occ-tema-info").textContent = `O tema traz: ${bits.join(", ")}.`;
+  fillLookSelect();
 }
-["occ-palette", "occ-effect", "occ-decor"].forEach((k) => { $(k).addEventListener("change", renderTemaInfo); $(k).addEventListener("input", renderTemaInfo); });
+$("occ-palette").addEventListener("change", renderTemaInfo);
+$("occ-tema-edit").addEventListener("click", () => openPaletteEditor($("occ-palette").value));
+$("occ-tema-new").addEventListener("click", () => openPaletteEditor(null));
 $("adm-occ-new").addEventListener("click", () => openOccasionEditor(null));
 $("occ-cancel").addEventListener("click", () => $("dlg-occ").close());
 $("occ-try").addEventListener("click", () => {
@@ -3848,8 +3848,6 @@ async function uploadBg(e, base, done) {
     toast("Imagem pronta. Toque em Salvar.");
   } catch (err) { toast(friendlyError(err)); }
 }
-$("occ-bg-file").addEventListener("change", (e) => uploadBg(e, occEditing || $("occ-id").value.trim(), setOccBg));
-$("occ-bg-clear").addEventListener("click", () => setOccBg(""));
 $("pal-bg-file").addEventListener("change", (e) => uploadBg(e, st && (st.id || slugify(st.pal.name)), (id) => commit(() => { st.bg = id; setBgField("pal", id); })));
 $("pal-bg-clear").addEventListener("click", () => commit(() => { st.bg = ""; setBgField("pal", ""); }));
 $("occ-form").addEventListener("submit", async (e) => {
@@ -4093,7 +4091,6 @@ function renderAdminDrawings() {
       tile.querySelector(".drawing-del").onclick = async () => {
         const users = [
           ...Object.entries(allPalettes()).filter(([, p]) => String((p || {}).decor || "").includes(name)).map(([id]) => "tema " + id),
-          ...Object.entries(allOccasions()).filter(([, o]) => String(occLookOf(o).own.decor || "").includes(name)).map(([id]) => "ocasião " + id),
         ];
         if (!(await confirmBox(`Apagar ${name}?`, users.length ? `Usado em: ${users.join(", ")}. Lá ele simplesmente some.` : "Não é usado em lugar nenhum.", "Apagar"))) return;
         try { await deleteDoc(doc(db, "decor", name)); toast("Desenho apagado."); } catch (err) { toast(friendlyError(err)); }
@@ -4295,11 +4292,10 @@ function fillLookSelect(keep) {
   const sel = $("occ-ns-look");
   keep = keep === undefined ? sel.value : keep;
   sel.innerHTML = "";
-  sel.add(new Option(`Automático (${NAME_LOOKS[autoLook($("occ-effect").value)].replace(/^\S+ /, "")})`, ""));
+  sel.add(new Option(`Automático (${NAME_LOOKS[autoLook((getPalette($("occ-palette").value) || {}).effect)].replace(/^\S+ /, "")})`, ""));
   for (const [k, l] of Object.entries(NAME_LOOKS)) if (k !== "none") sel.add(new Option(l, k));
   sel.value = keep in NAME_LOOKS ? keep : "";
 }
-$("occ-effect").addEventListener("change", () => fillLookSelect());
 ["occ-ns-icon", "occ-ns-title", "occ-ns-ideas"].forEach((id) => $(id).addEventListener("input", renderCurseHead));
 
 // Admin: everything running right now, from everyone, with ⋯ → Encerrar / Apagar. Nobody gets notified;

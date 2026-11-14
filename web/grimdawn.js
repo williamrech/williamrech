@@ -1236,3 +1236,26 @@ function beam(g, x, y, kind, delay, life, tapY) {
   }
 }
 
+
+// ---------- The pacote shape (see PACOTES in app.js): what the app calls while Grim Dawn is on ----------
+let grail = null, run = 0;
+export const pacote = {
+  back(layer) { startScene(layer); }, // the burning city behind the feed
+  front(layer, scale, still) { // a devotion constellation, ash + embers, riftgates now and then
+    if (scale >= 1) startSky(layer); // it holds still, so reduced motion keeps it
+    if (still) return;
+    startAsh(layer, scale);
+    if (scale >= 1) startRifts(layer);
+  },
+  tap(x, y, layer) { grimTap(x, y, layer); }, // a loot drop
+  chip(chip, name) { targetBar(chip, name); return true; }, // the name chip becomes a monster's target bar
+  async start(ctx) { // the collection (grail.js) while the occasion is live
+    const my = ++run;
+    const [g, self] = await Promise.all([import(new URL("grail.js" + new URL(import.meta.url).search, import.meta.url).href), import(import.meta.url)]);
+    if (my !== run) return;
+    if (grail) grail.stopGrail();
+    grail = g;
+    g.startGrail({ ...ctx, gd: self });
+  },
+  stop() { run++; if (grail) grail.stopGrail(); },
+};
