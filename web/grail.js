@@ -1,7 +1,7 @@
 // ⚔️ Grim Dawn grail: counts the epics, legendaries and iron each person finds (Firestore grail/{uid}),
 // shows them in the footer, opens a "holy grail" list of every possible item, and sends gifts between people
 // (gifts/{id}; moved by the functions, so nothing is duplicated or lost). Loaded only while the occasion is live.
-import { doc, setDoc, onSnapshot, collection, query, where, increment } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { doc, setDoc, onSnapshot, collection, query, where, increment, deleteField } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 const RAR = { legendary: { pt: "Lendário", pl: "Lendários", col: "#c86bff" }, epic: { pt: "Épico", pl: "Épicos", col: "#4f9dff" } };
 const IRON_COL = "#a7a7a3";
@@ -9,11 +9,10 @@ const KINDS = [["sword", "Espadas"], ["axe", "Machados"], ["mace", "Maças e mar
   ["shield", "Escudos"], ["helm", "Elmos"], ["chest", "Armaduras"], ["gloves", "Luvas"], ["boots", "Botas"], ["ring", "Anéis"], ["amulet", "Amuletos"]];
 const fmt = (n) => Number(n || 0).toLocaleString("pt-BR");
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const day = (ms) => new Date(ms).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
 
 const CSS = `
-.grail-line { pointer-events: auto; display: block; margin: 0 auto 4px; padding: 4px 10px; border: 0; background: none; font: 600 .74rem/1.45 var(--sans, system-ui);
-  color: var(--muted); letter-spacing: .02em; text-wrap: balance; max-width: 92vw; }
+.grail-line { pointer-events: auto; display: block; margin: 0 0 4px; padding: 4px 16px; border: 0; background: none; font: 600 .74rem/1.45 var(--sans, system-ui);
+  color: var(--muted); letter-spacing: .02em; text-align: left; max-width: calc(100% - 96px); } /* left, clear of the ＋ */
 .grail-line b { font-weight: 700; }
 .grail-line.glow { animation: grail-glow 1.4s ease-out; }
 @keyframes grail-glow { 0% { text-shadow: 0 0 0 transparent; } 25% { text-shadow: 0 0 12px #f3d64e, 0 0 3px #f3d64e; } 100% { text-shadow: 0 0 0 transparent; } }
@@ -41,9 +40,15 @@ const CSS = `
 #dlg-grail .gi.miss img { filter: grayscale(1) brightness(.35); }
 #dlg-grail .gi .nm { flex: 1; min-width: 0; }
 #dlg-grail .gi .meta { font-size: .72rem; color: var(--muted); white-space: nowrap; }
-#dlg-grail .gsend { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0 8px 34px; }
-#dlg-grail .gsend button { padding: 4px 9px; font-size: .76rem; border-radius: 10px; border: 1px solid #3c3221; background: #0e0f0e; color: #cfc6b0; }
-#dlg-grail .gsend button.pick { border-color: #f3d64e; color: #f3d64e; }
+#dlg-grail .gsend { margin: 2px 0 10px; padding: 8px 10px 10px; border: 1px solid #3c3221; border-radius: 3px; background: rgba(0,0,0,.25); }
+#dlg-grail .gsend .lbl { font-size: .72rem; color: var(--muted); margin: 0 0 6px; }
+#dlg-grail .gsend .who { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+#dlg-grail .gsend .who button { padding: 5px 11px; font-size: .8rem; border-radius: 14px; border: 1px dashed #5a4b33; background: none; color: #cfc6b0; }
+#dlg-grail .gsend .who button.pick { border: 1px solid #f3d64e; color: #f3d64e; background: rgba(243,214,78,.08); }
+#dlg-grail .gsend .who button.pick::before { content: "✓ "; }
+#dlg-grail .gsend .go { display: block; width: 100%; padding: 9px 10px; font: 700 .86rem/1.2 var(--sans, system-ui); border-radius: 3px; border: 1px solid #8a6f3e;
+  background: linear-gradient(180deg, #4a3c1f, #2a2112); color: #f3d64e; }
+#dlg-grail .gsend .go:disabled { opacity: .4; border-color: #3c3221; color: #8d877a; background: none; }
 #dlg-grail .gnote { font-size: .78rem; color: var(--muted); margin: 6px 0; }
 #dlg-grail input.gq { width: 7em; min-height: 34px; padding: 4px 8px; font-size: 16px; }
 #dlg-grail .grow { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: .84rem; }
@@ -56,7 +61,7 @@ let S = null; // the running grail (one per app open while the occasion is live)
 export function startGrail(o) {
   if (S) return S.stop;
   // o: { db, uid, api(action, data) → Promise, gd (grimdawn module), isAdmin(), people() → [[uid, name]], toast(msg) }
-  const st = { o, data: { items: {}, first: {}, iron: 0 }, pend: { items: {}, first: {}, iron: 0 }, gin: [], gout: [], allPend: [], tab: "legendary", filt: "all", open: null, pick: null, fam: null };
+  const st = { o, data: { items: {}, iron: 0 }, pend: { items: {}, iron: 0 }, gin: [], gout: [], allPend: [], tab: "legendary", filt: "all", open: null, pick: null, fam: null };
   S = st;
   if (!document.getElementById("grail-css")) { const c = document.createElement("style"); c.id = "grail-css"; c.textContent = CSS; document.head.appendChild(c); }
   const cat = o.gd.grailCatalog();
@@ -79,7 +84,11 @@ export function startGrail(o) {
 
   const ref = doc(o.db, "grail", o.uid);
   const unsubs = [
-    onSnapshot(ref, (s) => { st.data = norm(s.exists() ? s.data() : {}); render(); }, (e) => console.warn("grail", e)),
+    onSnapshot(ref, (s) => {
+      const d = s.exists() ? s.data() : {};
+      if (d.first) setDoc(ref, { first: deleteField() }, { merge: true }).catch(() => {}); // dates aren't kept any more
+      st.data = norm(d); render();
+    }, (e) => console.warn("grail", e)),
     onSnapshot(query(collection(o.db, "gifts"), where("to", "==", o.uid), where("status", "==", "pending")),
       (s) => { st.gin = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.at - b.at); render(); }, (e) => console.warn("gifts in", e)),
     onSnapshot(query(collection(o.db, "gifts"), where("from", "==", o.uid), where("status", "==", "pending")),
@@ -94,7 +103,7 @@ export function startGrail(o) {
     else {
       const have = (st.data.items[x.name] || 0) + (st.pend.items[x.name] || 0);
       st.pend.items[x.name] = (st.pend.items[x.name] || 0) + 1;
-      if (!have && !st.data.first[x.name]) { st.pend.first[x.name] = Date.now(); line.classList.remove("glow"); void line.offsetWidth; line.classList.add("glow"); }
+      if (!have) { line.classList.remove("glow"); void line.offsetWidth; line.classList.add("glow"); } // new to the collection
     }
     render();
     clearTimeout(st.t); st.t = setTimeout(flush, 4000);
@@ -115,34 +124,31 @@ export function startGrail(o) {
   return st.stop;
 
   function norm(d) { // apply renames
-    const items = {}, first = {};
+    const items = {};
     for (const [k, v] of Object.entries(d.items || {})) { const n = o.gd.ALIASES[k] || k; items[n] = (items[n] || 0) + (Number(v) || 0); }
-    for (const [k, v] of Object.entries(d.first || {})) { const n = o.gd.ALIASES[k] || k; first[n] = Math.min(first[n] || Infinity, v); }
-    return { items, first, iron: Number(d.iron) || 0 };
+    return { items, iron: Number(d.iron) || 0 };
   }
   function flush() {
     clearTimeout(st.t);
     const p = st.pend;
     if (!p.iron && !Object.keys(p.items).length) return Promise.resolve();
-    st.pend = { items: {}, first: {}, iron: 0 };
+    st.pend = { items: {}, iron: 0 };
     const w = { updatedAt: Date.now() };
     if (p.iron) w.iron = increment(p.iron);
     if (Object.keys(p.items).length) w.items = Object.fromEntries(Object.entries(p.items).map(([k, v]) => [k, increment(v)]));
-    if (Object.keys(p.first).length) w.first = p.first;
     return setDoc(ref, w, { merge: true }).catch((e) => { // put it back and try again later
       console.warn("grail save", e);
       for (const [k, v] of Object.entries(p.items)) st.pend.items[k] = (st.pend.items[k] || 0) + v;
-      Object.assign(st.pend.first, p.first); st.pend.iron += p.iron;
+      st.pend.iron += p.iron;
       st.t = setTimeout(flush, 15000);
     });
   }
   function counts() {
     const items = { ...st.data.items };
     for (const [k, v] of Object.entries(st.pend.items)) items[k] = (items[k] || 0) + v;
-    const first = { ...st.pend.first, ...st.data.first };
     let epic = 0, legendary = 0;
     for (const [k, v] of Object.entries(items)) { if (st.rar[k] === "epic") epic += v; else if (st.rar[k] === "legendary") legendary += v; }
-    return { items, first, epic, legendary, iron: st.data.iron + st.pend.iron };
+    return { items, epic, legendary, iron: st.data.iron + st.pend.iron };
   }
   function render() {
     const c = counts();
@@ -194,9 +200,10 @@ export function startGrail(o) {
     wire(B);
   }
   function people() { return o.people().filter(([u]) => u !== o.uid); }
-  function sendRow(key) { // family picker for one gift
-    return `<div class="gsend">${people().map(([u, n]) => `<button data-to="${u}" class="${st.pick === u ? "pick" : ""}">${esc(n)}</button>`).join("")}
-      ${st.pick ? `<button class="gbtn" data-send="${esc(key)}">Mandar</button>` : ""}</div>`;
+  function sendRow(key, what) { // 1) choose who (✓), 2) one clear button that says exactly what goes where
+    const who = people(), to = who.find(([u]) => u === st.pick);
+    return `<div class="gsend"><div class="lbl">Para quem?</div><div class="who">${who.map(([u, n]) => `<button data-to="${u}" class="${st.pick === u ? "pick" : ""}">${esc(n)}</button>`).join("")}</div>
+      <button class="go" data-send="${esc(key)}" ${to ? "" : "disabled"}>${to ? `🎁 Mandar ${what} pra ${esc(to[1])}` : "Escolha alguém acima"}</button></div>`;
   }
   function itemTab(r) {
     const c = counts(), list = st.cat[r];
@@ -212,9 +219,9 @@ export function startGrail(o) {
       for (const n of rows) {
         const q = c.items[n] || 0, out = st.gout.filter((g) => g.name === n).length;
         h += `<div class="gi ${q ? "" : "miss"}"><img src="${art.src}" alt=""><span class="nm" ${q ? `style="color:${RAR[r].col}"` : ""}>${esc(n)}</span>
-          <span class="meta">${q ? (q > 1 ? `×${q} · ` : "") + (c.first[n] ? day(c.first[n]) : "") : ""}${out ? ` · ${out} a caminho` : ""}</span>
+          <span class="meta">${q > 1 ? `×${q}` : ""}${out ? `${q > 1 ? " · " : ""}${out} a caminho` : ""}</span>
           ${q > 1 ? `<button class="gbtn" data-open="${esc(n)}">Presentear</button>` : ""}</div>`;
-        if (st.open === n) h += sendRow(n);
+        if (st.open === n) h += sendRow(n, esc(n));
       }
     }
     return h + (st.filt !== "miss" && !owned ? `<p class="gnote">Nada ainda. Toque no vazio e reze. 🙏</p>` : "") + "</div>";
@@ -222,9 +229,9 @@ export function startGrail(o) {
   function ironTab() {
     const c = counts();
     let h = `<p>Você tem <b style="color:${IRON_COL}">${fmt(c.iron)} Pedaços de Ferro</b>.</p>`;
-    if (c.iron > 0) h += `<p class="gnote">Presentear: <input class="gq" type="number" inputmode="numeric" min="1" max="${c.iron}" value="${Math.min(st.qty || 1, c.iron)}"></p>${sendRow("__iron")}`;
+    if (c.iron > 0) { st.qty = Math.max(1, Math.min(st.qty || 1, c.iron)); h += `<p class="gnote">Quanto presentear: <input class="gq" type="number" inputmode="numeric" min="1" max="${c.iron}" value="${st.qty}"></p>${sendRow("__iron", `<span class="qn">${fmt(st.qty)}</span> de ferro`)}`; }
     h += `<h4>Presentes a caminho</h4>`;
-    h += st.gout.length ? st.gout.map((g) => `<div class="grow"><span class="nm">${giftName(g)} → ${esc(g.toName || "?")} <span class="meta">até ${day(g.until)}</span></span><button class="gbtn no" data-cancel="${g.id}">Cancelar</button></div>`).join("")
+    h += st.gout.length ? st.gout.map((g) => `<div class="grow"><span class="nm">${giftName(g)} → ${esc(g.toName || "?")} <span class="meta">volta em ${Math.max(1, Math.ceil((g.until - Date.now()) / 864e5))} d se não abrir</span></span><button class="gbtn no" data-cancel="${g.id}">Cancelar</button></div>`).join("")
       : `<p class="gnote">Nenhum. Presentes não abertos em 7 dias voltam pra você.</p>`;
     return `<div class="glist">${h}</div>`;
   }
@@ -246,7 +253,7 @@ export function startGrail(o) {
     B.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { st.filt = b.dataset.f; renderList(); });
     B.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => { st.open = st.open === b.dataset.open ? null : b.dataset.open; st.pick = null; renderList(); });
     B.querySelectorAll("[data-to]").forEach((b) => b.onclick = () => { st.pick = st.pick === b.dataset.to ? null : b.dataset.to; renderList(); });
-    const q = B.querySelector(".gq"); if (q) q.oninput = () => (st.qty = Math.floor(Number(q.value)) || 1);
+    const q = B.querySelector(".gq"); if (q) q.oninput = () => { st.qty = Math.floor(Number(q.value)) || 1; const qn = B.querySelector(".qn"); if (qn) qn.textContent = fmt(st.qty); };
     B.querySelectorAll("[data-send]").forEach((b) => b.onclick = async () => {
       const key = b.dataset.send, to = st.pick;
       const data = key === "__iron" ? { kind: "iron", qty: Math.floor(Number((B.querySelector(".gq") || {}).value)) || 0 } : { kind: "item", name: key, rarity: st.rar[key] };

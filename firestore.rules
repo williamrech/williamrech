@@ -77,7 +77,7 @@ service cloud.firestore {
     match /grail/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow create, update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['items', 'first', 'iron', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['items', 'first', 'iron', 'updatedAt']) // 'first' (old find dates) only so phones can delete it
         && (!('items' in request.resource.data) || request.resource.data.items is map)
         && (!('first' in request.resource.data) || request.resource.data.first is map)
         && request.resource.data.get('iron', 0) is int

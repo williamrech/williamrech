@@ -1104,7 +1104,7 @@ handlers.claimAdmin = async (req) => {
 
 // ---------------------------------------------------------------------------
 // ⚔️ Grim Dawn grail: each person's epics, legendaries and iron (grail/{uid}), and gifts between people (gifts/{id}).
-// grail/{uid}: items { name: qty }, first { name: millis }, iron, updatedAt — the phone adds what drops (rules: only up);
+// grail/{uid}: items { name: qty }, iron, updatedAt (no dates: the user asked not to keep when things were found) — the phone adds what drops (rules: only up);
 // gifts move copies through here, in transactions, so nothing is duplicated or lost.
 // gift: from, fromName, to, toName, kind "item"|"iron", name, rarity, qty, status "pending"|"accepted"|"declined"|"returned"|"cancelled",
 //   at, until (pending gifts go back to the sender after 7 days), doneAt
@@ -1129,16 +1129,12 @@ async function grimLiveFor(uids) {
 }
 const grailRef = (uid) => db.doc(`grail/${uid}`);
 const itemPath = (name) => new FieldPath("items", name);
-const firstPath = (name) => new FieldPath("first", name);
 // Put a gift's contents into someone's grail (inside a transaction).
 function giveTo(tx, snap, uid, g) {
   const ref = grailRef(uid);
   if (g.kind === "iron") return tx.set(ref, { iron: FieldValue.increment(g.qty), updatedAt: Date.now() }, { merge: true });
-  const has = snap.exists && ((snap.get("items") || {})[g.name] || 0) > 0;
-  const upd = [itemPath(g.name), FieldValue.increment(g.qty), "updatedAt", Date.now()];
-  if (!(snap.exists && (snap.get("first") || {})[g.name])) upd.push(firstPath(g.name), Date.now());
-  if (!snap.exists) return tx.set(ref, { items: { [g.name]: g.qty }, first: has ? {} : { [g.name]: Date.now() }, iron: 0, updatedAt: Date.now() });
-  return tx.update(ref, ...upd);
+  if (!snap.exists) return tx.set(ref, { items: { [g.name]: g.qty }, iron: 0, updatedAt: Date.now() });
+  return tx.update(ref, itemPath(g.name), FieldValue.increment(g.qty), "updatedAt", Date.now());
 }
 const giftLabel = (g) => (g.kind === "iron" ? `${g.qty} Pedaços de Ferro` : `${g.name}${g.rarity ? ` (${RARITY_PT[g.rarity] || g.rarity})` : ""}`);
 // Ends a pending gift: accept → to the recipient; anything else → back to the sender.
