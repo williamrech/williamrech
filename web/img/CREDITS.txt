@@ -1,0 +1,1 @@
+gd-sword.png: a frame of the longsword loot sprite from Flare (https://github.com/flareteam/flare-game), art by the Flare team, CC-BY-SA 3.0 (https://creativecommons.org/licenses/by-sa/3.0/). Cropped from the sprite sheet.

@@ -28,6 +28,8 @@ const CSS = `
   100% { transform: translate(var(--sway), -70vh); opacity: 0; }
 }
 .gd-fx { position: absolute; pointer-events: none; }
+.gd-far { position: absolute; right: 52px; bottom: calc(122px + env(safe-area-inset-bottom)); width: 0; height: 0; z-index: 4; pointer-events: none;
+  transform: translateY(-400px) scale(.62); transform-origin: 0 400px; opacity: .72; filter: blur(1.6px) drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 26px var(--glow)); }
 .gd-portal { position: absolute; border-radius: 50%; overflow: hidden;
   -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
 .gd-portal i { position: absolute; inset: -25%; border-radius: 50%; }
@@ -35,8 +37,8 @@ const CSS = `
 .gd-rim { position: absolute; border-radius: 50%; }
 .gd-mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; }
 .gd-salt { position: absolute; overflow: visible; }
-.gd-item { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px; will-change: transform; }
-.gd-item svg { width: 100%; height: 100%; display: block; overflow: visible; filter: url(#gd-solid); }
+.gd-item { position: absolute; width: 64px; height: 24px; margin: -12px 0 0 -32px; will-change: transform; }
+.gd-item img { width: 100%; height: 100%; display: block; }
 .gd-ground { position: absolute; width: 44px; height: 14px; border-radius: 50%; opacity: 0; }
 .gd-ground.pool { filter: blur(3px); mix-blend-mode: screen; }
 .gd-twinkle { position: absolute; width: 9px; height: 9px; margin: -4px 0 0 -4px; opacity: 0; filter: drop-shadow(0 0 3px currentColor); }
@@ -286,6 +288,7 @@ export function startScene(layer, helpers = {}) {
   if (helpers.fog) helpers.fog(); // rolling smoke strips (pushed by swipes, swelling on scroll)
   layer.insertAdjacentHTML("beforeend", `<div class="gd-rubble">${rubbleSvg()}<div class="fade"></div></div>`);
   startCrow(layer.lastElementChild);
+  startRifts(layer);
   // Aether lightning, far off: a double flash every so often.
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     const strike = () => {
@@ -298,15 +301,30 @@ export function startScene(layer, helpers = {}) {
 }
 
 // ---------- Tap ----------
-export function grimTap(x, y, layer, force) { // force (tests only): "loot" | "rift" | "gate", lucky: 0..1
+export function grimTap(x, y, layer, force) { // every tap drops loot; force (tests only): { lucky: 0..1 }
   ensureCss();
   if (scareCrow) scareCrow();
   if (!force && layer.querySelectorAll(".gd-fx").length >= 4) return; // don't pile up
-  let r = force ? { loot: 0, rift: 0.6, gate: 0.9 }[force.kind] : Math.random();
-  if (r >= 0.55 && !force && layer.querySelector(".gd-portal")) r = 0; // only one portal at a time: loot instead
-  if (r < 0.55) loot(x, y, layer, force && force.lucky);
-  else if (r < 0.86) chthonicRift(x, y, layer);
-  else riftgate(x, y, layer);
+  loot(x, y, layer, force && force.lucky);
+}
+// Rifts open on their own, far off in the back just above the ＋ button (this pack's "spider coming down"):
+// a thin red chthonic tear, or the big purple riftgate. Faded, softened and heavily glowing.
+function startRifts(layer) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  ensureCss();
+  const spot = document.createElement("div");
+  spot.className = "gd-far";
+  layer.appendChild(spot);
+  const open = () => {
+    if (!spot.isConnected) return;
+    if (!document.hidden && !spot.firstChild) {
+      const gate = Math.random() < 0.4;
+      spot.style.setProperty("--glow", gate ? "rgba(170, 80, 255, .8)" : "rgba(255, 40, 25, .8)");
+      if (gate) riftgate(0, 400, spot); else chthonicRift(0, 400, spot, true);
+    }
+    setTimeout(open, rnd(20000, 40000));
+  };
+  setTimeout(open, rnd(4000, 9000));
 }
 
 function box(layer, x, y) {
@@ -353,8 +371,8 @@ function motes(g, w, h, color, n, ms) {
 const OPEN = "cubic-bezier(.2,1.5,.4,1)";
 
 // Small red tear into the Void.
-function chthonicRift(x, y, layer) {
-  const w = rnd(46, 70), h = w * rnd(1.45, 1.7), g = box(layer, x, y);
+function chthonicRift(x, y, layer, thin) {
+  const w = thin ? rnd(20, 28) : rnd(46, 70), h = thin ? w * rnd(3.6, 4.4) : w * rnd(1.45, 1.7), g = box(layer, x, y);
   const { p, rim } = portal(g, w, h, {
     swirl: ["#160002", "#ff3a1c", "#5c0207", "#b80d14"], streak: "rgba(255, 140, 90, .55)",
     rim: "rgba(255, 110, 70, .8)", glow: "rgba(255, 30, 20, .75)", glow2: "rgba(160, 0, 10, .45)",
@@ -521,14 +539,14 @@ function loot(x, y, layer, forceLucky) {
             { duration: rnd(700, 1200), delay: delay + FLY + rnd(0, 900), iterations: Math.max(1, Math.floor((life - FLY - 1200) / 1000)), easing: "ease-in-out", fill: "both" });
         }
       }
-      const node = el(g, "gd-item", "", ART[it.art] || ART.cleaver);
+      const node = el(g, "gd-item", "", `<img src="${SPRITE}" alt="">`); // placeholder: one real 3D-rendered sprite for every item
       const peak = -rnd(70, 120), rot = rnd(-260, 260), lie = rnd(-70, 70);
       node.animate([
         { transform: "translate(0px, 0px) rotate(0deg) scale(.4)", easing: "cubic-bezier(.3,.7,.6,1)" },
         { transform: `translate(${dx * 0.5}px, ${peak}px) rotate(${rot}deg) scale(1)`, offset: 0.45, easing: "cubic-bezier(.5,0,.9,.5)" },
-        { transform: `translate(${dx}px, ${dy}px) scale(1, .78) rotate(${lie}deg)`, offset: 0.86, easing: "ease-out" },
-        { transform: `translate(${dx}px, ${dy - 3}px) scale(1, .78) rotate(${lie * 0.94}deg)`, offset: 0.93, easing: "ease-in" },
-        { transform: `translate(${dx}px, ${dy}px) scale(1, .78) rotate(${lie}deg)` },
+        { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${lie}deg)`, offset: 0.86, easing: "ease-out" },
+        { transform: `translate(${dx}px, ${dy - 3}px) scale(1) rotate(${lie * 0.94}deg)`, offset: 0.93, easing: "ease-in" },
+        { transform: `translate(${dx}px, ${dy}px) scale(1) rotate(${lie}deg)` },
       ], { duration: FLY, delay, fill: "both" });
       if (it.broken) node.animate([{ opacity: 1 }, { opacity: 0, filter: "blur(2px)" }], { duration: 700, delay: delay + FLY + 700, fill: "forwards" });
       else node.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, delay: life - 500, fill: "forwards" });
@@ -547,6 +565,7 @@ function loot(x, y, layer, forceLucky) {
   });
   setTimeout(() => g.remove(), life + 200);
 }
+const SPRITE = new URL("img/gd-sword.png", import.meta.url).href;
 const TWINKLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C12.6 8.5 15.5 11.4 24 12C15.5 12.6 12.6 15.5 12 24C11.4 15.5 8.5 12.6 0 12C8.5 11.4 11.4 8.5 12 0Z" fill="currentColor"/></svg>`;
 
 // A pillar of light over an epic (blue) or legendary (purple): thin bright core, wide soft halo, up past the top of the screen.
