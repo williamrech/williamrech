@@ -1,9 +1,9 @@
 // ⚔️ Grim Dawn pack (occasion effect). Loaded only when the effect is on, so nobody else downloads it.
 // Background: ash falling and a few embers rising. Tapping empty background does one of:
 //  • a loot explosion: items fly out, land with their names in rarity colors, then vanish;
-//  • a small red chthonic rift that tears open and closes;
-//  • rarely, a purple riftgate that grows out of the ground while a ring of salt is poured around it.
-// Original drawings and names, in the game's mood (Victorian grimdark, iron as money, PT-BR terms).
+// Tapping the empty background drops loot; riftgates open on their own in the back, above the ＋ button.
+// Item sprites are Flare's 3D-rendered loot art (CC-BY-SA, see img/CREDITS.txt); names come from the game's
+// Brazilian Portuguese community translation.
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -28,17 +28,17 @@ const CSS = `
   100% { transform: translate(var(--sway), -70vh); opacity: 0; }
 }
 .gd-fx { position: absolute; pointer-events: none; }
-.gd-far { position: absolute; right: 52px; bottom: calc(122px + env(safe-area-inset-bottom)); width: 0; height: 0; z-index: 4; pointer-events: none;
-  transform: translateY(-400px) scale(.62); transform-origin: 0 400px; opacity: .72; filter: blur(1.6px) drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 26px var(--glow)); }
+.gd-far { position: fixed; right: 108px; bottom: 20vh; width: 0; height: 0; pointer-events: none;
+  opacity: .8; mix-blend-mode: screen; /* only its light lands on the feed, so text stays readable */
+  filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
 .gd-portal { position: absolute; border-radius: 50%; overflow: hidden;
   -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
 .gd-portal i { position: absolute; inset: -25%; border-radius: 50%; }
 .gd-portal .core { inset: 0; background: radial-gradient(closest-side, #000 0, rgba(0,0,0,.92) 28%, rgba(0,0,0,.35) 55%, transparent 75%); }
 .gd-rim { position: absolute; border-radius: 50%; }
 .gd-mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; }
-.gd-salt { position: absolute; overflow: visible; }
-.gd-item { position: absolute; width: 64px; height: 24px; margin: -12px 0 0 -32px; will-change: transform; }
-.gd-item img { width: 100%; height: 100%; display: block; }
+.gd-item { position: absolute; width: 0; height: 0; display: grid; place-items: center; will-change: transform; }
+.gd-item img { display: block; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .65)); }
 .gd-ground { position: absolute; width: 44px; height: 14px; border-radius: 50%; opacity: 0; }
 .gd-ground.pool { filter: blur(3px); mix-blend-mode: screen; }
 .gd-twinkle { position: absolute; width: 9px; height: 9px; margin: -4px 0 0 -4px; opacity: 0; filter: drop-shadow(0 0 3px currentColor); }
@@ -56,24 +56,9 @@ const CSS = `
 `;
 function ensureCss() {
   if (document.getElementById("gd-css")) return;
-  // Makes flat item drawings read as solid objects: a bevel from the shape's edge, a hard highlight, grit.
-  document.body.insertAdjacentHTML("beforeend", `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="gd-solid" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-<feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="b"/>
-<feDiffuseLighting in="b" surfaceScale="5" diffuseConstant="1.15" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="42"/></feDiffuseLighting>
-<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.3" k2=".1" k3="0" k4="0" result="lit"/>
-<feSpecularLighting in="b" surfaceScale="5" specularConstant=".45" specularExponent="30" lighting-color="#cfd8e2" result="s"><feDistantLight azimuth="225" elevation="50"/></feSpecularLighting>
-<feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="4" result="n"/>
-<feColorMatrix in="n" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.4 .9" result="grit"/>
-<feComposite in="lit" in2="grit" operator="in" result="worn"/>
-<feMerge result="m"><feMergeNode in="lit"/></feMerge>
-<feBlend in="worn" in2="lit" mode="multiply" result="base"/>
-<feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
-<feComposite in="base" in2="s2" operator="arithmetic" k1="0" k2="1" k3=".8" k4="0" result="out"/>
-<feComposite in="out" in2="SourceAlpha" operator="in"/>
-</filter></svg>`);
   const s = document.createElement("style");
   s.id = "gd-css";
-  s.textContent = CSS;
+  s.textContent = CSS + RIFT_CSS;
   document.head.appendChild(s);
 }
 
@@ -288,7 +273,6 @@ export function startScene(layer, helpers = {}) {
   if (helpers.fog) helpers.fog(); // rolling smoke strips (pushed by swipes, swelling on scroll)
   layer.insertAdjacentHTML("beforeend", `<div class="gd-rubble">${rubbleSvg()}<div class="fade"></div></div>`);
   startCrow(layer.lastElementChild);
-  startRifts(layer);
   // Aether lightning, far off: a double flash every so often.
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
     const strike = () => {
@@ -307,9 +291,9 @@ export function grimTap(x, y, layer, force) { // every tap drops loot; force (te
   if (!force && layer.querySelectorAll(".gd-fx").length >= 4) return; // don't pile up
   loot(x, y, layer, force && force.lucky);
 }
-// Rifts open on their own, far off in the back just above the ＋ button (this pack's "spider coming down"):
-// a thin red chthonic tear, or the big purple riftgate. Faded, softened and heavily glowing.
-function startRifts(layer) {
+// Rifts open on their own, in the back above the ＋ button (this pack's "spider coming down"): a big purple
+// riftgate or a small red chthonic tear. Faded and heavily glowing, so they read as far away.
+export function startRifts(layer) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   ensureCss();
   const spot = document.createElement("div");
@@ -318,9 +302,9 @@ function startRifts(layer) {
   const open = () => {
     if (!spot.isConnected) return;
     if (!document.hidden && !spot.firstChild) {
-      const gate = Math.random() < 0.4;
-      spot.style.setProperty("--glow", gate ? "rgba(170, 80, 255, .8)" : "rgba(255, 40, 25, .8)");
-      if (gate) riftgate(0, 400, spot); else chthonicRift(0, 400, spot, true);
+      const purple = Math.random() < 0.55;
+      spot.style.setProperty("--glow", purple ? "rgba(155, 61, 240, .75)" : "rgba(190, 40, 20, .7)");
+      rift(spot, purple ? "purple" : "red", rnd(3400, 5200));
     }
     setTimeout(open, rnd(20000, 40000));
   };
@@ -343,104 +327,81 @@ const el = (parent, cls, css, html) => {
   return n;
 };
 
-// A swirling portal: two counter-rotating streaked layers, a dark void core, a glowing rim and motes sucked in.
-function portal(g, w, h, cols) {
-  const p = el(g, "gd-portal", `left:${-w / 2}px;top:${-h / 2}px;width:${w}px;height:${h}px`);
-  const swirl = (c) => `conic-gradient(from 0deg, ${c[0]}, ${c[1]} 7%, ${c[2]} 16%, ${c[1]} 27%, ${c[0]} 36%, ${c[3]} 46%, ${c[2]} 58%, ${c[1]} 69%, ${c[0]} 80%, ${c[3]} 90%, ${c[0]})`;
-  const streak = (c) => `repeating-conic-gradient(from 10deg, transparent 0 9deg, ${c} 11deg, transparent 15deg 26deg)`;
-  const a = el(p, "", `background:${swirl(cols.swirl)};filter:blur(1.5px)`);
-  const b = el(p, "", `background:${streak(cols.streak)};mix-blend-mode:screen;opacity:.8;filter:blur(.8px)`);
-  el(p, "core");
-  a.animate([{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }], { duration: 2200, iterations: Infinity });
-  b.animate([{ transform: "rotate(360deg) scale(1.1)" }, { transform: "rotate(0deg) scale(1.1)" }], { duration: 1500, iterations: Infinity });
-  const rim = el(g, "gd-rim", `left:${-w / 2}px;top:${-h / 2}px;width:${w}px;height:${h}px;border:1.5px solid ${cols.rim};`
-    + `box-shadow:0 0 10px 2px ${cols.glow}, 0 0 28px 6px ${cols.glow2}, inset 0 0 12px 2px ${cols.glow}`);
-  return { p, rim, a, b };
+// Riftgates as they sit in the game: a flat ellipse on the ground seen in perspective, a wide sooty halo
+// smudging the ground around it, and a vortex of light swirling in the middle. All light and blur, no outlines.
+const RIFT_CSS = `
+.gd-rift { position: absolute; left: 0; top: 0; pointer-events: none; }
+.gd-rift .disc { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%) scaleY(.62); }
+.gd-rift i { position: absolute; left: 0; top: 0; border-radius: 50%; display: block; }
+.gd-rift .soot { filter: blur(8px); }
+.gd-rift .swirl { will-change: transform; animation: gd-spin 2.8s linear infinite; filter: blur(2.2px);
+  -webkit-mask-image: radial-gradient(closest-side, #000 48%, rgba(0,0,0,.4) 74%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 48%, rgba(0,0,0,.4) 74%, transparent 100%); }
+.gd-rift .swirl.slow { animation-duration: 5.5s; animation-direction: reverse; filter: blur(5px); }
+.gd-rift .hole { filter: blur(3px); }
+.gd-rift .hot { filter: blur(6px); mix-blend-mode: screen; animation: gd-hot 1.9s ease-in-out infinite alternate; }
+@keyframes gd-spin { from { transform: translate(-50%, -50%) rotate(0); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes gd-hot { from { opacity: .5; } to { opacity: 1; } }
+.gd-spark { position: absolute; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; }
+`;
+function riftColors(kind) {
+  if (kind === "purple") return { hot: "#e7c2ff", mid: "#9b3df0", dim: "#3d0a72", soot: "rgba(10, 2, 20, .92)", spark: "#ffd27a" };
+  if (kind === "green") return { hot: "#b6ffe4", mid: "#19c79a", dim: "#06352c", soot: "rgba(3, 16, 12, .92)", spark: "" };
+  return { hot: "#ff7a42", mid: "#c4240f", dim: "#450904", soot: "rgba(16, 4, 2, .9)", spark: "" }; // the small chthonic tear
 }
-function motes(g, w, h, color, n, ms) {
-  for (let i = 0; i < n; i++) {
-    const ang = rnd(0, Math.PI * 2), d = rnd(0.9, 1.6);
-    const m = el(g, "gd-mote", `background:${color};box-shadow:0 0 4px 1px ${color}`);
-    m.animate([
-      { transform: `translate(${Math.cos(ang) * w * d}px, ${Math.sin(ang) * h * d * 0.8}px) scale(1)`, opacity: 0 },
-      { opacity: 1, offset: 0.3 },
-      { transform: "translate(0, 0) scale(.3)", opacity: 0 },
-    ], { duration: rnd(600, 1100), delay: rnd(0, ms), easing: "cubic-bezier(.5,0,.9,.6)", fill: "both" });
+// kind: "purple" | "green" | "red". Opens, holds open for `hold` ms, then closes.
+export function rift(layer, kind, hold = 3400) {
+  const c = riftColors(kind), red = kind === "red";
+  const D = red ? rnd(30, 40) : rnd(62, 80); // diameter on the ground
+  const g = document.createElement("div");
+  g.className = "gd-rift gd-fx";
+  const disc = document.createElement("div");
+  disc.className = "disc";
+  g.appendChild(disc);
+  const ring = (cls, size, bg, extra = "") => {
+    const n = document.createElement("i");
+    n.className = cls;
+    n.style.cssText = `width:${size}px;height:${size}px;margin:${-size / 2}px 0 0 ${-size / 2}px;background:${bg};${extra}`;
+    disc.appendChild(n);
+    return n;
+  };
+  ring("soot", D * (red ? 2.0 : 1.8), `radial-gradient(closest-side, ${c.soot} 26%, color-mix(in srgb, ${c.soot} 55%, transparent) 55%, transparent 82%)`);
+  const arms = (n) => {
+    let st = "";
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * 100;
+      st += `, transparent ${a0}%, ${c.dim} ${a0 + 2}%, ${c.mid} ${a0 + 6}%, ${c.hot} ${a0 + 9}%, ${c.mid} ${a0 + 13}%, ${c.dim} ${a0 + 18}%, transparent ${a0 + 24}%`;
+    }
+    return `conic-gradient(from 0deg${st})`;
+  };
+  ring("swirl slow", D * 1.25, arms(2), `opacity:${red ? 0.5 : 0.55}`);
+  ring("swirl", D, arms(3), "opacity:.95");
+  ring("hole", D * 0.62, `radial-gradient(closest-side, #000 42%, rgba(0,0,0,.72) 68%, transparent 92%)`, `opacity:${red ? 0.8 : 0.8}`);
+  ring("hot", D * (red ? 0.42 : 0.5), `radial-gradient(closest-side, ${c.hot}, color-mix(in srgb, ${c.mid} 60%, transparent) 45%, transparent 75%)`, red ? "opacity:.8" : "");
+  layer.appendChild(g);
+  // Gold motes drifting off a riftgate.
+  if (c.spark) for (let i = 0; i < 9; i++) {
+    const sp = document.createElement("i");
+    sp.className = "gd-spark";
+    sp.style.cssText = `background:${c.spark};box-shadow:0 0 5px 1px ${c.spark};opacity:0`;
+    g.appendChild(sp);
+    const ang = rnd(0, 6.283), r0 = D * rnd(0.3, 0.6);
+    sp.animate([
+      { transform: `translate(${Math.cos(ang) * r0}px, ${Math.sin(ang) * r0 * 0.5}px)`, opacity: 0 },
+      { opacity: 1, offset: 0.25 },
+      { transform: `translate(${Math.cos(ang) * r0 * 1.5}px, ${Math.sin(ang) * r0 * 0.5 - rnd(18, 42)}px)`, opacity: 0 },
+    ], { duration: rnd(1600, 2600), delay: 500 + rnd(0, hold), easing: "ease-out", fill: "both" });
   }
-}
-const OPEN = "cubic-bezier(.2,1.5,.4,1)";
-
-// Small red tear into the Void.
-function chthonicRift(x, y, layer, thin) {
-  const w = thin ? rnd(20, 28) : rnd(46, 70), h = thin ? w * rnd(3.6, 4.4) : w * rnd(1.45, 1.7), g = box(layer, x, y);
-  const { p, rim } = portal(g, w, h, {
-    swirl: ["#160002", "#ff3a1c", "#5c0207", "#b80d14"], streak: "rgba(255, 140, 90, .55)",
-    rim: "rgba(255, 110, 70, .8)", glow: "rgba(255, 30, 20, .75)", glow2: "rgba(160, 0, 10, .45)",
-  });
-  const life = rnd(1900, 2600);
-  const frames = [
-    { transform: "scale(.04, .25)", opacity: 0 },
-    { transform: "scale(1.08, 1.02)", opacity: 1, offset: 0.13 },
-    { transform: "scale(1, 1)", opacity: 1, offset: 0.2 },
-    { transform: "scale(.96, 1.03)", opacity: 1, offset: 0.55 },
-    { transform: "scale(1.02, .98)", opacity: 1, offset: 0.82 },
-    { transform: "scale(.02, .6)", opacity: 0 },
-  ];
-  for (const n of [p, rim]) n.animate(frames, { duration: life, easing: "ease-in-out", fill: "both" });
-  motes(g, w, h, "#ff5a32", 12, life * 0.7);
-  flash(g, w * 1.3, "rgba(255, 60, 30, .55)", life - 260);
-  setTimeout(() => g.remove(), life + 400);
-}
-
-// A riftgate: grows while the salt ring is poured, flares when the ring closes, then shuts.
-function riftgate(x, y, layer) {
-  const w = rnd(96, 124), h = w * 1.5, g = box(layer, x, Math.max(y, h * 0.55 + 10));
-  const total = 5000;
-  // Salt ring on the ground, drawn in perspective around the portal's foot.
-  const rx = w * 1.05, ry = w * 0.3, cy = h * 0.47, id = `gds${++seq}`;
-  const svgW = rx * 2 + 20, svgH = ry * 2 + 20;
-  const salt = el(g, "svg", `position:absolute;left:${-svgW / 2}px;top:${cy - svgH / 2}px;width:${svgW}px;height:${svgH}px`,
-    `<svg class="gd-salt" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" aria-hidden="true">
-<defs><mask id="${id}"><ellipse cx="${svgW / 2}" cy="${svgH / 2}" rx="${rx}" ry="${ry}" fill="none" stroke="#fff" stroke-width="16" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></mask>
-<radialGradient id="${id}g"><stop offset="0" stop-color="#b45cff" stop-opacity=".45"/><stop offset="1" stop-color="#b45cff" stop-opacity="0"/></radialGradient></defs>
-<ellipse class="gd-groundglow" cx="${svgW / 2}" cy="${svgH / 2}" rx="${rx * 0.95}" ry="${ry * 0.95}" fill="url(#${id}g)" opacity="0"/>
-<g mask="url(#${id})" fill="none" stroke-linecap="round">
-<ellipse cx="${svgW / 2}" cy="${svgH / 2}" rx="${rx}" ry="${ry}" stroke="#ece6d8" stroke-width="3.2" stroke-dasharray="0.1 3.1"/>
-<ellipse cx="${svgW / 2}" cy="${svgH / 2}" rx="${rx - 3}" ry="${ry - 1.5}" stroke="#d6cfbf" stroke-width="2" stroke-dasharray="0.1 4.3" stroke-dashoffset="2"/>
-<ellipse cx="${svgW / 2}" cy="${svgH / 2}" rx="${rx + 3}" ry="${ry + 1.5}" stroke="#fffaf0" stroke-width="1.4" stroke-dasharray="0.1 6.5" opacity=".8"/>
-</g></svg>`);
-  const maskE = salt.querySelector("mask ellipse"), groundGlow = salt.querySelector(".gd-groundglow");
-  // The portal grows out of the ground while the salt is poured around it (same 1.6s), then flares when the ring closes.
-  const gate = portal(g, w, h, {
-    swirl: ["#0c0216", "#c77bff", "#3c0a6e", "#8a2be2"], streak: "rgba(225, 190, 255, .55)",
-    rim: "rgba(220, 170, 255, .85)", glow: "rgba(170, 70, 255, .75)", glow2: "rgba(90, 20, 170, .45)",
-  });
-  const all = [gate.p, gate.rim];
-  const pour = 1600;
-  for (const n of all) {
-    n.style.transformOrigin = "50% 88%";
-    n.animate([
-      { transform: "scale(.06, .04)", opacity: 0 },
-      { transform: "scale(.3, .22)", opacity: 1, offset: 0.12 },
-      { transform: "scale(.7, .62)", offset: 0.55 },
-      { transform: "scale(1.05, 1.03)", offset: 0.9 },
-      { transform: "scale(1, 1)", opacity: 1 },
-    ], { duration: pour, easing: "ease-out", fill: "backwards" });
-  }
-  motes(g, w, h, "#d6a6ff", 10, pour);
-  maskE.animate([{ strokeDashoffset: 100 }, { strokeDashoffset: 0 }], { duration: pour, easing: "ease-in-out", fill: "forwards" });
-  const turn = pour;
-  groundGlow.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, delay: turn, fill: "forwards" });
-  flash(g, w * 1.6, "rgba(200, 140, 255, .6)", turn - 80);
-  for (const n of all) n.animate([{ filter: "brightness(1)" }, { filter: "brightness(1.7)" }, { filter: "brightness(1)" }], { duration: 500, delay: turn - 80 });
-  setTimeout(() => motes(g, w, h, "#d6a6ff", 14, 1400), turn);
-  // Close.
-  const close = 3900;
-  for (const n of all) n.animate([{ transform: "scale(1, 1)", filter: "brightness(1)" }, { transform: "scale(1.04, 1)", filter: "brightness(1.8)", offset: 0.3 }, { transform: "scale(.02, .5)", filter: "brightness(1)" }],
-    { duration: 520, delay: close, easing: "ease-in", fill: "forwards" });
-  flash(g, w * 1.2, "rgba(220, 180, 255, .55)", close + 380);
-  salt.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 800, delay: close + 300, fill: "forwards" });
-  setTimeout(() => g.remove(), total + 300);
+  // Open, stay open, close.
+  const OPEN_MS = 650, CLOSE_MS = 750;
+  g.animate([
+    { transform: "scale(.12)", opacity: 0 },
+    { transform: "scale(1.06)", opacity: 1, offset: OPEN_MS / (OPEN_MS + hold + CLOSE_MS) * 0.85 },
+    { transform: "scale(1)", opacity: 1, offset: OPEN_MS / (OPEN_MS + hold + CLOSE_MS) },
+    { transform: "scale(1)", opacity: 1, offset: (OPEN_MS + hold) / (OPEN_MS + hold + CLOSE_MS) },
+    { transform: "scale(.1)", opacity: 0 },
+  ], { duration: OPEN_MS + hold + CLOSE_MS, easing: "ease-in-out", fill: "both" });
+  setTimeout(() => g.remove(), OPEN_MS + hold + CLOSE_MS + 200);
 }
 
 function flash(g, size, color, delay) {
@@ -539,7 +500,7 @@ function loot(x, y, layer, forceLucky) {
             { duration: rnd(700, 1200), delay: delay + FLY + rnd(0, 900), iterations: Math.max(1, Math.floor((life - FLY - 1200) / 1000)), easing: "ease-in-out", fill: "both" });
         }
       }
-      const node = el(g, "gd-item", "", `<img src="${SPRITE}" alt="">`); // placeholder: one real 3D-rendered sprite for every item
+      const node = el(g, "gd-item", "", spriteFor(it.art));
       const peak = -rnd(70, 120), rot = rnd(-260, 260), lie = rnd(-70, 70);
       node.animate([
         { transform: "translate(0px, 0px) rotate(0deg) scale(.4)", easing: "cubic-bezier(.3,.7,.6,1)" },
@@ -565,7 +526,29 @@ function loot(x, y, layer, forceLucky) {
   });
   setTimeout(() => g.remove(), life + 200);
 }
-const SPRITE = new URL("img/gd-sword.png", import.meta.url).href;
+// Item sprites: frames of Flare's 3D-rendered loot art (CC-BY-SA, see img/CREDITS.txt), lying on the ground.
+// [file, natural w, h]; drawn at 55% of their natural size, between 22 and 45 px, so a ring stays small next to a sword.
+const SPR = {
+  sword: [99, 21], sword2: [79, 58], greatsword: [86, 51], dagger: [42, 10], knife: [41, 35], cleaver: [47, 32],
+  axe: [97, 36], axe2: [91, 24], mace: [80, 22], hammer: [70, 39], hammer2: [54, 37], club: [54, 19], bow: [60, 46],
+  bow2: [88, 56], shield: [56, 81], shield2: [50, 48], buckler: [53, 29], armor: [83, 40], leather: [69, 35],
+  cloth: [49, 51], boots: [44, 31], belt: [34, 28], ring: [16, 11], ring2: [16, 14], gem: [39, 33], crystal: [18, 18],
+  book: [56, 35], scroll: [67, 58], rod: [71, 26], wand: [40, 13], staff: [82, 73], pouch: [45, 43], potion: [25, 24],
+};
+// Which sprites stand in for each kind of item (one is picked at random per drop).
+const SPRITE_FOR = {
+  cleaver: ["cleaver", "axe2"], sword: ["sword", "sword2", "greatsword"], axe: ["axe", "axe2", "cleaver"],
+  mace: ["mace", "hammer", "hammer2", "club"], pistol: ["bow", "bow2"], dagger: ["dagger", "knife"],
+  shield: ["shield", "shield2", "buckler"], helm: ["armor", "leather"], chest: ["leather", "armor", "cloth"],
+  gloves: ["leather", "cloth"], boots: ["boots"], ring: ["ring", "ring2"], amulet: ["gem", "crystal"],
+  scepter: ["rod", "wand", "staff"], scroll: ["scroll", "book"], crystal: ["crystal", "gem", "pouch", "potion"],
+};
+const SPRITE_URL = (n) => new URL(`img/gd-${n}.png`, import.meta.url).href;
+function spriteFor(art) {
+  const n = pick(SPRITE_FOR[art] || SPRITE_FOR.sword), [w, h] = SPR[n];
+  const big = Math.max(w, h), disp = Math.max(22, Math.min(45, big * 0.55)), k = disp / big;
+  return `<img src="${SPRITE_URL(n)}" alt="" width="${Math.round(w * k)}" height="${Math.round(h * k)}">`;
+}
 const TWINKLE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C12.6 8.5 15.5 11.4 24 12C15.5 12.6 12.6 15.5 12 24C11.4 15.5 8.5 12.6 0 12C8.5 11.4 11.4 8.5 12 0Z" fill="currentColor"/></svg>`;
 
 // A pillar of light over an epic (blue) or legendary (purple): thin bright core, wide soft halo, up past the top of the screen.
@@ -588,24 +571,3 @@ function beam(g, x, y, kind, delay, life, tapY) {
   }
 }
 
-// ---------- Item drawings (32×32, dark outline, worn metal / wood / leather) ----------
-const O = `stroke="none"`;
-const METAL = "#6f777e", METAL_D = "#3d4349", WOOD = "#3a2a1d", WOOD_L = "#4a3625", LEATHER = "#3b2b20", BRASS = "#7d6638", BONE = "#9f967f";
-const ART = {
-  cleaver: `<svg viewBox="0 0 32 32"><path d="M4 6 L22 6 L23 18 Q14 21 5 17 Z" fill="${METAL}" ${O}/><path d="M6 8 L20 8" stroke="#aeb6bd" stroke-width="1"/><circle cx="18" cy="10" r="1.3" fill="#2a2724"/><path d="M22 10 L29 9 L29.5 13 L22.5 14 Z" fill="${WOOD}" ${O}/><path d="M9 15 l2 -1 m3 1.5 l2 -1" stroke="#7a2a1c" stroke-width="1.1" opacity=".8"/></svg>`,
-  sword: `<svg viewBox="0 0 32 32"><g transform="rotate(45 16 16)"><path d="M16 1.5 L18 5 L18 20 L14 20 L14 5 Z" fill="${METAL}" ${O}/><path d="M16 4 L16 19" stroke="#aeb6bd" stroke-width=".9"/><path d="M10 20 L22 20 L22 22 L10 22 Z" fill="${BRASS}" ${O}/><path d="M14.8 22 L17.2 22 L17.2 28 L14.8 28 Z" fill="${LEATHER}" ${O}/><circle cx="16" cy="29.5" r="1.8" fill="${BRASS}" ${O}/></g></svg>`,
-  axe: `<svg viewBox="0 0 32 32"><path d="M8 29 L22 5" stroke="#15181a" stroke-width="4.2" stroke-linecap="round"/><path d="M8 29 L22 5" stroke="${WOOD_L}" stroke-width="2.4" stroke-linecap="round"/><path d="M17 7 Q25 3 29 10 Q26 16 21 15 Z" fill="${METAL}" ${O}/><path d="M25 6 Q28 9 27.5 12" stroke="#aeb6bd" stroke-width="1" fill="none"/></svg>`,
-  mace: `<svg viewBox="0 0 32 32"><path d="M7 28 L19 13" stroke="#15181a" stroke-width="4" stroke-linecap="round"/><path d="M7 28 L19 13" stroke="${WOOD}" stroke-width="2.2" stroke-linecap="round"/><path d="M21 4 L23 8 L28 7 L25 11 L29 14 L24 15 L24 20 L20 16 L16 18 L18 13 L14 10 L19 10 Z" fill="${METAL_D}" ${O}/><circle cx="21.5" cy="11.5" r="3.6" fill="${METAL}" ${O}/></svg>`,
-  pistol: `<svg viewBox="0 0 32 32"><path d="M3 11 L22 11 L22 15 L3 15 Z" fill="${METAL_D}" ${O}/><path d="M3 12.2 L21 12.2" stroke="#aeb6bd" stroke-width=".9"/><path d="M15 11 L28 10 Q30 13 27 15 L24 16 L27 26 Q25 28 21 27 L19 16 L15 15 Z" fill="${WOOD}" ${O}/><path d="M19 9 L21 6 L22.5 7 L21 10" fill="${METAL}" ${O}/><path d="M19.5 17 Q18 20 20.5 21" fill="none" ${O}/></svg>`,
-  dagger: `<svg viewBox="0 0 32 32"><g transform="rotate(-40 16 16)"><path d="M16 3 Q19 9 18 18 L14 18 Q13 9 16 3 Z" fill="${METAL}" ${O}/><path d="M12 18 L20 18 L20 20 L12 20 Z" fill="${METAL_D}" ${O}/><path d="M14.8 20 L17.2 20 L17.2 27 L14.8 27 Z" fill="${BONE}" ${O}/></g></svg>`,
-  shield: `<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12.5" fill="${WOOD}" ${O}/><path d="M9 6.5 L9 25.5 M16 3.5 L16 28.5 M23 6.5 L23 25.5" stroke="#3e2714" stroke-width="1"/><circle cx="16" cy="16" r="12.5" fill="none" stroke="${METAL_D}" stroke-width="2.4"/><circle cx="16" cy="16" r="4" fill="${METAL}" ${O}/><circle cx="14.8" cy="14.8" r="1.1" fill="#e4e4dc"/></svg>`,
-  helm: `<svg viewBox="0 0 32 32"><path d="M6 20 Q6 6 16 5 Q26 6 26 20 L26 25 L20 25 L20 18 L12 18 L12 25 L6 25 Z" fill="${METAL}" ${O}/><path d="M16 5 L16 18" stroke="${METAL_D}" stroke-width="1.6"/><path d="M8 12 Q10 8 13 7" stroke="#aeb6bd" stroke-width="1" fill="none"/><path d="M12 18 L20 18 L20 21 L12 21 Z" fill="#1d1712"/></svg>`,
-  chest: `<svg viewBox="0 0 32 32"><path d="M9 4 L13 6 Q16 8 19 6 L23 4 L29 9 L26 14 L24 12 L24 28 L8 28 L8 12 L6 14 L3 9 Z" fill="${LEATHER}" ${O}/><path d="M16 8 L16 28" stroke="#2c1b0f" stroke-width="1.2"/><circle cx="14" cy="13" r=".9" fill="${BRASS}"/><circle cx="14" cy="18" r=".9" fill="${BRASS}"/><circle cx="14" cy="23" r=".9" fill="${BRASS}"/><path d="M8 20 L24 20" stroke="#2c1b0f" stroke-width="1.6"/></svg>`,
-  ring: `<svg viewBox="0 0 32 32"><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="#15181a" stroke-width="5"/><ellipse cx="16" cy="19" rx="8.5" ry="7.5" fill="none" stroke="${BRASS}" stroke-width="2.8"/><path d="M12 11 L16 6 L20 11 L16 14 Z" fill="#6a1820" ${O}/><path d="M14 10 L16 7.5" stroke="#ff9aa4" stroke-width=".9"/></svg>`,
-  amulet: `<svg viewBox="0 0 32 32"><path d="M6 3 Q16 17 26 3" fill="none" stroke="#15181a" stroke-width="2.6"/><path d="M6 3 Q16 17 26 3" fill="none" stroke="${BRASS}" stroke-width="1.2" stroke-dasharray="1.6 1"/><path d="M16 12 L22 20 L16 29 L10 20 Z" fill="${BONE}" ${O}/><circle cx="16" cy="20" r="2.6" fill="#1f5038" ${O}/></svg>`,
-  scepter: `<svg viewBox="0 0 32 32"><path d="M8 29 L20 11" stroke="#15181a" stroke-width="3.6" stroke-linecap="round"/><path d="M8 29 L20 11" stroke="${BRASS}" stroke-width="1.8" stroke-linecap="round"/><path d="M19 4 L26 7 L25 13 L19 14 L16 9 Z" fill="${METAL_D}" ${O}/><circle cx="21" cy="9.5" r="2.4" fill="#2f8a66" ${O}/></svg>`,
-  gloves: `<svg viewBox="0 0 32 32"><path d="M8 28 L8 17 L6 12 Q6 10 8 10.5 L10 14 L10 6 Q11 4.5 12.5 6 L13 13 L14 4.5 Q15.5 3 17 4.5 L16.6 13 L18.5 6 Q20 5 21 6.5 L19.5 15 L21.5 13 Q23.5 12.5 23 15 L19 22 L19 28 Z" fill="${LEATHER}" ${O}/><path d="M8 24 L19 24" stroke="${METAL_D}" stroke-width="2"/></svg>`,
-  boots: `<svg viewBox="0 0 32 32"><path d="M10 3 L18 3 L18 19 Q26 19 28 24 L28 28 L8 28 L8 21 Q10 18 10 14 Z" fill="${LEATHER}" ${O}/><path d="M8 25 L28 25" stroke="#2c1b0f" stroke-width="2"/><path d="M10 9 L18 9" stroke="${BRASS}" stroke-width="1.4"/></svg>`,
-  scroll: `<svg viewBox="0 0 32 32"><path d="M7 7 L25 7 L25 25 L7 25 Z" fill="#8f8263" ${O}/><path d="M5 5.5 Q5 3.5 7 3.5 L25 3.5 Q27 3.5 27 5.5 Q27 7.5 25 7.5 L7 7.5 Q5 7.5 5 5.5 Z" fill="#7a6d51" ${O}/><path d="M5 26.5 Q5 24.5 7 24.5 L25 24.5 Q27 24.5 27 26.5 Q27 28.5 25 28.5 L7 28.5 Q5 28.5 5 26.5 Z" fill="#7a6d51" ${O}/><path d="M10 11 L22 11 M10 14 L20 14 M10 17 L18 17" stroke="#6b5636" stroke-width="1"/><circle cx="21" cy="20" r="2.8" fill="#6a1818" ${O}/></svg>`,
-  crystal: `<svg viewBox="0 0 32 32"><path d="M16 3 L22 12 L19 28 L13 28 L10 12 Z" fill="#1f7a55" ${O}/><path d="M16 3 L16 28 M10 12 L22 12" stroke="#0e5a37" stroke-width="1"/><path d="M14 7 L12.5 12" stroke="#c8ffe2" stroke-width="1.1"/><path d="M7 22 L10 16 L12 27 Z" fill="#17603f" ${O}/></svg>`,
-};

@@ -439,7 +439,11 @@ function spawnEffect(layer, kind, scale = 1) {
     return;
   }
   if (kind === "grimdawn") { // ash + embers (taps are handled below, with the eye)
-    if (!still) loadGrimDawn().then((m) => { if (layer.dataset.fx === "grimdawn") m.startAsh(layer, scale); }).catch((e) => console.warn("grimdawn", e));
+    if (!still) loadGrimDawn().then((m) => {
+      if (layer.dataset.fx !== "grimdawn") return;
+      m.startAsh(layer, scale);
+      if (scale >= 1) m.startRifts(layer); // riftgates open now and then, high up and far back
+    }).catch((e) => console.warn("grimdawn", e));
     return;
   }
   if (kind === "haunted") {
