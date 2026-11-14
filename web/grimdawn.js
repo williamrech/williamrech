@@ -28,9 +28,11 @@ const CSS = `
   100% { transform: translate(var(--sway), -70vh); opacity: 0; }
 }
 .gd-fx { position: absolute; pointer-events: none; }
-.gd-far { position: fixed; right: 108px; bottom: 20vh; width: 0; height: 0; pointer-events: none;
-  opacity: .8; mix-blend-mode: screen; /* only its light lands on the feed, so text stays readable */
-  filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
+.gd-far { position: fixed; right: 108px; bottom: 20vh; width: 0; height: 0; pointer-events: none; }
+.gd-far .gd-rift { mix-blend-mode: screen; opacity: .8; filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 24px var(--glow)); }
+.gd-far canvas.gd-riftgl { position: absolute; pointer-events: none; mix-blend-mode: screen; }
+.gd-far .gd-soot { position: absolute; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(0,0,0,.8) 25%, rgba(0,0,0,.45) 60%, transparent 100%); }
 .gd-portal { position: absolute; border-radius: 50%; overflow: hidden;
   -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); mask-image: radial-gradient(closest-side, #000 62%, transparent 100%); }
 .gd-portal i { position: absolute; inset: -25%; border-radius: 50%; }
@@ -354,6 +356,7 @@ function riftColors(kind) {
 // An upright oval of swirling light standing on the ground; a riftgate also has a ring of salt poured flat
 // around its foot. The layer's own point is where it meets the ground. Opens, holds, closes.
 export function rift(layer, kind, hold = 3400) {
+  if (riftGL(layer, kind, hold)) return;
   const c = riftColors(kind), red = kind === "red";
   const W = red ? rnd(22, 30) : rnd(74, 92);          // width of the oval
   const H = red ? W * rnd(3.4, 4.1) : W * 1.5;        // upright: taller than wide
@@ -421,6 +424,135 @@ export function rift(layer, kind, hold = 3400) {
     { opacity: 0 },
   ], { duration: TOTAL, easing: "ease-out", fill: "both" });
   setTimeout(() => g.remove(), TOTAL + 200);
+}
+
+// The riftgate as the game draws it: a narrow upright tear of smoky light, swirling around a hot magenta
+// core, ragged dark edges, standing on a scorched patch with gold motes. Drawn by a small GPU shader
+// (pure light, no outlines). Returns false where WebGL isn't available, and the CSS version runs instead.
+const RIFT_FS = `precision highp float;
+uniform vec2 res; uniform float t, o, fade; uniform vec3 cHot, cMid, cDim; uniform vec2 sz; uniform float foot, gold, dpr;
+float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+  return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+float fbm(vec2 p){ float v = 0., a = .5; for (int k = 0; k < 5; k++) { v += a*n(p); p = p*2.03 + 17.1; a *= .5; } return v; }
+mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+void main(){
+  vec2 px = gl_FragCoord.xy;
+  vec2 ctr = vec2(res.x*.5, foot + sz.y*.5);
+  vec2 q = (px - ctr) / (sz*.5);               // the oval is the unit circle here
+  q /= max(o, .02);                            // grows open from nothing
+  float r = length(q);
+  // Vortex: the texture turns faster near the middle, and is warped by itself so it reads as smoke.
+  vec2 w = rot(t*1.1 + 1.7*(1. - r)) * q;
+  vec2 wp = vec2(w.x*2.8, w.y*.95);
+  vec2 warp = vec2(fbm(wp*1.6 + t*.35), fbm(wp*1.6 - t*.3 + 4.));
+  float sm = fbm(wp*2.4 + warp*1.8 - vec2(0., t*.6));
+  float wisp = fbm(rot(-t*.7 + 1.6*(1. - r))*q*3.1 + warp);
+  // Ragged edge.
+  float edge = 1. - smoothstep(.62, 1., r + (fbm(q*2.7 + t*.5) - .5)*.55);
+  // Hot core: a vertical streak, brightest low in the middle.
+  float streak = exp(-q.x*q.x*14.) * smoothstep(1., .1, abs(q.y + .15));
+  float core = exp(-r*r*3.2);
+  vec3 col = cDim * edge * 1.4;
+  col += cMid * edge * smoothstep(.35, .8, sm) * 1.6;
+  col += cHot * edge * (streak*.9 + core*.5) * (.55 + .7*sm);
+  col *= mix(.25, 1.1, smoothstep(.3, .65, wisp));   // dark smoke threads through it
+  // Soft halo of light around the tear.
+  float hr = max(r - .8, 0.); col += cMid * .2 * exp(-hr*hr*9.) * (1. - edge*.6);
+  // Light pooled on the ground at its foot, and a faint ring of glimmers around it.
+  vec2 g = (px - vec2(res.x*.5, foot)) / vec2(sz.x*1.25, sz.x*.36);
+  float gr = length(g);
+  col += cMid * .45 * exp(-gr*gr*2.2) * o;
+  // Gold specks scattered on the ring around a riftgate, each twinkling on its own.
+  for (int k = 0; k < 16; k++) {
+    float fk = float(k), a = fk/16.*6.2832 + h(vec2(fk, 3.))*.3;
+    vec2 sp = vec2(res.x*.5, foot) + vec2(cos(a)*sz.x*1.25, sin(a)*sz.x*.36) * (.9 + .25*h(vec2(fk, 9.)));
+    float d = length(px - sp) / dpr;
+    float tw = .35 + .65*smoothstep(.2, .9, n(vec2(fk*7.3, t*1.7)));
+    col += gold * vec3(1., .78, .38) * exp(-d*d*.35) * tw * 1.3 * o;
+  }
+  vec2 uv = px / res; col *= fade * smoothstep(0., .12, uv.x) * smoothstep(1., .88, uv.x) * smoothstep(0., .08, uv.y) * smoothstep(1., .85, uv.y);
+  float a = clamp(max(col.r, max(col.g, col.b)), 0., 1.);
+  gl_FragColor = vec4(min(col, vec3(a)), a);
+}`;
+const RIFT_GL_COL = {
+  purple: { hot: [1.0, 0.55, 1.0], mid: [0.62, 0.2, 1.0], dim: [0.2, 0.03, 0.42] },
+  red: { hot: [1.0, 0.62, 0.3], mid: [0.85, 0.16, 0.05], dim: [0.3, 0.03, 0.01] },
+  green: { hot: [0.7, 1.0, 0.88], mid: [0.1, 0.8, 0.6], dim: [0.02, 0.22, 0.17] },
+};
+function riftGL(layer, kind, hold) {
+  const red = kind === "red";
+  const W = red ? rnd(22, 28) : rnd(48, 58);          // narrow and tall, like the game's
+  const H = red ? W * rnd(3.6, 4.2) : W * rnd(2.3, 2.6);
+  const CW = Math.round(W * (red ? 4 : 3.2)), CH = Math.round(H * 1.3 + W * 0.75);
+  const footY = W * 0.75;                              // canvas pixels from the bottom to the foot
+  const cv = document.createElement("canvas");
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(CW * dpr); cv.height = Math.round(CH * dpr);
+  cv.className = "gd-riftgl";
+  cv.style.cssText = `left:${-CW / 2}px;top:${-(CH - footY)}px;width:${CW}px;height:${CH}px`;
+  const gl = cv.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: false });
+  if (!gl) return false;
+  const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
+  const vs = sh(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }");
+  const fs = sh(gl.FRAGMENT_SHADER, RIFT_FS);
+  if (!vs || !fs) return false;
+  const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return false;
+  gl.useProgram(pr);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = (k) => gl.getUniformLocation(pr, k);
+  const col = RIFT_GL_COL[kind] || RIFT_GL_COL.purple;
+  gl.uniform2f(U("res"), cv.width, cv.height);
+  gl.uniform2f(U("sz"), W * dpr, H * dpr);
+  gl.uniform1f(U("foot"), footY * dpr); gl.uniform1f(U("gold"), kind === "purple" ? 1 : 0); gl.uniform1f(U("dpr"), dpr);
+  gl.uniform3fv(U("cHot"), col.hot); gl.uniform3fv(U("cMid"), col.mid); gl.uniform3fv(U("cDim"), col.dim);
+  const uT = U("t"), uO = U("o"), uF = U("fade");
+  // A scorched patch under it (drawn normally, so it darkens what's behind).
+  const soot = document.createElement("div");
+  soot.className = "gd-soot";
+  const sw = W * 2.6, shh = W * 0.75;
+  soot.style.cssText = `left:${-sw / 2}px;top:${-shh / 2}px;width:${sw}px;height:${shh}px;opacity:0`;
+  layer.appendChild(soot); layer.appendChild(cv);
+  // Gold motes drifting up off a riftgate.
+  const motes = [];
+  if (kind === "purple") for (let i = 0; i < 10; i++) {
+    const sp = document.createElement("i");
+    sp.className = "gd-spark";
+    sp.style.cssText = "background:#ffd27a;box-shadow:0 0 5px 1px #ffb640;opacity:0;mix-blend-mode:screen";
+    layer.appendChild(sp); motes.push(sp);
+    const x0 = rnd(-W * 1.1, W * 1.1), y0 = rnd(-W * 0.25, W * 0.15) - rnd(0, H * 0.5) * (Math.abs(x0) < W * 0.5 ? 1 : 0);
+    sp.animate([
+      { transform: `translate(${x0}px, ${y0}px)`, opacity: 0 },
+      { opacity: 1, offset: 0.3 },
+      { transform: `translate(${x0 * 1.15}px, ${y0 - rnd(25, 60)}px)`, opacity: 0 },
+    ], { duration: rnd(1400, 2400), delay: 400 + rnd(0, hold), easing: "ease-out", fill: "both" });
+  }
+  const OPEN_MS = 700, CLOSE_MS = 650, TOTAL = OPEN_MS + hold + CLOSE_MS;
+  soot.animate([{ opacity: 0 }, { opacity: 0.7, offset: OPEN_MS / TOTAL }, { opacity: 0.7, offset: (OPEN_MS + hold) / TOTAL }, { opacity: 0 }], { duration: TOTAL, fill: "both" });
+  const t0 = performance.now(), seed = rnd(0, 50);
+  const ease = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+  const frame = (now) => {
+    const e = now - t0;
+    if (e > TOTAL || !cv.isConnected) {
+      cv.remove(); soot.remove(); motes.forEach((m) => m.remove());
+      const lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext();
+      return;
+    }
+    let o, f;
+    if (e < OPEN_MS) { o = ease(e / OPEN_MS); f = Math.min(1, e / (OPEN_MS * 0.6)); }
+    else if (e < OPEN_MS + hold) { o = 1 + Math.sin(e / 380) * 0.015; f = 1; }
+    else { const k = (e - OPEN_MS - hold) / CLOSE_MS; o = 1 - ease(k) * 0.97; f = 1 - k; }
+    gl.viewport(0, 0, cv.width, cv.height);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1f(uT, seed + e / 1000); gl.uniform1f(uO, o); gl.uniform1f(uF, f);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  return true;
 }
 
 function flash(g, size, color, delay) {
