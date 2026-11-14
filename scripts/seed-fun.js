@@ -136,107 +136,25 @@ const ref = getFirestore().doc("config/fun");
     }
     update.configVersion = 14;
   }
-  // configVersion 15 (ran 14.11.2026): occasions got `tema` (+ `own` overrides, removed again by 16). Kept as a plain
-  // copy for any config still older than that.
-  if ((Number(cur.configVersion) || 0) < 15) {
+  // configVersions 15–17 (ran 14.11.2026) moved occasions onto temas: `tema` instead of their own palette, drawings,
+  // effect and image (occasions with their own look got an occasion-only tema), and merged the birthday temas.
+  // For a config still older than that, the plain part of it: `tema` = the old palette.
+  if ((Number(cur.configVersion) || 0) < 17) {
     for (const [id, o] of Object.entries(cur.occasions || {})) if (o && typeof o === "object" && !("tema" in o)) {
       update[`occasions.${id}.tema`] = o.palette || "";
-      const own = Object.fromEntries(["decor", "effect", "bgImage"].filter((k) => typeof o[k] === "string" && o[k]).map((k) => [k, o[k]]));
-      update[`occasions.${id}.own`] = own;
-      cur.occasions[id] = { ...o, tema: o.palette || "", own };
-    }
-    update.configVersion = 15;
-  }
-  // configVersion 16: occasions no longer change anything on top of their tema ("own" is gone). An occasion that had
-  // its own drawings/effect/image gets a tema of its own with exactly that look (occasions with the same look share
-  // one), named after the base tema + occasion. Checked like step 3 (two years, both views) for people on Espresso;
-  // an occasion with no tema but own drawings (each person's colours) now uses Espresso's colours.
-  if ((Number(cur.configVersion) || 0) < 16 && Number(update.configVersion || cur.configVersion) >= 15) {
-    const L = require("../functions/look");
-    const pals = { ...(cur.palettes || {}) }, occs = cur.occasions || {};
-    const slug = (x) => String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30);
-    const made = {}; // look JSON → new tema id
-    const conv = {};
-    for (const [id, o] of Object.entries(occs)) {
-      if (!o || typeof o !== "object") continue;
-      const own = o.own && typeof o.own === "object" ? Object.fromEntries(L.LOOK_KEYS.filter((k) => typeof o.own[k] === "string" && o.own[k]).map((k) => [k, o.own[k]])) : {};
-      let tema = L.occTema(o);
-      if (Object.keys(own).length) {
-        const baseId = pals[tema] ? tema : "espresso", base = pals[baseId] || {};
-        const look = { ...base, ...own, onlyOccasions: true };
-        delete look.name;
-        const key = JSON.stringify(look);
-        if (!made[key]) {
-          let nid = slug(`${baseId}-${id}`) || "tema", n = 2;
-          while (pals[nid]) nid = `${slug(`${baseId}-${id}`)}-${n++}`;
-          const pretty = id.replace(/-/g, " ");
-          pals[nid] = { name: (pretty[0].toUpperCase() + pretty.slice(1)).slice(0, 30), ...look };
-          made[key] = nid;
-          update[`palettes.${nid}`] = pals[nid];
-        }
-        tema = made[key];
-        update[`occasions.${id}.tema`] = tema;
-        update[`occasions.${id}.palette`] = tema;
-        console.log(`step 3b: ${id} → tema "${tema}" (${pals[tema].name})`);
-      }
-      if ("own" in o) update[`occasions.${id}.own`] = FieldValue.delete();
-      conv[id] = { ...o, tema };
-      delete conv[id].own;
-    }
-    // A tema shared by several occasions (e.g. birthdays) is named after what their ids have in common.
-    for (const nid of Object.values(made)) {
-      const ids = Object.keys(conv).filter((k) => conv[k].tema === nid);
-      if (ids.length < 2) continue;
-      let pre = ids[0]; for (const k of ids) while (!k.startsWith(pre)) pre = pre.slice(0, -1);
-      pre = pre.replace(/-+$/, "").replace(/-/g, " ");
-      pals[nid].name = pre ? pre[0].toUpperCase() + pre.slice(1) : pals[nid].name;
-      update[`palettes.${nid}`] = pals[nid];
-    }
-    // Check: every day of two years, both views, someone on Espresso — old look (tema + own) vs new (tema only).
-    const on = (all, t, admin) => {
-      let list = Object.entries(all).filter(([, o]) => o && typeof o === "object" && o.enabled !== false && (!o.adminOnly || admin)
-        && String(o.when || "").split(",").some((p) => L.matchesPattern(p, t)));
-      if (list.some(([, o]) => o.adminOnly)) list = list.filter(([, o]) => o.adminOnly);
-      return list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (b[1].adminOnly ? 1 : 0) || (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
-    };
-    const res = (list, P, withOwn) => {
-      const m = {};
-      for (const [, o] of list) {
-        const t = L.occTema(o);
-        if (t && P[t]) { m.tema = t; for (const k of L.LOOK_KEYS) m[k] = P[t][k] || ""; }
-        if (withOwn && o.own) for (const k of L.LOOK_KEYS) if (o.own[k]) m[k] = o.own[k];
-      }
-      const p = P[m.tema || "espresso"] || {};
-      return [JSON.stringify([p.bg, p.surface, p.text, p.muted, p.accent, p.highlight]), "decor" in m ? m.decor : p.decor || "", "effect" in m ? m.effect : p.effect || "", "bgImage" in m ? m.bgImage : p.bgImage || ""].join(" | ");
-    };
-    const diffs = [];
-    for (let i = 0; i < 731 && diffs.length < 10; i++) {
-      const dt = new Date(Date.now() + i * 86400000 - 3 * 3600000);
-      const y = dt.getUTCFullYear(), m = dt.getUTCMonth() + 1, d = dt.getUTCDate();
-      const key = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      const t = { y, m, d, key, md: key.slice(5), weekday: dt.getUTCDay() };
-      for (const admin of [false, true]) {
-        const x = res(on(occs, t, admin), cur.palettes || {}, true), z = res(on(conv, t, admin), pals, false);
-        if (x !== z) diffs.push(`${key}${admin ? " (admin)" : ""}: ${x}  →  ${z}`);
-      }
-    }
-    if (diffs.length) {
-      console.log("step 3b migration SKIPPED — the look would change on:\n  " + diffs.join("\n  "));
-      for (const k of Object.keys(update)) if (k.startsWith("palettes.") && !(cur.palettes || {})[k.slice(9)] || /^occasions\.[^.]+\.(tema|palette|own)$/.test(k)) delete update[k];
-    } else update.configVersion = 16;
-  }
-  // configVersion 17: one birthday tema for everyone — Mamãe's birthday uses "Aniver" too; "Aniver mama" is deleted.
-  if ((Number(cur.configVersion) || 0) < 17 && Number(update.configVersion || cur.configVersion) >= 16) {
-    const pals = cur.palettes || {}, occs = cur.occasions || {};
-    if (pals["festa-aniver-william"]) {
-      for (const [id, o] of Object.entries(occs)) if (o && (o.tema === "festa-aniver-mama" || o.palette === "festa-aniver-mama")) {
-        update[`occasions.${id}.tema`] = "festa-aniver-william";
-        update[`occasions.${id}.palette`] = "festa-aniver-william";
-        console.log(`step 5: ${id} → tema "festa-aniver-william"`);
-      }
-      if (pals["festa-aniver-mama"]) update["palettes.festa-aniver-mama"] = FieldValue.delete();
+      cur.occasions[id] = { ...o, tema: o.palette || "" };
     }
     update.configVersion = 17;
+  }
+  // configVersion 18: cleanup — the old occasion fields kept for safe reverts go away (palette, decor, effect,
+  // bgImage, own, nameSwap). The look is only `tema`; the name swap only `maldicao`.
+  if ((Number(cur.configVersion) || 0) < 18) {
+    for (const [id, o] of Object.entries(cur.occasions || {})) {
+      if (!o || typeof o !== "object") continue;
+      if (o.nameSwap && !o.maldicao) update[`occasions.${id}.maldicao`] = o.nameSwap;
+      for (const k of ["palette", "decor", "effect", "bgImage", "own", "nameSwap"]) if (k in o) update[`occasions.${id}.${k}`] = FieldValue.delete();
+    }
+    update.configVersion = 18;
   }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();

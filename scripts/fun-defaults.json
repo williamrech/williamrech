@@ -273,20 +273,14 @@
     "ano-novo": {
       "when": "01-01",
       "version": "2.0.0-ano.novo",
-      "palette": "champagne-ano-novo",
-      "decor": "firework.svg flute.svg bubbles.svg firework.svg bubbles.svg",
       "banner": "Feliz ano novo! 🥂",
-      "effect": "confetti",
       "priority": 5,
       "tema": "champagne-ano-novo"
     },
     "carnaval": {
       "when": "easter-48,easter-47",
       "version": "1.0.0-folia",
-      "palette": "carnaval",
-      "decor": "mask.svg streamer.svg maraca.svg streamer.svg mask.svg",
       "banner": "É carnaval! Ninguém faz mercado hoje. 🎭",
-      "effect": "confetti",
       "priority": 5,
       "tema": "carnaval"
     },
@@ -295,14 +289,10 @@
       "version": "0.0.1-mentira",
       "banner": "Hoje tudo aqui é verdade. Confia. 🤥",
       "priority": 5,
-      "decor": "fib.svg fib.svg fib.svg",
-      "tema": "espresso-mentira",
-      "palette": "espresso-mentira"
+      "tema": "espresso-mentira"
     },
     "dia-das-maes": {
       "when": "2sun-05",
-      "palette": "frutas-dia-das-maes",
-      "decor": "flower.svg heart.svg flower.svg heart.svg flower.svg",
       "banner": "Feliz Dia das Mães! 💐",
       "priority": 5,
       "tema": "frutas-dia-das-maes"
@@ -310,29 +300,20 @@
     "halloween": {
       "when": "10-31",
       "version": "1.666.0",
-      "palette": "halloween",
-      "decor": "pumpkin.svg ghost.svg bat.svg bat.svg pumpkin.svg",
       "banner": "Gostosuras ou travessuras? 🎃",
       "priority": 5,
-      "effect": "haunted",
       "tema": "halloween"
     },
     "sexta-13": {
       "when": "fri-13",
       "version": "1.13.sexta",
-      "palette": "halloween-sexta-13",
-      "decor": "cat.svg crystal-ball.svg candle.svg candle.svg cat.svg",
       "banner": "Sexta-feira 13. Cuidado no mercado. 🔮",
       "priority": 3,
-      "effect": "haunted",
       "tema": "halloween-sexta-13"
     },
     "natal-clima": {
       "when": "12-20..12-26",
-      "palette": "natal-natal-clima",
-      "decor": "tree.svg gift.svg ornament.svg snowflake.svg candy-cane.svg",
       "banner": "Clima de Natal 🎄",
-      "effect": "snow",
       "priority": 1,
       "tema": "natal-natal-clima"
     },
@@ -346,17 +327,12 @@
     "teste": {
       "when": "",
       "enabled": true,
-      "palette": "noite-teste",
-      "decor": "beaker.svg star.svg beaker.svg star.svg",
       "banner": "Ocasião de teste: mude o 'when' pra hoje ou use ?ocasiao=teste",
-      "effect": "snow",
       "priority": 99,
       "tema": "noite-teste"
     },
     "dia-dos-namorados": {
       "when": "06-12",
-      "palette": "namorados",
-      "effect": "sparkles",
       "banner": "Feliz Dia dos Namorados! 💘",
       "priority": 5,
       "tema": "namorados"
@@ -364,9 +340,6 @@
     "grim-dawn": {
       "when": "",
       "adminOnly": true,
-      "palette": "malmouth-grim-dawn",
-      "effect": "grimdawn",
-      "decor": "",
       "banner": "⚔️ Cairn nunca dorme. Toque no vazio e veja o que cai.",
       "version": "1.1.9.8",
       "priority": 5,
@@ -395,7 +368,7 @@
     }
   },
   "decorVersion": 2,
-  "configVersion": 17,
+  "configVersion": 18,
   "terms": {
     "recado": {
       "weight": 70,

@@ -108,33 +108,22 @@ const sortOccasions = (list) => list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (
 // ---------- Look: an occasion's look is its Tema, whole (same rules as functions/look.js) ----------
 // An occasion has `tema` (a tema id, or "" = each person sees their own).
 const LOOK_KEYS = ["decor", "effect", "bgImage"];
-const isNewOcc = (o) => !!o && typeof o === "object" && "tema" in o;
-const occTema = (o) => String((o && typeof o === "object" ? (isNewOcc(o) ? o.tema : o.palette) : "") || "");
+const occTema = (o) => String((o && typeof o === "object" && o.tema) || "");
 // The look the active occasions decide: the last one with a valid tema wins, with everything in it.
 // `m` has keys only when an occasion decides (tema, decor, effect — for everyone, bgImage); `src` = which occasion.
 function resolveLook(list) {
   const m = {}, src = {}, pals = (FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : {};
-  const valid = (id) => !!id && !!pals[id] && typeof pals[id] === "object";
-  if (!list.some(([, o]) => isNewOcc(o))) {
-    // Config from before the step-3 migration: exactly the old rules (each field from the last occasion that has it).
-    // Goes away in the cleanup step.
-    const raw = {}, from = {};
-    for (const [id, o] of list) for (const k of ["palette", ...LOOK_KEYS]) if (k in o) { raw[k] = o[k]; from[k] = id; }
-    if (valid(raw.palette)) { m.tema = raw.palette; src.tema = from.palette; }
-    for (const k of LOOK_KEYS) if (raw[k]) { m[k] = raw[k]; src[k] = from[k]; }
-    return { m, src };
-  }
   for (const [id, o] of list) {
     const tema = occTema(o);
-    if (valid(tema)) { m.tema = tema; for (const k of ["tema", ...LOOK_KEYS]) src[k] = id; for (const k of LOOK_KEYS) m[k] = typeof pals[tema][k] === "string" ? pals[tema][k] : ""; }
+    if (!tema || !pals[tema] || typeof pals[tema] !== "object") continue;
+    m.tema = tema;
+    for (const k of ["tema", ...LOOK_KEYS]) src[k] = id;
+    for (const k of LOOK_KEYS) m[k] = typeof pals[tema][k] === "string" ? pals[tema][k] : "";
   }
   return { m, src };
 }
-// One occasion's effect (picks a maldição's automatic name look). Old-shape occasions: only their own effect, as before.
-function occEffect(o) {
-  if (!isNewOcc(o)) return (o && o.effect) || "";
-  return ((FUN.palettes || {})[occTema(o)] || {}).effect || "";
-}
+// One occasion's effect: its tema's (picks a maldição's automatic name look).
+const occEffect = (o) => ((FUN.palettes || {})[occTema(o)] || {}).effect || "";
 function todaysOccasion() {
   const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
   const admin = typeof me !== "undefined" && me && me.admin === true;
@@ -1208,7 +1197,7 @@ function styledName(name, style) {
 
 // Maldição: today's occasion can replace someone's name. Each occasion sets its own icon, wording, look and 🎲 ideas.
 function curseCfgOf(o) {
-  const m = o && (o.maldicao || o.nameSwap); // "maldicao" (old name: nameSwap, kept until cleanup)
+  const m = o && o.maldicao;
   const c = (m && typeof m === "object") ? m : {};
   const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   const pinned = c.look in NAME_LOOKS ? c.look : "";
@@ -3391,9 +3380,7 @@ function readOccForm() {
   const put = (k, v) => { if (v !== "" && v !== null && v !== undefined) o[k] = v; };
   put("banner", $("occ-banner").value.trim());
   put("version", $("occ-version").value.trim());
-  // The look is the tema, whole. ("palette" is mirrored until the cleanup step, for a safe revert.)
-  o.tema = $("occ-palette").value;
-  put("palette", o.tema);
+  o.tema = $("occ-palette").value; // the look is the tema, whole
   const curses = {};
   document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, CURSE_MAX); });
   if (Object.keys(curses).length) o.curses = curses;

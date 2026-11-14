@@ -35,15 +35,9 @@ function matchesPattern(pat, t) {
 }
 
 // ---------- Look: an occasion's look is its Tema, whole ----------
-// An occasion has `tema` (a palette id, or "" = each person's own). Occasions from before step 3 only have the old
-// fields (palette/decor/effect/bgImage) and are read the old way by the app until the cleanup step.
-const LOOK_KEYS = ["decor", "effect", "bgImage"];
-const isNewOcc = (o) => !!o && typeof o === "object" && "tema" in o;
-const occTema = (o) => String((o && typeof o === "object" ? (isNewOcc(o) ? o.tema : o.palette) : "") || "");
-// One occasion's effect: its tema's (old-shape occasions: their own effect, else their palette's).
-function occEffect(o, pals) {
-  if (!isNewOcc(o)) return (o && o.effect) || ((pals[o && o.palette] || {}).effect) || "";
-  return ((pals[occTema(o)] || {}).effect) || "";
-}
+// An occasion has `tema` (a palette id, or "" = each person's own).
+const occTema = (o) => String((o && typeof o === "object" && o.tema) || "");
+// One occasion's effect: its tema's.
+const occEffect = (o, pals) => ((pals[occTema(o)] || {}).effect) || "";
 
-module.exports = { WDAY, easterUTC, matchesPattern, LOOK_KEYS, isNewOcc, occTema, occEffect };
+module.exports = { WDAY, easterUTC, matchesPattern, occTema, occEffect };
