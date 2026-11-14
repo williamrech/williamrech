@@ -326,11 +326,13 @@ ${solid(GEM)}<path d="${GEM_IN}" fill="#0a0503"/>
 return barSVG;
 })();
 let barPick = null; // level (= how full the bar is) and race: rolled once per app open
-export function targetBar(chip, name) {
+// look (optional): the app's animated name look for this name (HTML); its glow and sparks go over the big name.
+export function targetBar(chip, name, look = "") {
   ensureSkin();
   barPick ||= { level: 18 + Math.floor(Math.random() * 83), race: RACES[Math.floor(Math.random() * RACES.length)] };
-  if (chip.dataset.gdBar === name && chip.querySelector(".gd-tbar")) return;
-  chip.dataset.gdBar = name;
+  const key = name + "|" + look;
+  if (chip.dataset.gdBar === key && chip.querySelector(".gd-tbar")) return;
+  chip.dataset.gdBar = key;
   chip.classList.add("gd-bar");
   chip.innerHTML = barSVG({ name, level: barPick.level, fill: barPick.level, race: barPick.race });
   // Long names shrink to fit (measured, and again once the font has arrived).
@@ -340,8 +342,31 @@ export function targetBar(chip, name) {
     const r = max / len;
     for (const a of ["font-size", "letter-spacing", "word-spacing"]) t.setAttribute(a, (parseFloat(t.getAttribute(a)) * r).toFixed(2));
   });
-  fit();
-  if (document.fonts && document.fonts.load) document.fonts.load('27px "GD Risque"').then(() => { if (chip.dataset.gdBar === name) fit(); }).catch(() => {});
+  const lay = () => { fit(); lookOver(chip, look); };
+  lay();
+  if (document.fonts && document.fonts.load) document.fonts.load('27px "GD Risque"').then(() => { if (chip.dataset.gdBar === key) lay(); }).catch(() => {});
+  if (!chip._gdRO && window.ResizeObserver) { // phone turned / resized: put the look back over the name
+    let w = 0;
+    chip._gdRO = new ResizeObserver(() => { const nw = chip.clientWidth; if (nw !== w) { w = nw; if (chip._gdLook) lookOver(chip, chip._gdLook); } });
+    chip._gdRO.observe(chip);
+  }
+}
+// The name look as an invisible copy of the name in the same font and size, laid exactly over the SVG name: only its
+// glow and sparks show; the orange name stays the game's.
+function lookOver(chip, look) {
+  chip._gdLook = look;
+  const old = chip.querySelector(".gd-tb-look");
+  if (old) old.remove();
+  const svg = chip.querySelector(".gd-tbar"), t = chip.querySelectorAll('text[data-fit="346"]')[1];
+  if (!look || !svg || !t) return;
+  const k = svg.getBoundingClientRect().width / 360, px = (a) => `${(parseFloat(t.getAttribute(a)) * k).toFixed(2)}px`;
+  const d = document.createElement("div");
+  d.className = "gd-tb-look";
+  d.style.cssText = `font-size:${px("font-size")};letter-spacing:${px("letter-spacing")};word-spacing:${px("word-spacing")}`;
+  d.innerHTML = look;
+  chip.appendChild(d);
+  const tr = t.getBoundingClientRect(), u = d.querySelector(".uname") || d, ur = u.getBoundingClientRect();
+  d.style.transform = `translate(${(tr.left + tr.width / 2 - (ur.left + ur.width / 2)).toFixed(1)}px, ${(tr.top + tr.height / 2 - (ur.top + ur.height / 2)).toFixed(1)}px)`;
 }
 
 // ---------- Ash & embers ----------
@@ -461,6 +486,11 @@ body.gd-skin .me-chip { border-radius: 2px; border: 1px solid var(--gd-bronze); 
 body.gd-skin .me-chip .uname { font-family: "GD Fell", Georgia, serif; }
 body.gd-skin .me-chip.gd-bar { display: block; width: min(340px, 94vw); max-width: none; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; animation: none; }
 .gd-tbar { display: block; width: 100%; height: auto; overflow: visible; }
+body.gd-skin .me-chip.gd-bar { position: relative; }
+.gd-tb-look { position: absolute; left: 0; top: 0; width: 100%; text-align: center; white-space: nowrap; line-height: 1; pointer-events: none; font-family: 'GD Risque', serif; z-index: 2; }
+.gd-tb-look .uname-wrap, .gd-tb-look .uname { font: inherit !important; letter-spacing: inherit !important; word-spacing: inherit !important; line-height: 1 !important; }
+.gd-tb-look .uname { color: transparent !important; -webkit-text-fill-color: transparent !important; background: none !important; }
+.gd-tb-look .ubadge { display: none !important; }
 body.gd-skin .me-chip.gd-bar.nudge .gd-tbar { animation: gd-bar-nudge 1.6s ease-in-out infinite alternate; }
 @keyframes gd-bar-nudge { from { opacity: .6; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { body.gd-skin .me-chip.gd-bar.nudge .gd-tbar { animation: none; } }
@@ -1248,7 +1278,7 @@ export const pacote = {
     if (scale >= 1) startRifts(layer);
   },
   tap(x, y, layer) { grimTap(x, y, layer); }, // a loot drop
-  chip(chip, name) { targetBar(chip, name); return true; }, // the name chip becomes a monster's target bar
+  chip(chip, name, look) { targetBar(chip, name, look); return true; }, // the name chip becomes a monster's target bar
   async start(ctx) { // the collection (grail.js) while the occasion is live
     const my = ++run;
     const [g, self] = await Promise.all([import(new URL("grail.js" + new URL(import.meta.url).search, import.meta.url).href), import(import.meta.url)]);

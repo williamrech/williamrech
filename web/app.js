@@ -1222,8 +1222,11 @@ function renderMeChip() {
   const uid = auth.currentUser.uid, p = family[uid] || me || {};
   const plain = curseOf(uid) || p.name;
   if (filePacote(effectKey) && plain) { // a pacote may take over the chip (Grim Dawn: a monster's target bar)
-    const k = effectKey, p = pacoteMod[k];
-    if (p) { if (p.chip && p.chip(chip, plain)) { renderCurseBanner(); return; } }
+    const k = effectKey, pk = pacoteMod[k];
+    // The name's animated look (a maldição's, or the person's own) can go over the pacote's name too.
+    const lk = curseOf(uid) ? curseCfg(uid).look : cleanStyle(p.style).effect;
+    const lookHtml = ANIM_LOOKS.has(lk) ? lookedName(plain, null, lk) : "";
+    if (pk) { if (pk.chip && pk.chip(chip, plain, lookHtml)) { renderCurseBanner(); return; } }
     else loadPacote(k).then(() => { if (effectKey === k) renderMeChip(); }).catch((e) => console.warn(k, e));
   }
   chip.classList.remove("gd-bar"); // undo a pacote's chip
@@ -1236,11 +1239,12 @@ function renderCurseBanner() {
   const el = $("curse-banner");
   if (!el || !auth.currentUser) return;
   const c = curseOf(auth.currentUser.uid);
-  show("curse-banner", !!c);
+  const cfg = c ? curseCfg(auth.currentUser.uid) : null;
+  // Only the maldição's own phrase ("Frase pra quem foi trocado"), with its icon; nothing when it has none.
+  show("curse-banner", !!(c && cfg.banner));
   syncOccCard();
-  if (!c) return;
-  const cfg = curseCfg(auth.currentUser.uid);
-  el.innerHTML = `${cfg.icon ? esc(cfg.icon) + " " : ""}${cfg.banner ? esc(cfg.banner) + " " : ""}Enquanto durar a ocasião, todo mundo te vê como <b>${esc(c)}</b>.`;
+  if (!c || !cfg.banner) return;
+  el.innerHTML = `${cfg.icon ? esc(cfg.icon) + " " : ""}${esc(cfg.banner)}`;
 }
 
 let draftStyle = null;
