@@ -27,7 +27,7 @@ let seq = 0;
 const CSS = `
 .gd-dev { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
 .gd-dev svg { display: block; overflow: visible; }
-.gd-dev g { animation: gd-twinkle var(--t) var(--d) ease-in-out infinite alternate; }
+.gd-dev g { opacity: .8; } /* static: no twinkle (saves battery); about the twinkle's average brightness */
 @keyframes gd-twinkle { from { opacity: .45; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .gd-dev g { animation: none; } }
 .gd-ash { position: absolute; top: -12px; pointer-events: none; will-change: translate, transform;
