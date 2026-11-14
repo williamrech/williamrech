@@ -448,8 +448,8 @@ header .icon { padding: 4px; }
    ===================================================================== */
 html { font-size: 15px; }
 body { line-height: 1.4; }
-main { padding: 10px 16px 20px; }
-header { padding: 10px 16px 0; gap: 4px; }
+main { padding: 6px 16px 20px; }
+header { padding: 8px 16px 0; gap: 4px; }
 header h1 { font-size: 0.82rem; }
 .me-chip { font-size: 0.98rem; padding: 6px 14px; }
 
@@ -475,7 +475,7 @@ dialog h2 { margin-bottom: 4px; }
 .chip.swatch { width: 28px; height: 28px; }
 #style-badges .chip { padding: 5px 9px; font-size: 1rem; min-width: 38px; }
 
-.tabs { margin: 2px 0 14px; padding: 3px; border-radius: 12px; }
+.tabs { margin: 2px 0 10px; padding: 3px; border-radius: 12px; }
 .tab { padding: 7px; font-size: 0.9rem; }
 
 .pins { gap: 8px; padding-bottom: 10px; }
@@ -565,7 +565,7 @@ dialog h2 { margin-bottom: 4px; }
 /* ---------- Occasions: banner, emoji decor, effects ---------- */
 .banner-occ {
   text-align: center; font-family: var(--serif); font-style: italic; font-size: 1rem; color: var(--crema);
-  padding: 8px 12px; margin: 0 0 12px; border-radius: 12px;
+  padding: 6px 12px; margin: 0 0 8px; border-radius: 12px;
   background: color-mix(in srgb, var(--caramel) 18%, transparent); border: 1px solid var(--line);
 }
 .preview-tag { font-family: var(--sans); font-style: normal; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
@@ -1195,7 +1195,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 
 /* ---------- Curses ---------- */
 .curse-banner { font-family: var(--sans); font-style: normal; font-size: 0.8rem; line-height: 1.35; color: var(--fg); opacity: .92; cursor: pointer; }
-#banner:not([hidden]) + .curse-banner { margin-top: 8px; padding-top: 8px; border-top: 1px dashed color-mix(in srgb, var(--caramel) 45%, transparent); }
+#banner:not([hidden]) + .curse-banner { margin-top: 6px; padding-top: 6px; border-top: 1px dashed color-mix(in srgb, var(--caramel) 45%, transparent); }
 .curse-banner[hidden] { display: none; }
 /* Cursed name: oozing ectoplasm — sickly green glow, wisps rising off it, a queasy wobble */
 .cursed { position: relative; display: inline-block; isolation: isolate; }

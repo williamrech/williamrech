@@ -220,7 +220,7 @@ export function startSky(layer) {
 // ---------- Target bar: the name chip becomes a monster's nameplate ----------
 // Name above, a gold frame with a blood-red fill and the level in its crest, the monster race below.
 // The frame was redrawn by hand as vectors from measurements of a game screenshot (it is not the game's texture).
-// Geometry is in "screenshot pixels": centre x = 269.5, bar y = 83..101; the viewBox crops to 360 x 136.
+// Geometry is in "screenshot pixels": centre x = 269.5, bar y = 83..101; the viewBox crops to 360 x 108 (y 28..136).
 const RACES = ["Morto-vivo", "Bestial", "Etéreo", "Ctônico", "Corrupção Etérea", "Jurassangue", "Feérico", "Insetoide", "Humano", "Construção", "Progênie Abissal", "Fera", "Mágico", "Celestial", "Aracnídeo", "Planta"]; // the game's races, in its PT-BR translation
 const barSVG = (() => {
 const C = 269.5;
@@ -247,7 +247,9 @@ const TIPCURL = "M172,234 C180,200 226,186 256,216 C290,250 286,330 246,386 C226
 const RING  = "M286,372 C372,362 462,430 466,525 C462,620 372,688 286,678";
 const STEM  = "M466,525 L498,525";
 const DIAMS = "M152,525 L258,414 L388,525 L258,636 Z";
-const thinR = [CROOK, LEG, XBAR, ARCH, CURL1, STEP1, STEP2, CURL2, TICK2].map(T2).concat([HOOK, FOOT, TICK].map(T), [TIPCURL, flipY(TIPCURL, 525), RING, STEM, DIAMS].map(T3)).join(" ");
+// The horns beside the level are squeezed down toward the bar (k .75) so their tops sit level with the next curls (y 59.4).
+const LOW = (d) => d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (_, a, b) => `${a},${(80.4 - (80.4 - b) * 0.75).toFixed(2)}`);
+const thinR = [CROOK, LEG, XBAR].map(T2).map(LOW).concat([ARCH, CURL1, STEP1, STEP2, CURL2, TICK2].map(T2)).concat([HOOK, FOOT, TICK].map(T), [TIPCURL, flipY(TIPCURL, 525), RING, STEM, DIAMS].map(T3)).join(" ");
 // ---- right half, rails ----
 const railR = T("M43,323 L1064,323 M742,273 L1128,273 M52,521 L1064,521 M52,559 L1160,559 L1186,528");
 const HEAD = T3("M494,442 L668,525 L494,608 Q520,525 494,442 Z");
@@ -273,7 +275,7 @@ function barSVG({ name, level, fill, race }) {
   const solid = (d, extra = "") => `<path d="${d}" fill="url(#${id}g)" stroke="#120803" stroke-width=".7" stroke-linejoin="round"${extra}/>`;
   const n = [...String(name)].length, fs = Math.min(27.5, 346 / Math.max(n, 1) / 0.64);
   const rl = [...String(race)].length, rs = Math.min(17.5, 320 / Math.max(rl, 1) / 0.66);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="89.5 8 360 136" class="gd-tbar" role="img" aria-label="${esc(name)}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="89.5 28 360 108" class="gd-tbar" role="img" aria-label="${esc(name)}">
 <defs>
 <linearGradient id="${id}g" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="0" y2="114"><stop offset="0" stop-color="#f3dc9c"/><stop offset=".35" stop-color="#d8b06a"/><stop offset=".62" stop-color="#b98d49"/><stop offset=".85" stop-color="#8a6330"/><stop offset="1" stop-color="#b08a4a"/></linearGradient>
 <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e99aab"/><stop offset=".26" stop-color="#dc748a"/><stop offset=".37" stop-color="#b41a33"/><stop offset=".62" stop-color="#9b0f22"/><stop offset="1" stop-color="#830a18"/></linearGradient>
@@ -285,10 +287,10 @@ function barSVG({ name, level, fill, race }) {
 <clipPath id="${id}c"><path d="${FILL}"/></clipPath>
 <clipPath id="${id}h"><rect x="-126" y="80" width="${(252 * pct).toFixed(1)}" height="24"/></clipPath>
 </defs>
-<text data-fit="346" x="${C}" y="43.4" text-anchor="middle" font-family="'GD Risque',serif" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.115).toFixed(2)}" word-spacing="${(fs * 0.22).toFixed(1)}" fill="url(#${id}n)" stroke="#2a0700" stroke-width="2.6" stroke-linejoin="round" paint-order="stroke" filter="url(#${id}s)">${esc(name)}</text>
-<text data-fit="346" x="${C}" y="43.4" text-anchor="middle" font-family="'GD Risque',serif" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.115).toFixed(2)}" word-spacing="${(fs * 0.22).toFixed(1)}" fill="url(#${id}n)" stroke="#ff4a08" stroke-width=".55" stroke-linejoin="round">${esc(name)}</text>
+<text data-fit="346" x="${C}" y="51.9" text-anchor="middle" font-family="'GD Risque',serif" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.115).toFixed(2)}" word-spacing="${(fs * 0.22).toFixed(1)}" fill="url(#${id}n)" stroke="#2a0700" stroke-width="2.6" stroke-linejoin="round" paint-order="stroke" filter="url(#${id}s)">${esc(name)}</text>
+<text data-fit="346" x="${C}" y="51.9" text-anchor="middle" font-family="'GD Risque',serif" font-size="${fs.toFixed(1)}" letter-spacing="${(fs * 0.115).toFixed(2)}" word-spacing="${(fs * 0.22).toFixed(1)}" fill="url(#${id}n)" stroke="#ff4a08" stroke-width=".55" stroke-linejoin="round">${esc(name)}</text>
 <g transform="translate(${C},0)">
-<ellipse cx="0" cy="68" rx="20" ry="10" fill="#000" opacity=".75" filter="url(#${id}k)"/>
+<ellipse cx="0" cy="70" rx="18" ry="8" fill="#000" opacity=".75" filter="url(#${id}k)"/>
 ${both(`<path d="M78,75.6 H121 L127,80.9 H78 Z M5,102.9 H113 L124,104 L124,107 H5 Z" fill="#050302" opacity=".95"/>`)}<rect x="-114" y="80.9" width="228" height="22" fill="#050302"/>
 <path d="${FILL}" fill="#170306"/>
 <g clip-path="url(#${id}c)"><g clip-path="url(#${id}h)">
@@ -305,8 +307,8 @@ ${both(`<path d="${HEAD}" fill="#0a0503" stroke="#120803" stroke-width="2.6" str
 ${solid(GEM)}<path d="${GEM_IN}" fill="#0a0503"/>
 <text x="0" y="74.6" text-anchor="middle" font-family="'GD Cinzel',serif" font-weight="700" font-size="16.6" letter-spacing="1" fill="#f1d24a" stroke="#1c1002" stroke-width="1.1" paint-order="stroke">${esc(level)}</text>
 </g>
-<text data-fit="320" x="${C}" y="135" text-anchor="middle" font-family="'GD Risque',serif" font-size="${rs.toFixed(1)}" letter-spacing="${(rs * 0.11).toFixed(2)}" word-spacing="${(rs * 0.45).toFixed(1)}" fill="#ececec" stroke="#0b0b0b" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke" filter="url(#${id}s)">${esc(race)}</text>
-<text data-fit="320" x="${C}" y="135" text-anchor="middle" font-family="'GD Risque',serif" font-size="${rs.toFixed(1)}" letter-spacing="${(rs * 0.11).toFixed(2)}" word-spacing="${(rs * 0.45).toFixed(1)}" fill="#ececec" stroke="#ececec" stroke-width=".45" stroke-linejoin="round">${esc(race)}</text>
+<text data-fit="320" x="${C}" y="131.5" text-anchor="middle" font-family="'GD Risque',serif" font-size="${rs.toFixed(1)}" letter-spacing="${(rs * 0.11).toFixed(2)}" word-spacing="${(rs * 0.45).toFixed(1)}" fill="#ececec" stroke="#0b0b0b" stroke-width="2.4" stroke-linejoin="round" paint-order="stroke" filter="url(#${id}s)">${esc(race)}</text>
+<text data-fit="320" x="${C}" y="131.5" text-anchor="middle" font-family="'GD Risque',serif" font-size="${rs.toFixed(1)}" letter-spacing="${(rs * 0.11).toFixed(2)}" word-spacing="${(rs * 0.45).toFixed(1)}" fill="#ececec" stroke="#ececec" stroke-width=".45" stroke-linejoin="round">${esc(race)}</text>
 </svg>`;
 }
 return barSVG;
@@ -452,10 +454,10 @@ body.gd-skin .me-chip.gd-bar.nudge .gd-tbar { animation: gd-bar-nudge 1.6s ease-
 @media (prefers-reduced-motion: reduce) { body.gd-skin .me-chip.gd-bar.nudge .gd-tbar { animation: none; } }
 /* Banner: quest text between two bronze rules */
 body.gd-skin #occ-card.banner-occ { background: none; border: 0; box-shadow: none; }
-body.gd-skin #banner { font-family: "GD Fell", Georgia, serif; font-style: italic; color: #d8cfb8; position: relative; padding: 8px 6px; }
+body.gd-skin #banner { font-family: "GD Fell", Georgia, serif; font-style: italic; color: #d8cfb8; position: relative; padding: 2px 6px; }
 body.gd-skin #banner::before, body.gd-skin #banner::after { content: ""; display: block; height: 1px; margin: 0 18%;
   background: linear-gradient(90deg, transparent, var(--gd-bronze-l), transparent); }
-body.gd-skin #banner::before { margin-bottom: 8px; } body.gd-skin #banner::after { margin-top: 8px; }
+body.gd-skin #banner::before { margin-bottom: 6px; } body.gd-skin #banner::after { margin-top: 6px; }
 /* Deadline: a thin draining bar under the time left */
 body.gd-skin .round .deadline { position: relative; padding-bottom: 6px; color: var(--gd-text); }
 body.gd-skin .round .deadline[style]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 1px;
@@ -534,6 +536,10 @@ const BOTTOM_CSS = `
 // Each app open picks one strip per row, a zoom, a slice and maybe a mirror, then it stays put.
 // Numbers per strip: natural width, height, and the x range whose ground is solid (so a slice never has gaps);
 // cathedral strips also carry the x range of the cathedral itself, which every slice keeps in view.
+// Front strips: how tall the solid silhouette is across the strip, in 64 slices; (char code - 48) / 74 = fraction of the
+// strip's height (15th percentile per slice, so thin gaps don't count). Keeps the front row from dipping so low that the
+// floor shows between it and the houses behind.
+const SIL = {"gd-city-i1": "1ALWaPasrzzxxljx[yvre`b]QSbdiacin`SShrwvrxxxcHWGKJ^QXnghndUKSPB0", "gd-city-i2": "@Q_^^PKKkjWZmrsXXVPIOFEBAIHLZQTZV\\]cWqvv^]Y[lunpnkonkeeb][hrpeWB", "gd-city-i3": ";X]carx`bjlqaXWWQLNYMNNLF>A>@AA>858<@><7:<=AD?@FGO]YIHKmlQQ_[SK8"};
 const CITY = {"gd-city-c1":[1406,307,4,1385,640,890],"gd-city-r1":[1740,252,15,1736],"gd-city-i1":[1698,288,17,1667],"gd-city-c2":[1522,313,12,1514,860,1100],"gd-city-r2":[1616,292,6,1601],"gd-city-i2":[1651,301,2,1648],"gd-city-i3":[1648,316,2,1645],"gd-city-r3":[1644,293,1,1642],"gd-city-c3":[1643,284,1,1641,810,1090]};
 const CITY_CSS = `
 .gd-city { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -557,8 +563,8 @@ function startCity(layer) {
   // Back to front. Heights are fractions of the screen; the cathedral's top always reaches past half the screen.
   const rows = [
     { k: "c", h: rnd(0.32, 0.37), base: rnd(0.2, 0.24), tone: "brightness(1.02) saturate(.9) blur(.5px)" },
-    { k: "r", h: rnd(0.26, 0.31), base: rnd(0.09, 0.12), tone: "brightness(.72) saturate(.95)" },
-    { k: "i", h: rnd(0.21, 0.26), base: 0, tone: "brightness(.5) contrast(1.12)" },
+    { k: "r", h: rnd(0.31, 0.35), base: rnd(0.03, 0.05), tone: "brightness(.72) saturate(.95)" }, // solid to its foot, no fade:
+    { k: "i", h: rnd(0.24, 0.28), base: 0, tone: "brightness(.5) contrast(1.12)" },                 // where the front row dips, houses show, not black
   ];
   const c = rows[0];
   if (c.base + c.h < 0.53) c.h = 0.53 - c.base;
@@ -579,10 +585,17 @@ function startCity(layer) {
       const a = Math.max(lo, clo), b = Math.min(hi, chi);
       if (a <= b) { lo = a; hi = b; } else { lo = hi = Math.max(lo, Math.min(hi, ((cath[0] + cath[1]) / 2) * sc - vw / 2)); }
     }
-    const off = lo + rnd(0, Math.max(0, hi - lo));
+    let off = lo + rnd(0, Math.max(0, hi - lo));
+    const sil = SIL[name];
+    if (sil) { // front row: only slices where the silhouette stays at least 22% of the row tall all the way across
+      const low = (o) => { let m = 1; for (let b = Math.floor(o / sc / w * 64), e = Math.min(63, Math.floor((o + vw) / sc / w * 64)); b <= e; b++) m = Math.min(m, (sil.charCodeAt(b) - 48) / 74); return m; };
+      const ok = [], best = { o: off, m: -1 };
+      for (let o = lo; o <= hi; o += 6) { const m = low(o); if (m >= 0.22) ok.push(o); if (m > best.m) { best.o = o; best.m = m; } }
+      off = ok.length ? pick(ok) : best.o;
+    }
     const row = document.createElement("div");
     row.className = "row";
-    const fade = i < 2 ? "-webkit-mask-image:linear-gradient(to top, transparent, #000 14%);mask-image:linear-gradient(to top, transparent, #000 14%);" : "";
+    const fade = i < 1 ? "-webkit-mask-image:linear-gradient(to top, transparent, #000 14%);mask-image:linear-gradient(to top, transparent, #000 14%);" : "";
     row.style.cssText = `bottom:${r.base * vh}px;height:${H}px;filter:${r.tone};${fade}${Math.random() < 0.5 ? "transform:scaleX(-1);" : ""}`;
     const img = new Image();
     img.src = new URL(`img/${name}.webp`, import.meta.url).href;
