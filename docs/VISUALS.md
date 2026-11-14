@@ -4,18 +4,18 @@ Four kinds of things decide how the app looks. All of them live in Firestore `co
 
 | Name | What it is | Where |
 |---|---|---|
-| **Tema** | Colours (6), drawings, an effect or pacote, a background image. | `config/fun.palettes.<id>` · Admin → 🎨 Temas |
-| **Ocasião** | A date rule + which tema + banner, version text, maldições. It looks exactly like its tema. | `config/fun.occasions.<id>` · Admin → 📅 Ocasiões |
+| **Tema** | Colours (6), drawings, an effect or pacote, a background image. | `config/fun.palettes.<id>` · Admin → 🎨 Visual → Temas |
+| **Ocasião** | A date rule + which tema + banner, version text, maldições. It looks exactly like its tema. | `config/fun.occasions.<id>` · Admin → 🎨 Visual → Ocasiões |
 | **Efeito** | Decoration only: steam, bubbles, snow, confetti, sparkles, hearts. | `web/effects.js` (CSS in `style.css`) |
 | **Pacote** | A big experience: restyles the app, reacts to taps, may keep state. | its own file: `web/grimdawn.js`, `web/haunted.js` |
 
-On a normal day each person sees the tema they picked (and can turn its effect off). On an occasion day the last active occasion with a tema (sorted by só-admin, then priority) decides the whole look for everyone. Admin → 🗓️ Agenda shows which occasion wins each day and why.
+On a normal day each person sees the tema they picked (and can turn its effect off). On an occasion day the last active occasion with a tema (sorted by só-admin, then priority) decides the whole look for everyone. Admin → 🎨 Visual → Ocasiões → 🗓️ Calendário shows which occasion wins each day and why (tap one to edit it).
 
 ## Add a tema
-Admin → 🎨 Temas → ＋ Novo tema. Pick colours, drawings (bottom strip), and in ⋯: effect or pacote, extra emojis, background image, "Só em ocasiões" (hidden from Configurações). A tema with Grim Dawn is always occasion-only.
+Admin → 🎨 Visual → Temas → ＋ Novo tema. Pick colours, drawings (bottom strip; its ＋ opens the drawing library to upload one), and in ⋯: effect or pacote, extra emojis, background image, "Só em ocasiões" (hidden from Configurações). A tema with Grim Dawn is always occasion-only.
 
 ## Add an ocasião
-Admin → 📅 Ocasiões → ＋. Set the dates, banner, version, pick the tema (or "✏️ editar este tema" / "＋ tema novo" right there), maldições if any. "Prévia" shows it on your phone only; "👑 Só admin" makes it a test the family doesn't see. Want a different look for one occasion? Make a tema for it.
+Admin → 🎨 Visual → Ocasiões → ＋ Nova ocasião. Set the dates, banner, version, pick the tema (or "✏️ editar este tema" / "＋ tema novo" right there), maldições if any. "Prévia" shows it on your phone only; "👑 Só admin" makes it a test the family doesn't see. Want a different look for one occasion? Make a tema for it.
 
 ## Add an efeito
 1. `web/effects.js`: add a `kind === "<id>"` branch in `startEffect(layer, kind, scale, still)` (scale < 1 = the small preview in the tema editor; respect `still` = reduced motion; use `layer._fxTimer` for timers).
