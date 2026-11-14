@@ -80,6 +80,8 @@ const CSS = `
 .art-frame .ico { background-repeat: no-repeat; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .8)); }
 .art-frame .msg { width: 200px; min-height: 120px; display: grid; place-items: center; text-align: center; font-size: .9rem; color: #cfc6b0; }
 .art-frame .msg b { display: block; font-size: 2.4rem; margin-bottom: 6px; }
+.art-frame .msg button.art-dl { margin-top: 12px; padding: 8px 12px; font: 700 .8rem/1.2 var(--sans, system-ui); border-radius: 3px; border: 1px solid #8a6f3e;
+  background: linear-gradient(180deg, #4a3c1f, #2a2112); color: #f3d64e; }
 .art-name { font-family: "GD Cinzel", Georgia, serif; font-weight: 700; letter-spacing: .04em; text-align: center; max-width: 80vw; }
 .art-name.legendary { color: #c86bff; } .art-name.epic { color: #4f9dff; }
 `;
@@ -319,10 +321,10 @@ let gdRef = null;
 async function hasSheet() {
   try { return !!(gdRef && "caches" in self && await (await caches.open(ART_CACHE)).match(gdRef.ITEM_SPRITE)); } catch { return false; }
 }
-const onWifi = () => !!(navigator.connection && navigator.connection.type === "wifi"); // phones that don't say count as not on Wi-Fi
-async function getSheet() {
+const netType = () => (navigator.connection && navigator.connection.type) || "unknown"; // "wifi", "cellular", … or unknown (many phones don't say)
+async function getSheet(confirmed) {
   if (await hasSheet()) return true;
-  if (!onWifi()) return false;
+  if (netType() !== "wifi" && !confirmed) return false;
   try {
     const res = await fetch(gdRef.ITEM_SPRITE, { mode: "no-cors" }); // their server doesn't share; an opaque copy is enough to show it
     await (await caches.open(ART_CACHE)).put(gdRef.ITEM_SPRITE, res);
@@ -335,7 +337,7 @@ function icon(a, box) { // the icon scaled to fit a box (keeps its shape)
     background-size:${(W * k).toFixed(1)}px ${(H * k).toFixed(1)}px;background-position:${(-a.x * k).toFixed(1)}px ${(-a.y * k).toFixed(1)}px"></i>`;
 }
 function mini(a) { return `<span class="mini">${icon(a, 26).replace('style="display:block;', 'style="display:block;transform:translate(-50%,-50%);')}</span>`; }
-async function openArt(name) {
+async function openArt(name, confirmed) {
   const a = gdRef.itemArt(name);
   let d = document.getElementById("dlg-art");
   if (!d) {
@@ -348,7 +350,17 @@ async function openArt(name) {
   const silly = () => show(`<div class="msg"><div><b>❓</b>${NO_ART[Math.floor(Math.random() * NO_ART.length)]}</div></div>`);
   show(`<div class="msg"><div>Buscando a arte…</div></div>`);
   if (!d.open) d.showModal();
-  if (!a || !(await getSheet())) return silly();
+  if (!a) return silly();
+  if (!(await getSheet(confirmed))) {
+    // The phone didn't say it's on Wi-Fi: let the person confirm it (unless it said it's on mobile data).
+    if (netType() === "unknown" && !confirmed) {
+      show(`<div class="msg"><div><b>📶❓</b>Seu celular não contou se está no Wi-Fi.<br><button class="art-dl">Tô no Wi-Fi, baixar a arte (5,6 MB)</button></div></div>`);
+      const btn = d.querySelector(".art-dl");
+      btn.onclick = (e) => { e.stopPropagation(); openArt(name, true); };
+      return;
+    }
+    return silly();
+  }
   if (S) S.artReady = true;
   const img = new Image();
   img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5))); if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
