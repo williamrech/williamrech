@@ -92,17 +92,22 @@ const autoLook = (effect) => EFFECT_LOOK[effect] || "glitter"; // no effect → 
 const occasionMatches = (occ, t) => String(occ.when || "").split(",").some((p) => matchesPattern(p, t));
 
 // All of today's occasions, merged: higher priority wins field by field.
-function todaysOccasion() {
+// The occasions active on day t, in merge order (the last one wins each field). Used by today's look and by the Agenda.
+function occasionsOn(t, admin) {
   const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
-  const t = spToday();
   // "Só admin" occasions run only on admin phones (a live test the family doesn't see); they win over normal ones.
-  const admin = typeof me !== "undefined" && me && me.admin === true;
   let list = Object.entries(all).filter(([, o]) => o && typeof o === "object" && o.enabled !== false && (!o.adminOnly || admin) && occasionMatches(o, t));
   // An active "só admin" occasion is a test: show it alone, so nothing (curses included) leaks in from other occasions.
   if (list.some(([, o]) => o.adminOnly)) list = list.filter(([, o]) => o.adminOnly);
+  return sortOccasions(list);
+}
+const sortOccasions = (list) => list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (b[1].adminOnly ? 1 : 0) || (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
+function todaysOccasion() {
+  const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
+  const admin = typeof me !== "undefined" && me && me.admin === true;
+  let list = occasionsOn(spToday(), admin);
   if (previewOcc) list = [[previewOcc.id, previewOcc]];
   else if (PREVIEW_OCCASION && all[PREVIEW_OCCASION]) list = [[PREVIEW_OCCASION, all[PREVIEW_OCCASION]]];
-  list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (b[1].adminOnly ? 1 : 0) || (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
   const merged = {};
   for (const [id, o] of list) { Object.assign(merged, o); merged.id = id; }
   // Curses from every active occasion add up (higher priority wins per person); each keeps its own occasion's look.
@@ -3560,6 +3565,7 @@ $("adm-pal-new").addEventListener("click", () => openPaletteEditor(null));
 
 // ---------- Occasions ----------
 function renderAdminOccasions() {
+  renderAgenda();
   const today = todaysOccasion();
   const t = spToday();
   $("adm-today").textContent = `Hoje (${DAY_SHORT[t.weekday].toLowerCase()}, ${dmy(t.d, t.m, t.y)}): ${today ? "“" + today.id + "”" : "nenhuma ocasião"}${previewOcc || previewPal ? " (prévia ativa)" : ""}`;
@@ -3579,6 +3585,69 @@ function renderAdminOccasions() {
       list.appendChild(li);
     });
 }
+
+// ---------- Admin → Agenda: which occasion each day gets, and why (same logic the phones use) ----------
+const agenda = { y: 0, m: 0, sel: null, who: "fam" }; // who: "fam" = the family's view, "adm" = an admin phone (só-admin tests too)
+const AG_FIELDS = [["palette", "Cores"], ["effect", "Efeito"], ["decor", "Desenhos"], ["bgImage", "Imagem de fundo"], ["banner", "Faixa"], ["version", "Versão"]];
+const agDay = (y, m, d) => spToday(new Date(Date.UTC(y, m - 1, d, 15))); // 15h UTC = midday in São Paulo
+function occColor(id, o) {
+  const p = getPalette(o.palette);
+  if (p && HEX.test(String(p.accent || ""))) return p.accent;
+  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${h} 55% 55%)`;
+}
+function renderAgenda() {
+  const box = $("adm-agenda");
+  if (!box || !$("adm-agenda-sec").open) return;
+  if (!agenda.y) { const t = spToday(); agenda.y = t.y; agenda.m = t.m; }
+  const { y, m } = agenda, today = spToday().key, admin = agenda.who === "adm";
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let cells = "";
+  for (let i = 0; i < first; i++) cells += `<span class="ag-cell ag-empty"></span>`;
+  for (let d = 1; d <= days; d++) {
+    const t = agDay(y, m, d), list = occasionsOn(t, admin), top = list[list.length - 1];
+    const label = top ? (top[1].adminOnly ? "👑" : "") + top[0] : "";
+    cells += `<button class="ag-cell${t.key === today ? " ag-today" : ""}${agenda.sel === t.key ? " ag-sel" : ""}" data-d="${d}">
+      <b>${d}</b>${top ? `<i style="background:${occColor(top[0], top[1])}"></i><small>${esc(label)}</small>` : ""}${list.length > 1 ? `<em>+${list.length - 1}</em>` : ""}</button>`;
+  }
+  box.innerHTML = `<div class="ag-who">${[["fam", "Família vê"], ["adm", "Você vê (admin)"]].map(([k, l]) => `<button class="chip${agenda.who === k ? " selected" : ""}" data-who="${k}">${l}</button>`).join("")}</div>
+    <div class="ag-nav"><button class="icon" data-mv="-1" aria-label="Mês anterior">‹</button><b>${MONTHS_PT[m - 1]} ${y}</b><button class="icon" data-mv="1" aria-label="Próximo mês">›</button></div>
+    <div class="ag-grid">${DAY_SHORT.map((x) => `<span class="ag-wd">${x[0]}</span>`).join("")}${cells}</div>
+    <div class="ag-detail" id="ag-detail"></div>`;
+  box.querySelectorAll("[data-who]").forEach((b) => b.onclick = () => { agenda.who = b.dataset.who; renderAgenda(); });
+  box.querySelectorAll("[data-mv]").forEach((b) => b.onclick = () => {
+    agenda.m += Number(b.dataset.mv);
+    if (agenda.m < 1) { agenda.m = 12; agenda.y--; } else if (agenda.m > 12) { agenda.m = 1; agenda.y++; }
+    agenda.sel = null; renderAgenda();
+  });
+  box.querySelectorAll(".ag-cell[data-d]").forEach((b) => b.onclick = () => { agenda.sel = agDay(y, m, Number(b.dataset.d)).key; renderAgenda(); });
+  if (!agenda.sel && today.startsWith(`${y}-${pad2s(m)}`)) agenda.sel = today;
+  if (agenda.sel) renderAgendaDay(agenda.sel, admin);
+}
+function renderAgendaDay(key, admin) {
+  const [y, m, d] = key.split("-").map(Number), t = agDay(y, m, d), list = occasionsOn(t, admin);
+  const el = $("ag-detail");
+  const head = `<b>${DAY_SHORT[t.weekday]}, ${dmy(d, m, y, true)}</b>`;
+  if (!list.length) { el.innerHTML = `${head}<p class="muted small">Dia normal: cada pessoa vê o tema que escolheu.</p>`; return; }
+  const top = list[list.length - 1];
+  // Same rule as today's look: each field comes from the last occasion that sets it.
+  const from = (k) => { for (let i = list.length - 1; i >= 0; i--) if (k in list[i][1]) return list[i]; return null; };
+  const val = (k, v) => k === "palette" ? (((FUN.palettes || {})[v] || {}).name || v) : k === "effect" ? (EFFECTS[v] || v) : k === "bgImage" ? "sim" : v;
+  const rows = AG_FIELDS.map(([k, l]) => { const s = from(k); const v = s && s[1][k];
+    return `<li><span>${l}</span><span>${v ? esc(String(val(k, v)).slice(0, 60)) : "<span class='muted'>—</span>"}${s && v ? ` <span class="muted small">(${esc(s[0])})</span>` : ""}</span></li>`; }).join("");
+  const curses = [];
+  for (const [id, o] of list) for (const [u, n] of Object.entries(o.curses && typeof o.curses === "object" ? o.curses : {})) curses.push([u, n, id]);
+  const byUid = {}; for (const c of curses) byUid[c[0]] = c; // later occasions win per person
+  el.innerHTML = `${head}
+    <p class="small">Vale: <b>${esc(top[0])}</b>${top[1].adminOnly ? " 👑 (teste só admin: esconde as outras)" : ""}</p>
+    <p class="muted small">Ativas neste dia${list.length > 1 ? " — a de baixo ganha cada item" : ""}:</p>
+    <ol class="ag-list">${list.map(([id, o]) => `<li><i style="background:${occColor(id, o)}"></i><b>${esc(id)}</b>${o.adminOnly ? " 👑" : ""}
+      <span class="muted small">${esc(describeWhen(o.when))} · prioridade ${Number(o.priority) || 0}</span></li>`).join("")}</ol>
+    <p class="muted small">De onde vem cada coisa:</p><ul class="ag-fields">${rows}</ul>
+    ${Object.keys(byUid).length ? `<p class="muted small">Maldições:</p><ul class="ag-fields">${Object.values(byUid).map(([u, n, id]) =>
+      `<li><span>${esc((family[u] && family[u].name) || "?")}</span><span>${esc(n)} <span class="muted small">(${esc(id)})</span></span></li>`).join("")}</ul>` : ""}`;
+}
+$("adm-agenda-sec").addEventListener("toggle", renderAgenda);
 
 let occEditing = null;
 function readOccForm() {

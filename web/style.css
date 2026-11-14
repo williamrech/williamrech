@@ -1313,3 +1313,29 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 @keyframes cglow-pulse { 0%, 100% { opacity: 0; } 45% { opacity: 1; } 60% { opacity: .15; } }
 .cursed:not(.live) .cglow { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) { .cursed .cglow { animation: none; opacity: .5; } }
+
+/* ---------- Admin → Agenda ---------- */
+.ag-who { display: flex; gap: 6px; margin: 2px 0 8px; }
+.ag-nav { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px; text-transform: capitalize; }
+.ag-nav .icon { font-size: 1.3rem; padding: 2px 12px; }
+.ag-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.ag-wd { text-align: center; font-size: 0.66rem; color: var(--muted); padding: 2px 0; }
+.ag-cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 46px; padding: 3px 1px; border-radius: 6px;
+  border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 60%, transparent); color: var(--fg); font: inherit; overflow: hidden; }
+.ag-cell b { font-size: 0.74rem; font-weight: 600; }
+.ag-cell i { display: block; width: 80%; height: 4px; border-radius: 2px; }
+.ag-cell small { font-size: 0.56rem; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.ag-cell em { position: absolute; top: 1px; right: 3px; font-style: normal; font-size: 0.55rem; color: var(--crema); }
+.ag-empty { border: 0; background: none; }
+.ag-today { border-color: var(--crema); }
+.ag-sel { outline: 2px solid var(--caramel); outline-offset: -1px; }
+.ag-detail { margin: 10px 0 14px; }
+.ag-detail p { margin: 6px 0; }
+.ag-list { margin: 0 0 6px; padding-left: 20px; font-size: 0.86rem; }
+.ag-list li { margin: 3px 0; }
+.ag-list i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.ag-list .muted { display: block; }
+.ag-fields { list-style: none; margin: 0 0 6px; padding: 0; font-size: 0.84rem; }
+.ag-fields li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.ag-fields li > span:first-child { color: var(--muted); flex: none; }
+.ag-fields li > span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
