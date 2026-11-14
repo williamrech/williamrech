@@ -1339,3 +1339,11 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .ag-fields li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); }
 .ag-fields li > span:first-child { color: var(--muted); flex: none; }
 .ag-fields li > span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+
+/* Occasion editor: what an occasion changes on top of its tema */
+.occ-own { border: 1px solid var(--line); border-radius: 12px; padding: 4px 12px; margin: 2px 0 12px; }
+.occ-own > summary { cursor: pointer; padding: 8px 0; font-size: .95em; }
+.occ-own[open] > summary { margin-bottom: 2px; }
+#occ-tema-info { margin: -4px 0 8px; }
+.occ-own { max-width: 100%; min-width: 0; overflow: hidden; }
+.occ-own .ps-decor { max-width: 100%; }

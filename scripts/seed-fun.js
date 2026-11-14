@@ -136,6 +136,71 @@ const ref = getFirestore().doc("config/fun");
     }
     update.configVersion = 14;
   }
+  // configVersion 15: an occasion points to a Tema (`tema`) and keeps only what differs from it in `own`
+  // (decor / effect / bgImage). Old fields stay until the cleanup step. Before writing, every day of the next two
+  // years is resolved the old way and the new way (family and admin view, each personal tema); any difference → skip.
+  if ((Number(cur.configVersion) || 0) < 15) {
+    const L = require("../functions/look");
+    const pals = cur.palettes || {}, occs = cur.occasions || {};
+    const conv = {};
+    for (const [id, o] of Object.entries(occs)) {
+      if (!o || typeof o !== "object") continue;
+      const { tema, own } = L.occLookOf(o);
+      const T = tema && pals[tema] && typeof pals[tema] === "object" ? pals[tema] : null;
+      const keep = {};
+      for (const k of L.LOOK_KEYS) if (own[k] && !(T && own[k] === (T[k] || ""))) keep[k] = own[k];
+      conv[id] = { ...o, tema: T ? tema : "", own: keep };
+    }
+    const EFFECT_LOOK = { grimdawn: "ember", haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
+    const LOOKS = ["none", "glow", "rainbow", "wavy", "shadow", "ecto", "frost", "gold", "fizz", "glitter", "steam", "hearts", "ember"];
+    const autoLook = (e) => EFFECT_LOOK[e] || "glitter";
+    const on = (all, t, admin) => {
+      let list = Object.entries(all).filter(([, o]) => o && typeof o === "object" && o.enabled !== false && (!o.adminOnly || admin)
+        && String(o.when || "").split(",").some((p) => L.matchesPattern(p, t)));
+      if (list.some(([, o]) => o.adminOnly)) list = list.filter(([, o]) => o.adminOnly);
+      return list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (b[1].adminOnly ? 1 : 0) || (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
+    };
+    const pal = (id) => (pals[id] && typeof pals[id] === "object" ? pals[id] : {});
+    const oldLook = (list, user) => {
+      const m = {}; for (const [, o] of list) Object.assign(m, o);
+      const P = m.palette && pals[m.palette] && typeof pals[m.palette] === "object" ? m.palette : user;
+      return [P, m.decor || pal(P).decor || "", m.effect || pal(P).effect || "", m.bgImage || ""].join(" | ");
+    };
+    const newLook = (list, user) => {
+      const { m } = L.lookLayers(list, pals), P = m.tema || user;
+      return [P, "decor" in m ? m.decor : pal(P).decor || "", "effect" in m ? m.effect : pal(P).effect || "", "bgImage" in m ? m.bgImage : pal(P).bgImage || ""].join(" | ");
+    };
+    const users = Object.entries(pals).filter(([, p]) => p && !p.onlyOccasions).map(([id]) => id);
+    if (!users.includes("espresso")) users.push("espresso");
+    const diffs = [];
+    const start = Date.now();
+    for (let i = 0; i < 731 && diffs.length < 10; i++) {
+      const dt = new Date(start + i * 86400000 - 3 * 3600000);
+      const y = dt.getUTCFullYear(), m = dt.getUTCMonth() + 1, d = dt.getUTCDate();
+      const key = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const t = { y, m, d, key, md: key.slice(5), weekday: dt.getUTCDay() };
+      for (const admin of [false, true]) {
+        const a = on(occs, t, admin), b = on(conv, t, admin);
+        for (const u of users) { const x = oldLook(a, u), z = newLook(b, u); if (x !== z) { diffs.push(`${key}${admin ? " (admin)" : ""} [${u}]: ${x}  →  ${z}`); break; } }
+      }
+    }
+    if (diffs.length) {
+      console.log("step 3 migration SKIPPED — the look would change on:\n  " + diffs.join("\n  "));
+    } else {
+      for (const [id, o] of Object.entries(conv)) {
+        update[`occasions.${id}.tema`] = o.tema;
+        update[`occasions.${id}.own`] = o.own;
+        // Maldição look: it used to follow only the occasion's own effect; pin it where the new rule would pick another.
+        const m = occs[id].maldicao || occs[id].nameSwap;
+        const hasCurse = (occs[id].curses && Object.keys(occs[id].curses).length) || m;
+        const pinned = m && typeof m === "object" && LOOKS.includes(m.look);
+        const was = autoLook(occs[id].effect), now = autoLook(L.occEffect(o, pals));
+        if (hasCurse && !pinned && was !== now) update[`occasions.${id}.maldicao.look`] = was;
+        console.log(`step 3: ${id} → tema "${o.tema}"${Object.keys(o.own).length ? ", own " + JSON.stringify(o.own) : ""}`);
+      }
+      update.configVersion = 15;
+    }
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

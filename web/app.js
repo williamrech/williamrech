@@ -105,6 +105,43 @@ function occasionsOn(t, admin) {
   return sortOccasions(list);
 }
 const sortOccasions = (list) => list.sort((a, b) => (a[1].adminOnly ? 1 : 0) - (b[1].adminOnly ? 1 : 0) || (Number(a[1].priority) || 0) - (Number(b[1].priority) || 0));
+// ---------- Look: Tema + what an occasion changes only for itself (same rules as functions/look.js) ----------
+// An occasion has `tema` (a tema id, or "" = each person's own) and `own` = { decor, effect, bgImage } overrides.
+const LOOK_KEYS = ["decor", "effect", "bgImage"];
+const isNewOcc = (o) => !!o && typeof o === "object" && ("tema" in o || "own" in o);
+function occLookOf(o) {
+  o = o && typeof o === "object" ? o : {};
+  const neu = isNewOcc(o), src = neu ? (o.own && typeof o.own === "object" ? o.own : {}) : o;
+  const own = {};
+  for (const k of LOOK_KEYS) if (typeof src[k] === "string" && src[k]) own[k] = src[k];
+  return { tema: String((neu ? o.tema : o.palette) || ""), own };
+}
+// The look the active occasions decide (merge order, last wins). `m` has a key only when an occasion decides it
+// (tema, decor, effect — for everyone, bgImage); `src` says which occasion ("tema" = it came with the tema).
+function resolveLook(list) {
+  const m = {}, src = {}, pals = (FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : {};
+  const valid = (id) => !!id && !!pals[id] && typeof pals[id] === "object";
+  if (!list.some(([, o]) => isNewOcc(o))) {
+    // Config from before the step-3 migration: exactly the old rules (each field from the last occasion that has it).
+    const raw = {}, from = {};
+    for (const [id, o] of list) for (const k of ["palette", ...LOOK_KEYS]) if (k in o) { raw[k] = o[k]; from[k] = id; }
+    if (valid(raw.palette)) { m.tema = raw.palette; src.tema = from.palette; }
+    for (const k of LOOK_KEYS) if (raw[k]) { m[k] = raw[k]; src[k] = from[k]; }
+    return { m, src };
+  }
+  for (const [id, o] of list) {
+    const { tema, own } = occLookOf(o);
+    if (valid(tema)) { m.tema = tema; src.tema = id; for (const k of LOOK_KEYS) { m[k] = typeof pals[tema][k] === "string" ? pals[tema][k] : ""; src[k] = "tema"; } }
+    for (const k of Object.keys(own)) { m[k] = own[k]; src[k] = id; }
+  }
+  return { m, src };
+}
+// One occasion's effect (picks a maldição's automatic name look). Old-shape occasions: only their own effect, as before.
+function occEffect(o) {
+  if (!isNewOcc(o)) return (o && o.effect) || "";
+  const { tema, own } = occLookOf(o);
+  return own.effect || ((FUN.palettes || {})[tema] || {}).effect || "";
+}
 function todaysOccasion() {
   const all = (FUN.occasions && typeof FUN.occasions === "object") ? FUN.occasions : {};
   const admin = typeof me !== "undefined" && me && me.admin === true;
@@ -113,6 +150,8 @@ function todaysOccasion() {
   else if (PREVIEW_OCCASION && all[PREVIEW_OCCASION]) list = [[PREVIEW_OCCASION, all[PREVIEW_OCCASION]]];
   const merged = {};
   for (const [id, o] of list) { Object.assign(merged, o); merged.id = id; }
+  const lk = resolveLook(list);
+  merged.look = lk.m; merged.lookSrc = lk.src;
   // Curses from every active occasion add up (higher priority wins per person); each keeps its own occasion's look.
   merged.curses = {}; merged.curseCfg = {};
   for (const [, o] of list) for (const [u, n] of Object.entries(o.curses && typeof o.curses === "object" ? o.curses : {})) {
@@ -145,10 +184,12 @@ function applyLook() {
   let userPal = (typeof me !== "undefined" && me && me.palette) || "espresso";
   const chosen = getPalette(userPal);
   if (chosen && chosen.onlyOccasions) userPal = "espresso"; // occasion-only palettes can't be kept as a personal choice
+  // What today's occasions decide (a tema preview shows that tema alone).
+  const L = (!previewPal && todayOcc && todayOcc.look) || {};
   const pal = (previewPal && { ...DEFAULT_PALETTE, ...previewPal }) ||
-    (todayOcc && getPalette(todayOcc.palette)) || getPalette(userPal) || getPalette("espresso") || DEFAULT_PALETTE;
+    (L.tema && getPalette(L.tema)) || getPalette(userPal) || getPalette("espresso") || DEFAULT_PALETTE;
   applyPalette(pal);
-  const decorSpec = (todayOcc && todayOcc.decor) || pal.decor || "";
+  const decorSpec = "decor" in L ? L.decor : pal.decor || "";
   // Remember the look so the next launch paints it immediately (see the inline script in index.html).
   const previewing = !!(previewOcc || previewPal || PREVIEW_OCCASION);
   if (!previewing) try {
@@ -160,10 +201,10 @@ function applyLook() {
   renderBanner();
   placeDecor(decorSpec);
   renderPreviewBar(previewing);
-  // An occasion's effect is for everyone; otherwise the theme's own effect, unless you switched it off.
-  applyBgImage((todayOcc && todayOcc.bgImage) || "");
+  // An occasion's effect is for everyone; otherwise your tema's own effect, unless you switched it off.
+  applyBgImage("bgImage" in L ? L.bgImage : pal.bgImage || "");
   const fxOff = typeof me !== "undefined" && me && me.fxOff === true;
-  runEffect((todayOcc && todayOcc.effect) || (!fxOff && pal.effect) || null);
+  runEffect("effect" in L ? L.effect || null : (!fxOff && pal.effect) || null);
   if (typeof renderSettings === "function" && typeof auth !== "undefined" && auth.currentUser) renderSettings();
   if (typeof renderAdmin === "function" && typeof auth !== "undefined" && auth.currentUser) renderAdmin();
 }
@@ -382,7 +423,7 @@ const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 
 const PACKAGES = ["grimdawn", "haunted"];
 function fillEffectSelect(sel, forOccasion = false) {
   const keep = sel.value;
-  sel.innerHTML = `<option value="">Nenhum</option>`;
+  sel.innerHTML = `<option value="">${forOccasion ? "Igual ao tema" : "Nenhum"}</option>`;
   const groups = [["Efeitos", (k) => !PACKAGES.includes(k)], ["Pacotes", (k) => PACKAGES.includes(k)]];
   for (const [title, test] of groups) {
     const g = document.createElement("optgroup"); g.label = title;
@@ -648,11 +689,16 @@ function shrinkImage(file) {
   });
 }
 function setOccBg(id) {
-  $("occ-bg").value = id;
-  show("occ-bg-clear", !!id);
-  const th = $("occ-bg-thumb");
+  setBgField("occ", id);
+  if (typeof renderTemaInfo === "function" && $("dlg-occ").open) renderTemaInfo();
+}
+// A background-image field (occasion "occ", tema "pal"): hidden input + thumbnail + "Tirar".
+function setBgField(pre, id) {
+  $(pre + "-bg").value = id;
+  show(pre + "-bg-clear", !!id);
+  const th = $(pre + "-bg-thumb");
   th.style.backgroundImage = "";
-  if (id) loadBgImage(id).then((url) => { if ($("occ-bg").value === id && url) th.style.backgroundImage = `url("${url}")`; });
+  if (id) loadBgImage(id).then((url) => { if ($(pre + "-bg").value === id && url) th.style.backgroundImage = `url("${url}")`; });
 }
 function runEffect(kind) {
   kind = kind || null;
@@ -1329,7 +1375,7 @@ function renderPalettes() {
   if (!wrap) return;
   const pals = (FUN.palettes && typeof FUN.palettes === "object") ? FUN.palettes : { espresso: DEFAULT_PALETTE };
   const current = (me && me.palette) || "espresso";
-  const forced = todayOcc && todayOcc.palette && getPalette(todayOcc.palette);
+  const forced = todayOcc && todayOcc.look && todayOcc.look.tema && getPalette(todayOcc.look.tema);
   $("palette-forced").textContent = forced ? `Hoje o tema é obrigatório (${todayOcc.banner || todayOcc.id}). Sua escolha volta amanhã. 😌` : "";
   show("palette-forced", !!forced);
   wrap.innerHTML = "";
@@ -1509,7 +1555,7 @@ function curseCfgOf(o) {
   const c = (m && typeof m === "object") ? m : {};
   const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   const pinned = c.look in NAME_LOOKS ? c.look : "";
-  return { icon: str(c.icon, 8), title: str(c.title, 30), banner: str(c.banner, 120), pinned, look: pinned || autoLook(o && o.effect),
+  return { icon: str(c.icon, 8), title: str(c.title, 30), banner: str(c.banner, 120), pinned, look: pinned || autoLook(occEffect(o)),
     ideas: Array.isArray(c.ideas) ? c.ideas.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim().slice(0, CURSE_MAX)) : [] };
 }
 const curseCfg = (uid) => (todayOcc && todayOcc.curseCfg && todayOcc.curseCfg[uid]) || curseCfgOf(null);
@@ -3118,7 +3164,7 @@ function paletteDots(p) {
   return [p.bg, p.surface, p.accent, p.highlight].filter((c) => HEX.test(String(c))).map((c) => `<i style="background:${c}"></i>`).join("");
 }
 function usedByOccasions(palId) {
-  return Object.entries(allOccasions()).filter(([, o]) => o && o.palette === palId).map(([id]) => id);
+  return Object.entries(allOccasions()).filter(([, o]) => o && occLookOf(o).tema === palId).map(([id]) => id);
 }
 function renderAdminPalettes() {
   const list = $("adm-palettes");
@@ -3232,8 +3278,8 @@ const slugify = (x) => String(x).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowe
 
 // --- studio state ---
 let st = null; // { id, isNew, pal:{name,bg,…}, role, locks:Set, decor:[], emoji, only, hist:[], fut:[] }
-const snap = () => JSON.stringify({ pal: st.pal, decor: st.decor, emoji: st.emoji, only: st.only, effect: st.effect });
-function restore(json) { const o = JSON.parse(json); st.pal = o.pal; st.decor = o.decor; st.emoji = o.emoji; st.only = o.only; st.effect = o.effect || ""; }
+const snap = () => JSON.stringify({ pal: st.pal, decor: st.decor, emoji: st.emoji, only: st.only, effect: st.effect, bg: st.bg });
+function restore(json) { const o = JSON.parse(json); st.pal = o.pal; st.decor = o.decor; st.emoji = o.emoji; st.only = o.only; st.effect = o.effect || ""; st.bg = o.bg || ""; setBgField("pal", st.bg); }
 function commit(change) { st.hist.push(snap()); if (st.hist.length > 80) st.hist.shift(); st.fut = []; change(); renderStudio(); }
 
 function studioId() {
@@ -3260,8 +3306,9 @@ function openPaletteEditor(id) {
     role: "accent", locks: new Set(),
     decor: parsed.filter((x) => x.svg).map((x) => x.svg).filter((v, i, a) => a.indexOf(v) === i),
     emoji: parsed.filter((x) => x.emoji).map((x) => x.emoji).join(""),
-    only: !!(raw && raw.onlyOccasions), effect: (raw && raw.effect in EFFECTS) ? raw.effect : "", hist: [], fut: [],
+    only: !!(raw && raw.onlyOccasions), effect: (raw && raw.effect in EFFECTS) ? raw.effect : "", bg: (raw && typeof raw.bgImage === "string") ? raw.bgImage : "", hist: [], fut: [],
   };
+  setBgField("pal", st.bg);
   if (!raw) st.decor = ["latte.svg", "mug.svg", "bean.svg"];
   $("pal-preview").querySelector(".mini-fx")?.removeAttribute("data-k");
   const from = $("pal-from");
@@ -3516,6 +3563,7 @@ $("pal-from").addEventListener("change", (e) => {
     st.decor = d.filter((x) => x.svg).map((x) => x.svg).filter((v, i, a) => a.indexOf(v) === i);
     st.emoji = d.filter((x) => x.emoji).map((x) => x.emoji).join("");
     st.effect = src.effect in EFFECTS ? src.effect : "";
+    st.bg = typeof src.bgImage === "string" ? src.bgImage : ""; setBgField("pal", st.bg);
   });
   palMenu(false);
   toast("Copiado. Agora é só ajustar. 🎨");
@@ -3553,6 +3601,7 @@ function studioPalette() {
   if (decor) p.decor = decor;
   if (st.only) p.onlyOccasions = true;
   if (st.effect) p.effect = st.effect;
+  if (st.bg) p.bgImage = st.bg;
   return p;
 }
 $("pal-save").addEventListener("click", async () => {
@@ -3588,7 +3637,7 @@ function renderAdminOccasions() {
     .map(([id, o]) => ({ id, o: o || {}, next: nextDates((o || {}).when, 1)[0] }))
     .sort((a, b) => (a.next ? a.next.i : 9999) - (b.next ? b.next.i : 9999) || a.id.localeCompare(b.id))
     .forEach(({ id, o, next }) => {
-      const pal = getPalette(o.palette);
+      const pal = getPalette(occLookOf(o).tema);
       const li = document.createElement("li");
       li.innerHTML = `<button class="adm-row"><span class="dots">${pal ? paletteDots(pal) : ""}</span>
         <span class="adm-row-text"><b>${esc(id)}${o.adminOnly ? ` <span class="badge" title="Só admin">👑 só admin</span>` : ""}${o.enabled === false ? ` <span class="badge off">desativada</span>` : ""}${next && next.i === 0 ? ` <span class="badge">hoje</span>` : ""}</b>
@@ -3601,10 +3650,10 @@ function renderAdminOccasions() {
 
 // ---------- Admin → Agenda: which occasion each day gets, and why (same logic the phones use) ----------
 const agenda = { y: 0, m: 0, sel: null, who: "fam" }; // who: "fam" = the family's view, "adm" = an admin phone (só-admin tests too)
-const AG_FIELDS = [["palette", "Tema"], ["effect", "Efeito"], ["decor", "Desenhos"], ["bgImage", "Imagem de fundo"], ["banner", "Faixa"], ["version", "Versão"]];
+const AG_FIELDS = [["tema", "Tema"], ["effect", "Efeito"], ["decor", "Desenhos"], ["bgImage", "Imagem de fundo"], ["banner", "Faixa"], ["version", "Versão"]];
 const agDay = (y, m, d) => spToday(new Date(Date.UTC(y, m - 1, d, 15))); // 15h UTC = midday in São Paulo
 function occColor(id, o) {
-  const p = getPalette(o.palette);
+  const p = getPalette(occLookOf(o).tema);
   if (p && HEX.test(String(p.accent || ""))) return p.accent;
   let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
   return `hsl(${h} 55% 55%)`;
@@ -3643,11 +3692,17 @@ function renderAgendaDay(key, admin) {
   const head = `<b>${DAY_SHORT[t.weekday]}, ${dmy(d, m, y, true)}</b>`;
   if (!list.length) { el.innerHTML = `${head}<p class="muted small">Dia normal: cada pessoa vê o tema que escolheu.</p>`; return; }
   const top = list[list.length - 1];
-  // Same rule as today's look: each field comes from the last occasion that sets it.
+  // Same rules as today's look: the tema brings its whole look, an occasion's own changes go on top; banner and
+  // version come from the last occasion that has them.
+  const { m: lk, src } = resolveLook(list);
   const from = (k) => { for (let i = list.length - 1; i >= 0; i--) if (k in list[i][1]) return list[i]; return null; };
-  const val = (k, v) => k === "palette" ? (((FUN.palettes || {})[v] || {}).name || v) : k === "effect" ? (EFFECTS[v] || v) : k === "bgImage" ? "sim" : v;
-  const rows = AG_FIELDS.map(([k, l]) => { const s = from(k); const v = s && s[1][k];
-    return `<li><span>${l}</span><span>${v ? esc(String(val(k, v)).slice(0, 60)) : "<span class='muted'>—</span>"}${s && v ? ` <span class="muted small">(${esc(s[0])})</span>` : ""}</span></li>`; }).join("");
+  const val = (k, v) => k === "tema" ? (((FUN.palettes || {})[v] || {}).name || v) : k === "effect" ? (EFFECTS[v] || v) : k === "bgImage" ? "sim" : v;
+  const rows = AG_FIELDS.map(([k, l]) => {
+    let v, who;
+    if (k === "tema" || LOOK_KEYS.includes(k)) { v = lk[k]; who = src[k] === "tema" ? "do tema" : src[k]; }
+    else { const s = from(k); v = s && s[1][k]; who = s && s[0]; }
+    const none = k === "tema" ? "cada um o seu" : "—";
+    return `<li><span>${l}</span><span>${v ? esc(String(val(k, v)).slice(0, 60)) : `<span class='muted'>${none}</span>`}${v && who ? ` <span class="muted small">(${esc(who)})</span>` : ""}</span></li>`; }).join("");
   const curses = [];
   for (const [id, o] of list) for (const [u, n] of Object.entries(o.curses && typeof o.curses === "object" ? o.curses : {})) curses.push([u, n, id]);
   const byUid = {}; for (const c of curses) byUid[c[0]] = c; // later occasions win per person
@@ -3668,10 +3723,14 @@ function readOccForm() {
   const put = (k, v) => { if (v !== "" && v !== null && v !== undefined) o[k] = v; };
   put("banner", $("occ-banner").value.trim());
   put("version", $("occ-version").value.trim());
-  put("palette", $("occ-palette").value);
-  put("decor", $("occ-decor").value.trim());
-  put("bgImage", $("occ-bg").value);
-  put("effect", $("occ-effect").value);
+  // The look: a tema + what changes only here. The old fields are mirrored until the cleanup step (safe revert).
+  o.tema = $("occ-palette").value;
+  o.own = {};
+  const own = (k, v) => { if (v) { o.own[k] = v; o[k] = v; } };
+  own("decor", $("occ-decor").value.trim());
+  own("effect", $("occ-effect").value);
+  own("bgImage", $("occ-bg").value);
+  put("palette", o.tema);
   const curses = {};
   document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { const v = i.value.trim(); if (v) curses[i.dataset.uid] = v.slice(0, CURSE_MAX); });
   if (Object.keys(curses).length) o.curses = curses;
@@ -3730,8 +3789,9 @@ function openOccasionEditor(id) {
   if (!occRules.length) occRules = [newRule()];
   $("occ-banner").value = o.banner || "";
   $("occ-version").value = o.version || "";
-  $("occ-decor").value = o.decor || "";
-  $("occ-effect").value = o.effect || "";
+  const look = occLookOf(o);
+  $("occ-decor").value = look.own.decor || "";
+  $("occ-effect").value = look.own.effect || "";
   $("occ-priority").value = o.priority ?? "";
   $("occ-enabled").checked = o.enabled !== false;
   $("occ-admin-only").checked = o.adminOnly === true;
@@ -3743,13 +3803,25 @@ function openOccasionEditor(id) {
   const sel = $("occ-palette");
   sel.innerHTML = `<option value="">(a de cada um)</option>`;
   Object.entries(allPalettes()).forEach(([pid, p]) => sel.add(new Option((p && p.name) || pid, pid)));
-  sel.value = o.palette || "";
+  sel.value = getPalette(look.tema) ? look.tema : "";
   show("occ-delete", !!id);
   renderDecorPicker("occ-decor-picker", "occ-decor", "occ-palette");
-  setOccBg(o.bgImage || "");
+  setOccBg(look.own.bgImage || "");
+  $("occ-own").open = Object.keys(look.own).length > 0;
+  renderTemaInfo();
   renderRules();
   $("dlg-occ").showModal();
 }
+// Under the Tema picker: what the tema brings, and how many things this occasion changes on top.
+function renderTemaInfo() {
+  const p = getPalette($("occ-palette").value);
+  const n = [$("occ-effect").value, $("occ-decor").value.trim(), $("occ-bg").value].filter(Boolean).length;
+  $("occ-own-n").textContent = n ? `(${n} ${n === 1 ? "coisa" : "coisas"})` : "";
+  if (!p) { $("occ-tema-info").textContent = "Cada pessoa vê o tema que escolheu."; return; }
+  const bits = ["cores", p.decor ? "desenhos" : "", p.effect ? `efeito ${EFFECTS[p.effect] || p.effect}` : "", p.bgImage ? "imagem de fundo" : ""].filter(Boolean);
+  $("occ-tema-info").textContent = `O tema traz: ${bits.join(", ")}.`;
+}
+["occ-palette", "occ-effect", "occ-decor"].forEach((k) => { $(k).addEventListener("change", renderTemaInfo); $(k).addEventListener("input", renderTemaInfo); });
 $("adm-occ-new").addEventListener("click", () => openOccasionEditor(null));
 $("occ-cancel").addEventListener("click", () => $("dlg-occ").close());
 $("occ-try").addEventListener("click", () => {
@@ -3761,22 +3833,25 @@ $("occ-try").addEventListener("click", () => {
   toast("Prévia só no seu aparelho. Toque em “sair” pra voltar.", 4000);
 });
 // Background image: uploaded right away (shrunk), saved into the occasion with "Salvar".
-$("occ-bg-file").addEventListener("change", async (e) => {
+// Same for a tema (Temas → ⋯ → Imagem de fundo).
+async function uploadBg(e, base, done) {
   const file = e.target.files && e.target.files[0];
   e.target.value = "";
   if (!file) return;
   try {
     toast("Enviando a imagem…");
     const url = await shrinkImage(file);
-    const base = String(occEditing || $("occ-id").value.trim() || "fundo").toLowerCase().replace(/[^a-z0-9-]/g, "") || "fundo";
-    const id = `${base}-${Date.now().toString(36)}`;
+    const id = `${String(base || "fundo").toLowerCase().replace(/[^a-z0-9-]/g, "") || "fundo"}-${Date.now().toString(36)}`;
     await setDoc(doc(db, "backgrounds", id), { img: url, updatedAt: serverTimestamp() });
     bgCache[id] = Promise.resolve(url);
-    setOccBg(id);
+    done(id);
     toast("Imagem pronta. Toque em Salvar.");
   } catch (err) { toast(friendlyError(err)); }
-});
+}
+$("occ-bg-file").addEventListener("change", (e) => uploadBg(e, occEditing || $("occ-id").value.trim(), setOccBg));
 $("occ-bg-clear").addEventListener("click", () => setOccBg(""));
+$("pal-bg-file").addEventListener("change", (e) => uploadBg(e, st && (st.id || slugify(st.pal.name)), (id) => commit(() => { st.bg = id; setBgField("pal", id); })));
+$("pal-bg-clear").addEventListener("click", () => commit(() => { st.bg = ""; setBgField("pal", ""); }));
 $("occ-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const id = occEditing || $("occ-id").value.trim().toLowerCase();
@@ -4018,7 +4093,7 @@ function renderAdminDrawings() {
       tile.querySelector(".drawing-del").onclick = async () => {
         const users = [
           ...Object.entries(allPalettes()).filter(([, p]) => String((p || {}).decor || "").includes(name)).map(([id]) => "tema " + id),
-          ...Object.entries(allOccasions()).filter(([, o]) => String((o || {}).decor || "").includes(name)).map(([id]) => "ocasião " + id),
+          ...Object.entries(allOccasions()).filter(([, o]) => String(occLookOf(o).own.decor || "").includes(name)).map(([id]) => "ocasião " + id),
         ];
         if (!(await confirmBox(`Apagar ${name}?`, users.length ? `Usado em: ${users.join(", ")}. Lá ele simplesmente some.` : "Não é usado em lugar nenhum.", "Apagar"))) return;
         try { await deleteDoc(doc(db, "decor", name)); toast("Desenho apagado."); } catch (err) { toast(friendlyError(err)); }
