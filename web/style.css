@@ -1198,17 +1198,17 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 #banner:not([hidden]) + .curse-banner { margin-top: 6px; padding-top: 6px; border-top: 1px dashed color-mix(in srgb, var(--caramel) 45%, transparent); }
 .curse-banner[hidden] { display: none; }
 /* Cursed name: oozing ectoplasm — sickly green glow, wisps rising off it, a queasy wobble */
-.cursed { position: relative; display: inline-block; isolation: isolate; }
-.cursed.l-ecto { --ecto: color-mix(in srgb, #8dff6a 72%, var(--caramel)); }
-.cursed.l-ecto .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 55%, #c9ffb0) !important; -webkit-text-fill-color: currentColor;
+.nlook { position: relative; display: inline-block; isolation: isolate; }
+.nlook.l-ecto { --ecto: color-mix(in srgb, #8dff6a 72%, var(--caramel)); }
+.nlook.l-ecto .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 55%, #c9ffb0) !important; -webkit-text-fill-color: currentColor;
   text-shadow: 0 0 4px var(--ecto), 0 0 12px color-mix(in srgb, var(--ecto) 70%, transparent), 0 2px 18px color-mix(in srgb, var(--ecto) 45%, transparent);
   animation: ecto-wobble 5.5s ease-in-out infinite; display: inline-block; }
-.cursed.l-ecto::before, .cursed.l-ecto::after {
+.nlook.l-ecto::before, .nlook.l-ecto::after {
   content: ""; position: absolute; left: 8%; right: 25%; bottom: 25%; height: 1.5em; z-index: -1; pointer-events: none; border-radius: 45% 55% 40% 60%;
   background: radial-gradient(ellipse at 50% 70%, var(--ecto), color-mix(in srgb, var(--ecto) 40%, transparent) 45%, transparent 72%);
   filter: blur(3.5px); opacity: 0; animation: ecto-rise 3.2s ease-out infinite;
 }
-.cursed.l-ecto::after { left: 35%; right: 5%; animation-delay: 1.6s; animation-duration: 3.8s; }
+.nlook.l-ecto::after { left: 35%; right: 5%; animation-delay: 1.6s; animation-duration: 3.8s; }
 @keyframes ecto-rise {
   0% { transform: translateY(20%) scale(.6, .5); opacity: 0; }
   25% { opacity: .95; }
@@ -1220,13 +1220,13 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
   60% { text-shadow: 0 0 3px var(--ecto), 0 0 9px color-mix(in srgb, var(--ecto) 55%, transparent), 0 2px 14px color-mix(in srgb, var(--ecto) 35%, transparent); }
 }
 @keyframes ecto-wobble { 0%, 100% { transform: skewX(0) translateY(0); } 30% { transform: skewX(-2deg) translateY(.5px); } 65% { transform: skewX(1.5deg) translateY(-.5px); } }
-@media (prefers-reduced-motion: reduce) { .cursed.l-ecto .uname, .cursed.l-ecto::before, .cursed.l-ecto::after { animation: none; } .cursed.l-ecto::before { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .nlook.l-ecto .uname, .nlook.l-ecto::before, .nlook.l-ecto::after { animation: none; } .nlook.l-ecto::before { opacity: .45; } }
 .curses { display: grid; gap: 6px; margin-bottom: 10px; }
 .curse-row { display: grid; grid-template-columns: minmax(70px, 34%) 1fr 40px; gap: 6px; align-items: center; }
 .curse-who { font-size: 0.85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .curse-row input { margin: 0; min-width: 0; }
 /* Cursed badge: the emoji becomes a green silhouette that oozes along with the name */
-.cursed.l-ecto .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
+.nlook.l-ecto .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
   text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 6px var(--ecto), 0 0 14px color-mix(in srgb, var(--ecto) 70%, transparent);
   animation: ecto-wobble 5.5s ease-in-out infinite; }
 @keyframes ecto-pulse-badge {
@@ -1234,7 +1234,7 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
   45% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 9px var(--ecto), 0 0 22px color-mix(in srgb, var(--ecto) 85%, transparent); }
   60% { text-shadow: 0 0 0 color-mix(in srgb, #c9ffb0 70%, var(--ecto)), 0 0 4px var(--ecto), 0 0 10px color-mix(in srgb, var(--ecto) 55%, transparent); }
 }
-@media (prefers-reduced-motion: reduce) { .cursed.l-ecto .ubadge { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .nlook.l-ecto .ubadge { animation: none; } }
 .ns-row { grid-template-columns: 76px 1fr; }
 .curse-dice[hidden] { display: inline-flex; visibility: hidden; }
 /* Hearts effect: hearts drifting up, swaying */
@@ -1243,53 +1243,53 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 
 /* Swapped-name looks (besides ectoplasm): a glow in the look's color, the emoji as a silhouette,
    and little particles coming off the name. --lk: glow color, --lk2: light tint for the letters. */
-.cursed.l-frost { --lk: #8fd3ff; --lk2: #eaf8ff; --pc: "❄"; }
-.cursed.l-gold { --lk: #ffbf3c; --lk2: #fff0b8; --pc: "✦"; }
-.cursed.l-fizz { --lk: #7fdcff; --lk2: #e6fbff; --pc: ""; }
-.cursed.l-glitter { --lk: #ff9ff0; --lk2: #fff3fd; --pc: "✧"; }
-.cursed.l-steam { --lk: #e9e2d6; --lk2: #ffffff; --pc: ""; }
-.cursed.l-hearts { --lk: #ff4f86; --lk2: #ffd6e3; --pc: "♥"; }
-.cursed.lk .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 40%, var(--lk2)) !important; -webkit-text-fill-color: currentColor; display: inline-block;
+.nlook.l-frost { --lk: #8fd3ff; --lk2: #eaf8ff; --pc: "❄"; }
+.nlook.l-gold { --lk: #ffbf3c; --lk2: #fff0b8; --pc: "✦"; }
+.nlook.l-fizz { --lk: #7fdcff; --lk2: #e6fbff; --pc: ""; }
+.nlook.l-glitter { --lk: #ff9ff0; --lk2: #fff3fd; --pc: "✧"; }
+.nlook.l-steam { --lk: #e9e2d6; --lk2: #ffffff; --pc: ""; }
+.nlook.l-hearts { --lk: #ff4f86; --lk2: #ffd6e3; --pc: "♥"; }
+.nlook.lk .uname { color: color-mix(in srgb, var(--uc, var(--fg)) 40%, var(--lk2)) !important; -webkit-text-fill-color: currentColor; display: inline-block;
   text-shadow: 0 0 4px var(--lk), 0 0 12px color-mix(in srgb, var(--lk) 60%, transparent); }
-.cursed.lk .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
+.nlook.lk .ubadge { display: inline-block; color: transparent !important; -webkit-text-fill-color: transparent;
   text-shadow: 0 0 0 var(--lk2), 0 0 6px var(--lk), 0 0 12px color-mix(in srgb, var(--lk) 60%, transparent); }
 @keyframes lk-pulse {
   0%, 100% { text-shadow: 0 0 4px var(--lk), 0 0 12px color-mix(in srgb, var(--lk) 60%, transparent); }
   50% { text-shadow: 0 0 7px var(--lk), 0 0 20px color-mix(in srgb, var(--lk) 85%, transparent); }
 }
-.cursed.lk::before, .cursed.lk::after { content: var(--pc); position: absolute; z-index: 1; pointer-events: none; font-style: normal; line-height: 1;
+.nlook.lk::before, .nlook.lk::after { content: var(--pc); position: absolute; z-index: 1; pointer-events: none; font-style: normal; line-height: 1;
   font-size: .9em; color: var(--lk2); text-shadow: 0 0 4px var(--lk), 0 0 8px var(--lk); opacity: 0; left: 22%; }
-.cursed.lk::after { left: 72%; animation-delay: 1.4s !important; }
+.nlook.lk::after { left: 72%; animation-delay: 1.4s !important; }
 /* Gelo: flakes settling onto the name */
-.cursed.l-frost::before, .cursed.l-frost::after { top: 0; animation: lk-fall 3.4s ease-in infinite; }
+.nlook.l-frost::before, .nlook.l-frost::after { top: 0; animation: lk-fall 3.4s ease-in infinite; }
 @keyframes lk-fall { 0% { transform: translateY(-1.3em) rotate(0); opacity: 0; } 25% { opacity: .95; } 80% { opacity: .9; } 100% { transform: translateY(.15em) rotate(120deg); opacity: 0; } }
 /* Dourado / Purpurina: little stars popping over the letters */
-.cursed.l-gold::before, .cursed.l-gold::after, .cursed.l-glitter::before, .cursed.l-glitter::after { top: -.35em; animation: lk-pop 2.2s ease-in-out infinite; }
-.cursed.l-glitter::before { left: 10%; } .cursed.l-glitter::after { left: 58%; top: .55em; }
+.nlook.l-gold::before, .nlook.l-gold::after, .nlook.l-glitter::before, .nlook.l-glitter::after { top: -.35em; animation: lk-pop 2.2s ease-in-out infinite; }
+.nlook.l-glitter::before { left: 10%; } .nlook.l-glitter::after { left: 58%; top: .55em; }
 @keyframes lk-pop { 0%, 100% { transform: scale(0) rotate(0); opacity: 0; } 45% { transform: scale(1.15) rotate(40deg); opacity: 1; } 70% { transform: scale(.6) rotate(80deg); opacity: .6; } }
 /* Corações: hearts floating off the name */
-.cursed.l-hearts::before, .cursed.l-hearts::after { bottom: 30%; animation: lk-rise 3s ease-out infinite; }
+.nlook.l-hearts::before, .nlook.l-hearts::after { bottom: 30%; animation: lk-rise 3s ease-out infinite; }
 @keyframes lk-rise { 0% { transform: translate(0, .2em) scale(.5); opacity: 0; } 25% { opacity: .95; } 100% { transform: translate(.35em, -1.5em) scale(1); opacity: 0; } }
 /* Efervescente: tiny bubbles fizzing up */
-.cursed.l-fizz::before, .cursed.l-fizz::after { width: .4em; height: .4em; border-radius: 50%; border: 1.5px solid var(--lk2); box-shadow: 0 0 4px var(--lk);
+.nlook.l-fizz::before, .nlook.l-fizz::after { width: .4em; height: .4em; border-radius: 50%; border: 1.5px solid var(--lk2); box-shadow: 0 0 4px var(--lk);
   bottom: 25%; animation: lk-rise 2s cubic-bezier(.55, 0, .9, .55) infinite; }
-.cursed.l-fizz::after { animation-duration: 2.6s; }
+.nlook.l-fizz::after { animation-duration: 2.6s; }
 /* Vapor: soft wisps curling up */
-.cursed.l-steam::before, .cursed.l-steam::after { width: 1.4em; height: 1em; bottom: 35%; border-radius: 50%; filter: blur(3px);
+.nlook.l-steam::before, .nlook.l-steam::after { width: 1.4em; height: 1em; bottom: 35%; border-radius: 50%; filter: blur(3px);
   background: radial-gradient(ellipse, var(--lk2), color-mix(in srgb, var(--lk2) 50%, transparent) 45%, transparent 72%); animation: lk-wisp 3.6s ease-out infinite; }
 @keyframes lk-wisp { 0% { transform: translateY(.2em) scale(.5, .4); opacity: 0; } 30% { opacity: .9; } 100% { transform: translate(-.3em, -1.6em) scale(1.3, 1.1) skewX(-14deg); opacity: 0; } }
-.cursed.l-ember { --lk: #ff6a1a; --lk2: #ffdcae; --pc: ""; }
+.nlook.l-ember { --lk: #ff6a1a; --lk2: #ffdcae; --pc: ""; }
 /* Brasas: embers flickering up off the letters */
-.cursed.l-ember::before, .cursed.l-ember::after { width: .22em; height: .22em; border-radius: 50%; background: var(--lk2);
+.nlook.l-ember::before, .nlook.l-ember::after { width: .22em; height: .22em; border-radius: 50%; background: var(--lk2);
   box-shadow: 0 0 4px 1px var(--lk), 0 0 9px 2px color-mix(in srgb, var(--lk) 50%, transparent); bottom: 35%; animation: lk-ember 2.3s ease-out infinite; }
-.cursed.l-ember::after { animation-duration: 2.9s; }
+.nlook.l-ember::after { animation-duration: 2.9s; }
 @keyframes lk-ember { 0% { transform: translate(0, .2em); opacity: 0; } 15% { opacity: 1; } 35% { opacity: .5; } 50% { opacity: 1; } 100% { transform: translate(-.4em, -1.8em); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .cursed.lk .uname, .cursed.lk::before, .cursed.lk::after, .heart { animation: none; } .heart { display: none; } }
+@media (prefers-reduced-motion: reduce) { .nlook.lk .uname, .nlook.lk::before, .nlook.lk::after, .heart { animation: none; } .heart { display: none; } }
 /* A curse has no respect for limits: cursed names skip the clip (no "…", names are capped instead),
    so the glow spills past the chip's border and the wisps fly out over the header. */
-.cursed .uname-wrap, .cursed .uname-wrap .uname { overflow: visible; text-overflow: clip; }
-.me-chip:has(.cursed), .me-chip:has(.cursed) .uname-wrap { overflow: visible; }
-.me-chip:has(.cursed) { position: relative; z-index: 3; }
+.nlook .uname-wrap, .nlook .uname-wrap .uname { overflow: visible; text-overflow: clip; }
+.me-chip:has(.nlook), .me-chip:has(.nlook) .uname-wrap { overflow: visible; }
+.me-chip:has(.nlook) { position: relative; z-index: 3; }
 /* The toast is a popover so it shows above open popups (undo the browser's popover defaults) */
 #toast[popover] { inset: auto; left: 50%; bottom: calc(44px + env(safe-area-inset-bottom)); margin: 0; border: 0; overflow: visible; width: max-content; }
 /* Admin: everything running right now */
@@ -1300,19 +1300,19 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .adm-round-text { display: grid; min-width: 0; font-size: 0.9rem; }
 .adm-round-text .muted { overflow-wrap: anywhere; }
 /* Off-screen cursed names hold still (they start moving as soon as they scroll into view). */
-.cursed:not(.live) .uname, .cursed:not(.live) .ubadge, .cursed:not(.live)::before, .cursed:not(.live)::after { animation-play-state: paused !important; }
+.nlook:not(.live) .uname, .nlook:not(.live) .ubadge, .nlook:not(.live)::before, .nlook:not(.live)::after { animation-play-state: paused !important; }
 /* The glow pulse: a glow-only copy of the name on top of the real one, fading in and out. */
-.cursed .cglow { position: absolute; inset: 0; z-index: -1; pointer-events: none; white-space: nowrap; opacity: 0; will-change: opacity;
+.nlook .cglow { position: absolute; inset: 0; z-index: -1; pointer-events: none; white-space: nowrap; opacity: 0; will-change: opacity;
   animation: cglow-pulse 2.8s ease-in-out infinite; }
-.cursed .cglow .uname, .cursed .cglow .ubadge { color: transparent !important; -webkit-text-fill-color: transparent; }
-.cursed.l-ecto .cglow .uname { text-shadow: 0 0 7px var(--ecto), 0 0 20px color-mix(in srgb, var(--ecto) 85%, transparent), 0 4px 28px color-mix(in srgb, var(--ecto) 60%, transparent); }
-.cursed.l-ecto .cglow .ubadge { text-shadow: 0 0 9px var(--ecto), 0 0 22px color-mix(in srgb, var(--ecto) 85%, transparent); }
-.cursed.lk .cglow { animation-duration: 2.6s; }
-.cursed.lk .cglow .uname { text-shadow: 0 0 7px var(--lk), 0 0 20px color-mix(in srgb, var(--lk) 85%, transparent); animation: none; }
-.cursed.lk .cglow .ubadge { text-shadow: 0 0 9px var(--lk), 0 0 18px color-mix(in srgb, var(--lk) 80%, transparent); }
+.nlook .cglow .uname, .nlook .cglow .ubadge { color: transparent !important; -webkit-text-fill-color: transparent; }
+.nlook.l-ecto .cglow .uname { text-shadow: 0 0 7px var(--ecto), 0 0 20px color-mix(in srgb, var(--ecto) 85%, transparent), 0 4px 28px color-mix(in srgb, var(--ecto) 60%, transparent); }
+.nlook.l-ecto .cglow .ubadge { text-shadow: 0 0 9px var(--ecto), 0 0 22px color-mix(in srgb, var(--ecto) 85%, transparent); }
+.nlook.lk .cglow { animation-duration: 2.6s; }
+.nlook.lk .cglow .uname { text-shadow: 0 0 7px var(--lk), 0 0 20px color-mix(in srgb, var(--lk) 85%, transparent); animation: none; }
+.nlook.lk .cglow .ubadge { text-shadow: 0 0 9px var(--lk), 0 0 18px color-mix(in srgb, var(--lk) 80%, transparent); }
 @keyframes cglow-pulse { 0%, 100% { opacity: 0; } 45% { opacity: 1; } 60% { opacity: .15; } }
-.cursed:not(.live) .cglow { animation-play-state: paused !important; }
-@media (prefers-reduced-motion: reduce) { .cursed .cglow { animation: none; opacity: .5; } }
+.nlook:not(.live) .cglow { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) { .nlook .cglow { animation: none; opacity: .5; } }
 
 /* ---------- Admin → Agenda ---------- */
 .ag-who { display: flex; gap: 6px; margin: 2px 0 8px; }

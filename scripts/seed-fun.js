@@ -129,6 +129,13 @@ const ref = getFirestore().doc("config/fun");
     console.log(`grail reset: ${grails.size} collections, ${pend.size} pending gifts`);
     update.configVersion = 13;
   }
+  // configVersion 14: an occasion's name swap is now called "maldicao" (old "nameSwap" stays until the cleanup step).
+  if ((Number(cur.configVersion) || 0) < 14) {
+    for (const [id, o] of Object.entries(cur.occasions || {})) {
+      if (o && typeof o === "object" && o.nameSwap && !o.maldicao) update[`occasions.${id}.maldicao`] = o.nameSwap;
+    }
+    update.configVersion = 14;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

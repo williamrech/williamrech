@@ -83,7 +83,10 @@ function matchesPattern(pat, t) {
   return false;
 }
 // Name looks for a swapped name. Each effect brings its own; an occasion can pin any of them.
-const NAME_LOOKS = { ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações", ember: "🔥 Brasas" };
+// One list of name looks, for everyone's own name style AND for maldições (an occasion's swapped names).
+// The first five are plain text styles; the rest are animated (sparks, frost, hearts…) and wrap the name.
+const NAME_LOOKS = { none: "Normal", glow: "Brilho", rainbow: "Arco-íris", wavy: "Ondinha", shadow: "Sombra", ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações", ember: "🔥 Brasas" };
+const ANIM_LOOKS = new Set(["ecto", "frost", "gold", "fizz", "glitter", "steam", "hearts", "ember"]);
 const EFFECT_LOOK = { grimdawn: "ember", haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
 // Swapped names are capped so they always fit the top chip without "…" (they skip the clipping).
 const CURSE_MAX = 22;
@@ -174,7 +177,7 @@ function renderPreviewBar(on) {
     bar.id = "preview-bar";
     document.body.appendChild(bar);
   }
-  const label = previewPal ? `paleta “${previewPal.name || previewPal.id}”` : `ocasião “${(previewOcc && previewOcc.id) || PREVIEW_OCCASION}”`;
+  const label = previewPal ? `tema “${previewPal.name || previewPal.id}”` : `ocasião “${(previewOcc && previewOcc.id) || PREVIEW_OCCASION}”`;
   bar.innerHTML = `<span>Prévia: ${esc(label)}</span>`;
   const b = document.createElement("button");
   b.textContent = "sair";
@@ -375,10 +378,17 @@ function eyeSvg(id, slit) {
 }
 const HEART_SVG = `<svg viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21.5 C5 16 0 12 0 6.6 C0 3 2.8 0 6.4 0 C8.8 0 10.8 1.3 12 3.3 C13.2 1.3 15.2 0 17.6 0 C21.2 0 24 3 24 6.6 C24 12 19 16 12 21.5Z" fill="currentColor"/></svg>`;
 const SPARKLE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor"/></svg>`;
+// Pacotes: the big ones that restyle the app or react to touch (each will become its own pacote file; see the cleanup plan).
+const PACKAGES = ["grimdawn", "haunted"];
 function fillEffectSelect(sel, forOccasion = false) {
   const keep = sel.value;
   sel.innerHTML = `<option value="">Nenhum</option>`;
-  for (const [k, label] of Object.entries(EFFECTS)) if (forOccasion || !OCCASION_ONLY_FX.includes(k)) sel.add(new Option(label, k));
+  const groups = [["Efeitos", (k) => !PACKAGES.includes(k)], ["Pacotes", (k) => PACKAGES.includes(k)]];
+  for (const [title, test] of groups) {
+    const g = document.createElement("optgroup"); g.label = title;
+    for (const [k, label] of Object.entries(EFFECTS)) if (test(k) && (forOccasion || !OCCASION_ONLY_FX.includes(k))) g.appendChild(new Option(label, k));
+    if (g.children.length) sel.appendChild(g);
+  }
   sel.value = keep in EFFECTS ? keep : "";
 }
 // A plain cup on a saucer in the theme's drawing colors (coffee on Espresso, matcha on Matcha…).
@@ -1467,7 +1477,6 @@ function firstGrapheme(str) {
 // ---------- Styled names (color, font, effect, badge) — everyone sees them ----------
 const NAME_COLORS = ["#e2c39b", "#c98b4f", "#f0a594", "#ff8fb1", "#b9a4ff", "#7fc8f8", "#8fd694", "#f5d76e", "#ffffff"];
 const NAME_FONTS = { classic: "Clássica", bold: "Negrito", round: "Fofa", script: "Cursiva", mono: "Máquina" };
-const NAME_EFFECTS = { none: "Normal", glow: "Brilho", rainbow: "Arco-íris", wavy: "Ondinha", shadow: "Sombra" };
 const NAME_BADGES = ["", "👑", "☕", "🍦", "✨", "🔥", "💅", "🐸", "🦄", "🌵", "🍕", "🐔"];
 
 function cleanStyle(st) {
@@ -1475,11 +1484,18 @@ function cleanStyle(st) {
   return {
     color: NAME_COLORS.includes(st.color) ? st.color : NAME_COLORS[0],
     font: st.font in NAME_FONTS ? st.font : "classic",
-    effect: st.effect in NAME_EFFECTS ? st.effect : "none",
+    effect: st.effect in NAME_LOOKS ? st.effect : "none",
     badge: typeof st.badge === "string" ? st.badge.slice(0, 4) : "",
   };
 }
 
+// A name in a look: plain looks are a class on the text; animated ones wrap it (with a cheap glow copy that only fades).
+function lookedName(name, style, look) {
+  const st = cleanStyle(style), k = look || st.effect;
+  if (!ANIM_LOOKS.has(k)) return styledName(name, { ...st, effect: k in NAME_LOOKS ? k : "none" });
+  const inner = styledName(name, ANIM_LOOKS.has(st.effect) ? { ...st, effect: "none" } : st);
+  return `<span class="nlook l-${k}${k === "ecto" ? "" : " lk"}">${inner}<span class="cglow" aria-hidden="true">${inner}</span></span>`;
+}
 function styledName(name, style) {
   const st = cleanStyle(style);
   // Badge goes on the left, same line as the name.
@@ -1487,9 +1503,10 @@ function styledName(name, style) {
     `<span class="uname f-${st.font} x-${st.effect}" style="--uc:${st.color}">${esc(name)}</span></span>`;
 }
 
-// Curse: today's occasion can replace someone's name. Each occasion sets its own icon, wording, look and 🎲 ideas.
+// Maldição: today's occasion can replace someone's name. Each occasion sets its own icon, wording, look and 🎲 ideas.
 function curseCfgOf(o) {
-  const c = (o && o.nameSwap && typeof o.nameSwap === "object") ? o.nameSwap : {};
+  const m = o && (o.maldicao || o.nameSwap); // "maldicao" (old name: nameSwap, kept until cleanup)
+  const c = (m && typeof m === "object") ? m : {};
   const str = (v, n) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   const pinned = c.look in NAME_LOOKS ? c.look : "";
   return { icon: str(c.icon, 8), title: str(c.title, 30), banner: str(c.banner, 120), pinned, look: pinned || autoLook(o && o.effect),
@@ -1504,12 +1521,8 @@ const displayName = (uid, fallback) => curseOf(uid) || (family[uid] && family[ui
 function nameHtml(uid, fallback) {
   const p = family[uid];
   const c = curseOf(uid);
-  if (c) {
-    // The pulsing glow is a copy that only fades in/out (cheap on phones), instead of re-drawing the glow every frame.
-    const k = curseCfg(uid).look, inner = styledName(c, p && p.style);
-    return `<span class="cursed l-${k}${k === "ecto" ? "" : " lk"}">${inner}<span class="cglow" aria-hidden="true">${inner}</span></span>`;
-  }
-  return styledName((p && p.name) || fallback || "?", p && p.style);
+  if (c) return lookedName(c, p && p.style, curseCfg(uid).look); // a maldição: the occasion's look over the person's own style
+  return lookedName((p && p.name) || fallback || "?", p && p.style);
 }
 
 function renderMeChip() {
@@ -1541,7 +1554,7 @@ function renderCurseBanner() {
 let draftStyle = null;
 function renderStyleEditor() {
   const p = me || {};
-  $("style-preview").innerHTML = `${styledName(p.name || "Você", draftStyle)}<span class="edit-icon" aria-hidden="true">✏️</span>`;
+  $("style-preview").innerHTML = `${lookedName(p.name || "Você", draftStyle)}<span class="edit-icon" aria-hidden="true">✏️</span>`;
   const curse = auth.currentUser && curseOf(auth.currentUser.uid);
   show("curse-note", !!curse);
   if (curse) { const cfg = curseCfg(auth.currentUser.uid); $("curse-note").innerHTML = `${cfg.icon ? esc(cfg.icon) + " " : ""}Hoje você aparece como <b>${esc(curse)}</b>.`; }
@@ -1563,7 +1576,7 @@ function renderStyleEditor() {
     b.setAttribute("aria-label", c);
   });
   mk("style-fonts", Object.entries(NAME_FONTS), "font", (b, v, l) => { b.innerHTML = `<span class="f-${v}">${l}</span>`; });
-  mk("style-effects", Object.entries(NAME_EFFECTS), "effect", (b, v, l) => { b.innerHTML = `<span class="uname x-${v}" style="--uc:${draftStyle.color}">${l}</span>`; });
+  mk("style-effects", Object.entries(NAME_LOOKS), "effect", (b, v, l) => { b.innerHTML = lookedName(l.replace(/^\S+ (?=\S)/u, ""), { color: draftStyle.color, font: "classic" }, v); });
   mk("style-badges", NAME_BADGES.map((e) => [e, e || "nenhum"]), "badge", (b, v, l) => { b.textContent = l; });
 }
 
@@ -3225,7 +3238,7 @@ function commit(change) { st.hist.push(snap()); if (st.hist.length > 80) st.hist
 
 function studioId() {
   if (!st.isNew) return st.id;
-  let base = slugify(st.pal.name) || "paleta";
+  let base = slugify(st.pal.name) || "tema";
   if (base.length < 2) base += "-1";
   let id = base, n = 2;
   while (allPalettes()[id]) id = `${base}-${n++}`;
@@ -3278,7 +3291,7 @@ function readPair(role, p) {
 function renderStudio() {
   const p = st.pal;
   const dirty = st.isNew || st.hist.length > 0;
-  $("pal-idline").textContent = st.isNew ? (p.name ? `Nova · id: ${studioId()}` : "Nova paleta · dá um nome ✍️") : `id: ${st.id}`;
+  $("pal-idline").textContent = st.isNew ? (p.name ? `Nova · id: ${studioId()}` : "Novo tema · dá um nome ✍️") : `id: ${st.id}`;
   $("pal-undo").disabled = !st.hist.length;
   $("pal-redo").disabled = !st.fut.length;
   $("pal-save").classList.toggle("dirty", dirty);
@@ -3525,7 +3538,7 @@ $("pal-random").addEventListener("click", () => commit(() => {
 }));
 
 $("pal-cancel").addEventListener("click", async () => {
-  if (st.hist.length && !(await confirmBox("Sair sem salvar?", "As mudanças dessa paleta vão se perder.", "Sair"))) return;
+  if (st.hist.length && !(await confirmBox("Sair sem salvar?", "As mudanças desse tema vão se perder.", "Sair"))) return;
   $("dlg-pal").close();
 });
 $("dlg-pal").addEventListener("cancel", (e) => {
@@ -3544,21 +3557,21 @@ function studioPalette() {
 }
 $("pal-save").addEventListener("click", async () => {
   const p = studioPalette();
-  if (!p.name) { toast("Dá um nome pra paleta. ✍️"); $("pal-name").focus(); return; }
+  if (!p.name) { toast("Dá um nome pro tema. ✍️"); $("pal-name").focus(); return; }
   const bad = ROLES.find((r) => !HEX.test(p[r.key]));
   if (bad) return toast(`Cor inválida em “${bad.label}”.`);
   const id = studioId();
   const ok = await withBusy($("pal-save"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), p); return true; }, "…");
-  if (ok) { $("dlg-pal").close(); toast(`Paleta “${p.name}” salva. 🎨`); }
+  if (ok) { $("dlg-pal").close(); toast(`Tema “${p.name}” salvo. 🎨`); }
 });
 $("pal-delete").addEventListener("click", async () => {
   palMenu(false);
   const id = st.id;
   const used = usedByOccasions(id);
-  const msg = used.length ? `Ela é usada em: ${used.join(", ")}. Essas ocasiões vão ficar sem paleta.` : "Quem tinha escolhido ela volta pro Espresso.";
-  if (!(await confirmBox("Apagar paleta?", msg, "Apagar"))) return;
+  const msg = used.length ? `Ele é usado em: ${used.join(", ")}. Essas ocasiões vão ficar sem tema.` : "Quem tinha escolhido ela volta pro Espresso.";
+  if (!(await confirmBox("Apagar tema?", msg, "Apagar"))) return;
   const ok = await withBusy($("pal-delete"), async () => { await updateDoc(funRef(), new FieldPath("palettes", id), deleteField()); return true; }, "…");
-  if (ok) { $("dlg-pal").close(); toast("Paleta apagada."); }
+  if (ok) { $("dlg-pal").close(); toast("Tema apagado."); }
 });
 
 $("adm-pal-new").addEventListener("click", () => openPaletteEditor(null));
@@ -3588,7 +3601,7 @@ function renderAdminOccasions() {
 
 // ---------- Admin → Agenda: which occasion each day gets, and why (same logic the phones use) ----------
 const agenda = { y: 0, m: 0, sel: null, who: "fam" }; // who: "fam" = the family's view, "adm" = an admin phone (só-admin tests too)
-const AG_FIELDS = [["palette", "Cores"], ["effect", "Efeito"], ["decor", "Desenhos"], ["bgImage", "Imagem de fundo"], ["banner", "Faixa"], ["version", "Versão"]];
+const AG_FIELDS = [["palette", "Tema"], ["effect", "Efeito"], ["decor", "Desenhos"], ["bgImage", "Imagem de fundo"], ["banner", "Faixa"], ["version", "Versão"]];
 const agDay = (y, m, d) => spToday(new Date(Date.UTC(y, m - 1, d, 15))); // 15h UTC = midday in São Paulo
 function occColor(id, o) {
   const p = getPalette(o.palette);
@@ -3665,7 +3678,7 @@ function readOccForm() {
   const ns = { icon: $("occ-ns-icon").value.trim(), title: $("occ-ns-title").value.trim(), banner: $("occ-ns-banner").value.trim(),
     look: $("occ-ns-look").value in NAME_LOOKS ? $("occ-ns-look").value : "", ideas: $("occ-ns-ideas").value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 60) };
   Object.keys(ns).forEach((k) => { if (!ns[k] || (Array.isArray(ns[k]) && !ns[k].length)) delete ns[k]; });
-  if (Object.keys(ns).length) o.nameSwap = ns;
+  if (Object.keys(ns).length) o.maldicao = ns;
   const pr = $("occ-priority").value.trim();
   if (pr !== "") o.priority = Number(pr) || 0;
   if (!$("occ-enabled").checked) o.enabled = false;
@@ -3678,11 +3691,11 @@ function renderWhenInfo() {
   const next = nextDates(when, 3);
   $("occ-when-info").textContent = next.length ? `${next[0].i === 0 ? "✓ Hoje é dia! · " : ""}Próximas: ${next.map(fmtDate).join(", ")}` : "⚠ Não cai em nenhum dia dos próximos 2 anos.";
 }
-// Troca de nome: a name per person (empty = none), 🎲 picks from this occasion's own ideas.
+// Maldição: a name per person (empty = none), 🎲 picks from this occasion's own ideas.
 const curseIdeas = () => $("occ-ns-ideas").value.split("\n").map((x) => x.trim()).filter(Boolean);
 function renderCurseHead() {
   const t = $("occ-ns-title").value.trim();
-  $("occ-ns-head").textContent = `${$("occ-ns-icon").value.trim() || "🎭"} ${t || "Troca de nome"} (nome que a pessoa ganha nesse dia)`;
+  $("occ-ns-head").textContent = `${$("occ-ns-icon").value.trim() || "🎭"} Maldição${t && t !== "Maldição" ? ` — na tela: “${t}”` : ""} (nome que a pessoa ganha nesse dia)`;
   document.querySelectorAll("#occ-curses input[data-uid]").forEach((i) => { i.placeholder = t ? `sem ${t.toLowerCase()}` : "nome normal"; });
   const has = curseIdeas().length > 0;
   document.querySelectorAll("#occ-curses .curse-dice").forEach((b) => { b.hidden = !has; });
@@ -4004,7 +4017,7 @@ function renderAdminDrawings() {
     if (uploaded) {
       tile.querySelector(".drawing-del").onclick = async () => {
         const users = [
-          ...Object.entries(allPalettes()).filter(([, p]) => String((p || {}).decor || "").includes(name)).map(([id]) => "paleta " + id),
+          ...Object.entries(allPalettes()).filter(([, p]) => String((p || {}).decor || "").includes(name)).map(([id]) => "tema " + id),
           ...Object.entries(allOccasions()).filter(([, o]) => String((o || {}).decor || "").includes(name)).map(([id]) => "ocasião " + id),
         ];
         if (!(await confirmBox(`Apagar ${name}?`, users.length ? `Usado em: ${users.join(", ")}. Lá ele simplesmente some.` : "Não é usado em lugar nenhum.", "Apagar"))) return;
@@ -4201,14 +4214,14 @@ window.addEventListener("pageshow", (e) => { if (e.persisted) { hiddenAt = hidde
   document.querySelectorAll("dialog").forEach((d) => obs.observe(d, { attributes: true, attributeFilter: ["open"] }));
 })();
 
-// Troca de nome form: the look list, and a live header/placeholder/🎲 as you type.
+// Maldição form: the look list, and a live header/placeholder/🎲 as you type.
 // "Automático" follows the occasion's effect (and says which look that is).
 function fillLookSelect(keep) {
   const sel = $("occ-ns-look");
   keep = keep === undefined ? sel.value : keep;
   sel.innerHTML = "";
   sel.add(new Option(`Automático (${NAME_LOOKS[autoLook($("occ-effect").value)].replace(/^\S+ /, "")})`, ""));
-  for (const [k, l] of Object.entries(NAME_LOOKS)) sel.add(new Option(l, k));
+  for (const [k, l] of Object.entries(NAME_LOOKS)) if (k !== "none") sel.add(new Option(l, k));
   sel.value = keep in NAME_LOOKS ? keep : "";
 }
 $("occ-effect").addEventListener("change", () => fillLookSelect());
@@ -4260,7 +4273,7 @@ const curseSeen = window.IntersectionObserver ? new IntersectionObserver((list) 
   for (const e of list) e.target.classList.toggle("live", e.isIntersecting);
 }, { rootMargin: "80px" }) : null;
 function watchCursed(root = document) {
-  root.querySelectorAll(".cursed:not([data-w])").forEach((el) => {
+  root.querySelectorAll(".nlook:not([data-w])").forEach((el) => {
     el.dataset.w = "1";
     if (curseSeen) curseSeen.observe(el); else el.classList.add("live");
   });

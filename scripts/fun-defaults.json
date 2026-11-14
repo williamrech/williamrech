@@ -277,7 +277,7 @@
       "banner": "⚔️ Cairn nunca dorme. Toque no vazio e veja o que cai.",
       "version": "1.1.9.8",
       "priority": 5,
-      "nameSwap": {
+      "maldicao": {
         "icon": "👁️",
         "title": "Possessão",
         "banner": "Um Etéreo tomou o seu corpo!",
@@ -301,7 +301,7 @@
     }
   },
   "decorVersion": 2,
-  "configVersion": 13,
+  "configVersion": 14,
   "terms": {
     "recado": {
       "weight": 70,

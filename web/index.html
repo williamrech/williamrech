@@ -163,9 +163,9 @@
         </details>
 
         <details class="adm-sec">
-          <summary>🎨 Paletas</summary>
+          <summary>🎨 Temas</summary>
           <ul id="adm-palettes" class="adm-list"></ul>
-          <button id="adm-pal-new" class="secondary wide">＋ Nova paleta</button>
+          <button id="adm-pal-new" class="secondary wide">＋ Novo tema</button>
         </details>
 
         <details class="adm-sec" id="adm-agenda-sec">
@@ -331,7 +331,7 @@
     <div class="ps" tabindex="-1" autofocus>
       <div class="ps-top">
         <button type="button" id="pal-cancel" class="icon-btn" aria-label="Fechar">✕</button>
-        <input id="pal-name" maxlength="30" placeholder="Nome da paleta" autocomplete="off" aria-label="Nome da paleta">
+        <input id="pal-name" maxlength="30" placeholder="Nome do tema" autocomplete="off" aria-label="Nome do tema">
         <button type="button" id="pal-undo" class="icon-btn" aria-label="Desfazer">↶</button>
         <button type="button" id="pal-redo" class="icon-btn" aria-label="Refazer">↷</button>
         <button type="button" id="pal-more" class="icon-btn" aria-label="Mais opções" aria-expanded="false">⋯</button>
@@ -340,7 +340,7 @@
 
       <div id="pal-preview" class="ps-preview theme-scope" title="Toque numa parte pra mudar a cor dela"></div>
 
-      <div id="pal-roles" class="ps-roles" aria-label="Cores da paleta"></div>
+      <div id="pal-roles" class="ps-roles" aria-label="Cores do tema"></div>
 
       <section class="ps-editor" aria-label="Editar cor">
         <div class="ps-head">
@@ -362,10 +362,10 @@
     <div id="pal-menu" class="ps-menu" hidden>
       <p class="muted small" id="pal-idline"></p>
       <label class="field">Copiar cores de<select id="pal-from"></select></label>
-      <label class="field">Efeito do tema<select id="pal-effect"><option value="">Nenhum</option></select></label>
+      <label class="field">Efeito ou pacote do tema<select id="pal-effect"><option value="">Nenhum</option></select></label>
       <label class="field">Emojis extras no fundo<input id="pal-emoji" maxlength="60" placeholder="🎈✨" autocomplete="off"></label>
       <label class="toggle"><input type="checkbox" id="pal-only"> <span>Só em ocasiões (some das configurações)</span></label>
-      <button type="button" id="pal-delete" class="danger wide" hidden>Apagar paleta</button>
+      <button type="button" id="pal-delete" class="danger wide" hidden>Apagar tema</button>
     </div>
   </dialog>
 
@@ -382,13 +382,13 @@
       <label class="field">Banner (frase no topo)<input id="occ-banner" maxlength="120"></label>
       <label class="field">Versão (rodapé)<input id="occ-version" maxlength="40" placeholder="ex: 1.13.sexta"></label>
       <div class="pick-row">
-        <label class="field">Paleta<select id="occ-palette"></select></label>
-        <label class="field">Efeito<select id="occ-effect"><option value="">Nenhum</option></select></label>
+        <label class="field">Tema<select id="occ-palette"></select></label>
+        <label class="field">Efeito ou pacote<select id="occ-effect"><option value="">Nenhum</option></select></label>
       </div>
-      <p class="muted small pick-label" id="occ-ns-head">🎭 Troca de nome</p>
+      <p class="muted small pick-label" id="occ-ns-head">🎭 Maldição</p>
       <div class="pick-row ns-row">
         <label class="field ns-icon">Ícone<input id="occ-ns-icon" maxlength="8" placeholder="🎭"></label>
-        <label class="field">Nome da troca<input id="occ-ns-title" maxlength="30" placeholder="ex: Maldição"></label>
+        <label class="field">Como chamar na tela (opcional)<input id="occ-ns-title" maxlength="30" placeholder="Maldição (ex: Possessão)"></label>
       </div>
       <label class="field">Frase pra quem foi trocado<input id="occ-ns-banner" maxlength="120" placeholder="ex: Você foi amaldiçoado(a)!"></label>
       <label class="field">Visual do nome<select id="occ-ns-look"></select></label>

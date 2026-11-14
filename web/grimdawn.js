@@ -490,7 +490,7 @@ function ensureSkin() {
 // Emoji inside ordinary text (answers, chips, tabs) get wrapped in <span class="gd-emo"> so the skin can tint
 // them like old photos. Skips form fields, the effect layers and curse badges (they have their own look).
 const EMO = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\uFE0F|\u20E3|\p{Emoji_Modifier}|\u200D(?:\p{Extended_Pictographic}|\p{Regional_Indicator}))*/gu;
-const EMO_SKIP = "input, textarea, select, script, style, svg, [contenteditable], #fx, #fx-back, .gd-emo, .ubadge, .cursed, .emoji-grid";
+const EMO_SKIP = "input, textarea, select, script, style, svg, [contenteditable], #fx, #fx-back, .gd-emo, .ubadge, .nlook, .emoji-grid";
 function wrapEmoji(root) {
   if (!root) return;
   const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
