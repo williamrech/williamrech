@@ -763,8 +763,8 @@ function loot(x, y, layer, forceLucky) {
   const entries = items.map((it) => ({ it }));
   if (iron) entries.push({ it: { name: `${iron} Pedaços de Ferro`, col: COLOR.iron }, iron: true });
   const ROW = 22, n2 = entries.length;
-  const baseY = Math.max(y - 34, 70 + (n2 - 1) * ROW); // bottom plate; the stack grows upward
-  const pileY = Math.min(H - 36, baseY + 56);
+  // The items land a little below the tap; each name then sits right above its own item (placed after the loop).
+  const pileY = Math.min(H - 36, Math.max(y + 30, 120));
   // Gravity arcs: x moves steadily, y rises, slows and falls, so every path is a true curve, fanned out like
   // the ribs of an open umbrella. y(s) = a s² + b s with y(1) = dy and the top of the arc at peak (< 0).
   const arc = (dx, dy, peak, n = 16, rot = 0, rot1 = 0, sc0 = 1) => {
@@ -824,14 +824,27 @@ function loot(x, y, layer, forceLucky) {
     const t = el(g, "gd-label", `--c:${it.col};visibility:hidden`);
     if (it.col === COLOR.rare && Math.random() < 0.45) t.insertAdjacentHTML("beforeend", `<i class="dia">◆</i>`);
     t.appendChild(document.createTextNode(it.name));
-    plates.push({ t, i, delay, it });
+    plates.push({ t, delay, it, dx, dy, prio: it.beam === "legendary" ? 0 : it.beam ? 1 : 2 });
   });
-  // Measure all the plates in one go (one layout), then place and show them.
-  const widths = plates.map((pl) => pl.t.offsetWidth);
-  plates.forEach(({ t, i, delay, it }, k) => {
-    const w = widths[k];
-    const lx = Math.max(w / 2 + 6 - x, Math.min(W - w / 2 - 6 - x, rnd(-34, 34)));
-    t.style.left = `${lx}px`; t.style.top = `${baseY - i * ROW - y}px`; t.style.visibility = "";
+  // Measure all the plates in one go (one layout), then place each one just above its own item, like the
+  // game: legendaries and epics first (their plate sits on their light pillar), then the rest; a plate that
+  // would overlap one already placed steps up a row. Plates stay on screen.
+  const sizes = plates.map((pl) => [pl.t.offsetWidth, pl.t.offsetHeight]);
+  const placed = [];
+  plates.map((pl, k) => ({ ...pl, k })).sort((a, b) => a.prio - b.prio).forEach((pl) => {
+    const [w, hgt] = sizes[pl.k];
+    const clampX = (c) => Math.max(w / 2 + 6 - x, Math.min(W - w / 2 - 6 - x, c));
+    const hits = (c, tp) => placed.some((r) => c - w / 2 < r.r + 3 && c + w / 2 > r.l - 3 && tp < r.b + 1 && tp + hgt > r.t - 1);
+    // Try right above the item first, then slid sideways (still over the item), and only then a row higher.
+    const reach = Math.max(0, w / 2 - 12), shifts = [0, -0.35, 0.35, -0.7, 0.7, -1, 1].map((f) => f * reach);
+    let cx = clampX(pl.dx), top = pl.dy - 24 - hgt;
+    found: for (let n = 0; n < 8; n++, top -= ROW) {
+      for (const sft of shifts) { const c = clampX(pl.dx + sft); if (!hits(c, top)) { cx = c; break found; } }
+    }
+    top = Math.max(6 - y, top);
+    placed.push({ l: cx - w / 2, r: cx + w / 2, t: top, b: top + hgt });
+    const { t, delay, it } = pl;
+    t.style.left = `${cx}px`; t.style.top = `${top}px`; t.style.visibility = "";
     const show = delay + FLY - 150, end = it.broken ? show + 1450 : life;
     t.animate([{ opacity: 0, transform: "translate(-50%, 4px)" }, { opacity: 1, transform: "translate(-50%, 0)" }], { duration: 200, delay: show, fill: "forwards" });
     t.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, delay: end - 400, fill: "forwards" });
