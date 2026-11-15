@@ -41,7 +41,7 @@ service cloud.firestore {
         && request.resource.data.title.size() <= 80;
       allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == request.auth.uid
-        && changed().hasOnly(['emoji', 'title', 'body', 'answerType', 'options', 'recipients',
+        && changed().hasOnly(['emoji', 'title', 'body', 'answerType', 'options', 'recipients', 'watchers',
              'visibility', 'allowMute', 'nagEveryMin', 'durationHours', 'schedule', 'keep', 'favorite', 'updatedAt'])
         && request.resource.data.title is string && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 80;

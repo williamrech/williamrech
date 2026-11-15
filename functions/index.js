@@ -282,12 +282,13 @@ const handlers = {};
 // Chamados: personal templates (templates/{id}) that create rounds (rounds/{id}).
 //
 // template: ownerUid, emoji, title, body, answerType ("none"|"yesno"|"options"|"text"),
-//   options[], recipients ("all" | [uid]), visibility ("all"|"owner"), allowMute,
+//   options[], recipients ("all" | [uid]), watchers ("rest" | [uid]: see it and its answers, can't answer, no ping
+//   when it goes out), visibility ("all"|"owner"), allowMute,
 //   nagEveryMin (0 = never), durationHours, keep (false = vanishes after its last date),
 //   schedule { on, slots: [{ d: 0-6, t: "HH:MM" }], dates: ["YYYY-MM-DD HH:MM"] } (older: { days[], time }),
 //   mutedBy { uid: name }  ← server only, lastFiredKey ← server only
 //
-// round: copy of the template's look + recipients/participants, answers { uid: {value,name,changes,at} },
+// round: copy of the template's look + recipients/watchers/participants, answers { uid: {value,name,changes,at} },
 //   notified { uid: millis }, open, closesAt
 // ---------------------------------------------------------------------------
 const ANSWER_TYPES = ["none", "yesno", "options", "text"];
@@ -301,6 +302,10 @@ async function createRound(tplRef, tpl, owner, { users, devices, kind } = {}) {
     : (tpl.recipients || []).filter((u) => users[u]);
   const recipients = pool.filter((u) => !muted[u]);
   if (!recipients.length) throw new HttpsError("failed-precondition", "Ninguém pra receber (ou todo mundo silenciou 🙃).");
+  // Watchers: they see the round and every answer (and get the answer pings), but can't answer and get no ping when
+  // it goes out. "rest" = everyone who isn't answering (minus whoever muted this recado).
+  const wpool = tpl.watchers === "rest" ? Object.keys(users) : Array.isArray(tpl.watchers) ? tpl.watchers : [];
+  const watchers = [...new Set(wpool)].filter((u) => users[u] && !recipients.includes(u) && u !== tpl.ownerUid && !muted[u]);
 
   const answerType = ANSWER_TYPES.includes(tpl.answerType) ? tpl.answerType : "none";
   const durationHours = Math.min(Math.max(Number(tpl.durationHours) || 12, 1), 72);
@@ -320,7 +325,9 @@ async function createRound(tplRef, tpl, owner, { users, devices, kind } = {}) {
     nagEveryMin: answerType === "none" ? 0 : Number(tpl.nagEveryMin) || 0,
     recipients,
     recipientNames: Object.fromEntries(recipients.map((u) => [u, users[u].name || "?"])),
-    participants: [...new Set([...recipients, tpl.ownerUid])],
+    watchers,
+    watcherNames: Object.fromEntries(watchers.map((u) => [u, users[u].name || "?"])),
+    participants: [...new Set([...recipients, tpl.ownerUid, ...watchers])],
     answers: {},
     notified: {},
     delivery: {}, // uid -> { st: "sent"|"failed"|"nodevice"|"quiet", at, recv, open }
@@ -376,6 +383,7 @@ handlers.sendOnce = async (req) => {
     answerType: ANSWER_TYPES.includes(d.answerType) ? d.answerType : "none",
     options: Array.isArray(d.options) ? d.options.map((o) => str(o, 40)).filter(Boolean).slice(0, 6) : [],
     recipients: d.recipients === "all" ? "all" : (Array.isArray(d.recipients) ? d.recipients.map(String).slice(0, 50) : []),
+    watchers: d.watchers === "rest" ? "rest" : (Array.isArray(d.watchers) ? d.watchers.map(String).slice(0, 50) : []),
     visibility: d.visibility === "owner" ? "owner" : "all",
     nagEveryMin: [0, 15, 30, 60, 120].includes(Number(d.nagEveryMin)) ? Number(d.nagEveryMin) : 0,
     durationHours: Number(d.durationHours) || 12,
@@ -441,7 +449,7 @@ async function applyAnswer(uid, me, roundId, rawValue, via = "app") {
   };
   const targets = round.visibility === "all"
     ? round.participants.filter((u) => u !== uid)
-    : [round.ownerUid].filter((u) => u !== uid);
+    : [round.ownerUid, ...(round.watchers || [])].filter((u) => u !== uid); // "só eu vejo": me + the watchers I picked
   await logEvent("answer", { roundId, roundTitle: round.title, emoji: round.emoji, actorUid: uid, actorName: me.name, value, changes,
     ...(via !== "app" ? { via } : {}) });
   await sendToUids(targets, msg, `?rodada=${roundId}`, { kind: changes ? "mudou de ideia" : "resposta", roundId, fromUid: uid,
@@ -497,7 +505,7 @@ handlers.adminRounds = async (req) => {
   const rounds = snap.docs.map((d) => {
     const r = d.data();
     return { id: d.id, title: r.title || "", emoji: r.emoji || "🔔", ownerUid: r.ownerUid, ownerName: r.ownerName || "",
-      recipients: r.recipients || [], recipientNames: r.recipientNames || {}, answered: Object.keys(r.answers || {}).length,
+      recipients: r.recipients || [], recipientNames: r.recipientNames || {}, watchers: r.watchers || [], answered: Object.keys(r.answers || {}).length,
       answerType: r.answerType, createdAt: r.createdAt ? r.createdAt.toMillis() : 0, closesAt: r.closesAt ? r.closesAt.toMillis() : 0 };
   }).sort((a, b) => b.createdAt - a.createdAt);
   return { rounds };

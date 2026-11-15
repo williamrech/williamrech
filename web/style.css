@@ -1322,3 +1322,4 @@ body.diag-off-fire .gd-city .seam, body.diag-off-ash .gd-ash, body.diag-off-embe
 .diag-row input { width: 20px; height: 20px; }
 #fps-meter { position: fixed; left: 6px; top: calc(env(safe-area-inset-top, 0px) + 4px); z-index: 99; pointer-events: none; font: 600 11px/1.2 ui-monospace, monospace;
   color: #fff; background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 6px; }
+.watch-hint { margin: -4px 0 6px; }

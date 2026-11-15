@@ -1405,7 +1405,7 @@ const STARTERS = [
   { emoji: "☕", title: "Café?", body: "Tô passando um agora.", answerType: "options", options: ["Quero ☕", "Não, valeu"] },
   { emoji: "🎬", title: "Filme hoje à noite?", body: "Escolhe o horário.", answerType: "options", options: ["20h", "21h", "Hoje não"] },
 ];
-const BLANK = { emoji: "", title: "", body: "", answerType: "yesno", options: [], recipients: "all", visibility: "all",
+const BLANK = { emoji: "", title: "", body: "", answerType: "yesno", options: [], recipients: "all", watchers: [], visibility: "all",
   nagEveryMin: 15, durationHours: 2, schedule: { on: false, slots: [], dates: [] }, allowMute: true, keep: true };
 
 const g = (person, m, f) => ((person && person.gender) === "f" ? f : m);
@@ -1596,7 +1596,7 @@ function renderChamados() {
       <button class="chamado-main">
         <span class="tile-emoji">${esc(t.emoji || "🔔")}</span>
         <span class="manage-text"><b>${esc(t.title)}</b>
-          <span class="muted small">${esc(scheduleText(t.schedule))} · ${esc(recipientsText(t.recipients))}</span>
+          <span class="muted small">${esc(scheduleText(t.schedule))} · ${esc(recipientsText(t.recipients))}${t.recipients !== "all" && (t.watchers === "rest" || (t.watchers || []).length) ? ` · 👀 ${esc(t.watchers === "rest" ? "o resto" : recipientsText(t.watchers))}` : ""}</span>
           ${scheduled && nextFire(t.schedule) ? `<span class="next-fire small">próximo: ${esc(whenLabel(nextFire(t.schedule)))}${t.keep === false ? " · some depois" : ""}</span>` : ""}
           ${muted.length ? `<span class="muted-by small">🔕 ${muted.map(esc).join(", ")} silenciou</span>` : ""}
         </span>
@@ -1887,8 +1887,9 @@ function buildRound(r, ask) {
   li.className = "round" + (ask ? " ask" : "") + (done ? " closed" : "") + (collapsed ? " collapsed" : "") + (r.id === highlightRound ? " highlight" : "");
   const mine = r.ownerUid === uid;
   const isRecipient = r.recipients.includes(uid);
+  const isWatcher = !mine && !isRecipient && (r.watchers || []).includes(uid); // sees it all, doesn't answer
   const myAnswer = r.answers && r.answers[uid];
-  const canSeeAll = mine || r.visibility === "all";
+  const canSeeAll = mine || isWatcher || r.visibility === "all";
   const nameOfR = (u) => (u === uid ? "Você" : nameHtml(u, r.recipientNames && r.recipientNames[u]));
   const changedHtml = (a) => (a.changes ? ` <span class="changed">(mudou ${a.changes}x)</span>` : "");
 
@@ -1905,6 +1906,7 @@ function buildRound(r, ask) {
       return `<li class="waiting">${nameOfR(u)} ${st || `<span class="dots">…</span>`}</li>`;
     }).filter(Boolean);
     if (rows.length && !(ask && !mine)) peopleHtml = `<ul class="answers">${rows.join("")}</ul>`;
+    if (isWatcher) peopleHtml = `<div class="muted small">👀 Pergunta pra ${r.recipients.map((u) => esc(displayName(u, r.recipientNames && r.recipientNames[u]))).join(", ")} — você só acompanha.</div>` + peopleHtml;
     if (!canSeeAll && r.answerType !== "none" && !ask) peopleHtml += `<div class="muted small">Só ${esc(r.ownerName)} vê as respostas.</div>`;
   }
 
@@ -2262,6 +2264,37 @@ function renderRecipients() {
   Object.entries(family).filter(([u, p]) => u !== uid && p.name)
     .sort((a, b) => a[1].name.localeCompare(b[1].name))
     .forEach(([u, p]) => mk(p.name, u));
+  renderWatchers();
+}
+// 👀 Quem só acompanha: only when not everyone answers. "O resto" = everyone who isn't answering.
+function renderWatchers() {
+  const wrap = $("ed-watchers"), uid = auth.currentUser.uid;
+  show("ed-watch-wrap", ed.recipients !== "all");
+  if (ed.recipients === "all") return;
+  const answering = new Set(ed.recipients || []);
+  if (Array.isArray(ed.watchers)) ed.watchers = ed.watchers.filter((u) => !answering.has(u));
+  wrap.innerHTML = "";
+  const mk = (label, value) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = label;
+    b.classList.toggle("selected", value === "rest" ? ed.watchers === "rest" : Array.isArray(ed.watchers) && ed.watchers.includes(value));
+    b.onclick = () => {
+      if (value === "rest") ed.watchers = ed.watchers === "rest" ? [] : "rest";
+      else {
+        const cur = new Set(Array.isArray(ed.watchers) ? ed.watchers : []);
+        cur.has(value) ? cur.delete(value) : cur.add(value);
+        ed.watchers = [...cur];
+      }
+      renderWatchers();
+    };
+    wrap.appendChild(b);
+  };
+  mk("O resto da família", "rest");
+  Object.entries(family).filter(([u, p]) => u !== uid && p.name && !answering.has(u))
+    .sort((a, b) => a[1].name.localeCompare(b[1].name))
+    .forEach(([u, p]) => mk(p.name, u));
 }
 
 // ---- Agendar: every week (same time for all days, or per day) + one-off dates ----
@@ -2534,6 +2567,7 @@ $("editor-form").addEventListener("submit", async (e) => {
     answerType: type,
     options: type === "options" ? options : [],
     recipients: ed.recipients === "all" ? "all" : (ed.recipients || []),
+    watchers: ed.recipients === "all" ? [] : ed.watchers === "rest" ? "rest" : (ed.watchers || []),
     visibility: segValue("ed-visibility") || "all",
     allowMute: keep && $("ed-mute").checked,
     nagEveryMin: type === "none" ? 0 : Number($("ed-nag").value),
@@ -3994,7 +4028,7 @@ async function loadAdminRounds() {
   if (!list.length) { box.innerHTML = `<p class="muted small">Nada no ar agora.</p>`; return; }
   box.innerHTML = "";
   for (const r of list) {
-    const to = r.recipients.map((u) => personName(u, r.recipientNames[u])).join(", ");
+    const to = r.recipients.map((u) => personName(u, r.recipientNames[u])).join(", ") + ((r.watchers || []).length ? ` · 👀 ${r.watchers.length}` : "");
     const dl = r.closesAt ? deadlineParts({ toMillis: () => r.closesAt }) : null;
     const resp = r.answerType === "none" ? "aviso" : `${r.answered}/${r.recipients.length} responderam`;
     const row = document.createElement("div");
