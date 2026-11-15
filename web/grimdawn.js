@@ -23,6 +23,7 @@ const KIND_ART = { sword: "sword", sword2h: "sword", spear2h: "sword", axe: "axe
   hands: "gloves", waist: "chest", legs: "chest", feet: "boots", ring: "ring", amulet: "amulet", medal: "amulet" };
 let seq = 0;
 
+let restAt = null; // when rest mode began (app.js: 10 s untouched), or null while awake
 // ---------- Styles (injected once) ----------
 const CSS = `
 .gd-dev { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
@@ -48,6 +49,8 @@ const CSS = `
 }
 .gd-ash.hot { animation: gd-ash-fall linear infinite, gd-ash-flutter ease-in-out infinite alternate, gd-ash-glow ease-in-out infinite alternate; }
 @keyframes gd-ash-glow { from { opacity: 1; } to { opacity: .55; } } /* the burning edge flickers (opacity only: cheap) */
+.gd-ash { transition: opacity 1.5s; }
+body.resting .gd-ash { opacity: 0 !important; transition-duration: 2s; } /* the ash settles while resting */
 .gd-ember { position: absolute; bottom: -8px; border-radius: 50%; background: #c8ffe0; pointer-events: none;
   box-shadow: 0 0 4px 1px #46ff9a, 0 0 10px 2px rgba(70, 255, 154, .35); opacity: 0; will-change: transform, opacity; }
 .gd-fx { position: absolute; pointer-events: none; }
@@ -399,7 +402,7 @@ export function startAsh(layer, scale = 1) {
 // flickers, and goes out. Then another one starts somewhere else.
 function ember(layer, k) {
   if (!layer.isConnected) return;
-  if (document.hidden) { setTimeout(() => ember(layer, k), 1500); return; }
+  if (document.hidden || restAt != null || document.body.classList.contains("diag-off-embers")) { setTimeout(() => ember(layer, k), 1500); return; }
   const e = document.createElement("i");
   e.className = "gd-ember";
   const big = Math.random() < 0.15;
@@ -591,6 +594,8 @@ const CITY_CSS = `
 .gd-city .row img { position: absolute; top: 0; max-width: none; user-select: none; -webkit-user-drag: none; }
 .gd-city .row img.lit { opacity: 0; filter: brightness(2.2) saturate(1.1); will-change: opacity; }
 .gd-city .seam { position: absolute; left: 0; width: 100%; mix-blend-mode: screen; }
+.gd-city canvas.seam { transition: opacity 1.2s; } body.resting .gd-city canvas.seam { opacity: 0; transition-duration: 1.5s; }
+.gd-city .seam.restglow { opacity: 0; transition: opacity 1.2s; } body.resting .gd-city .seam.restglow { opacity: 1; transition-duration: 1.5s; }
 .gd-city .seam.still { background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(80, 255, 170, .35), rgba(40, 200, 130, .14) 45%, transparent 75%); }
 .gd-city .sky { position: absolute; left: -20%; right: -20%; bottom: 14vh; height: 52vh;
   background: radial-gradient(ellipse 55% 60% at 50% 70%, rgba(60, 220, 150, .26), rgba(30, 150, 100, .1) 55%, transparent 80%); }
@@ -668,6 +673,12 @@ function startCity(layer) {
   city.insertAdjacentHTML("beforeend", `<div class="floor"></div>`);
   layer.appendChild(city);
   if (!seamFire(seams, vw, vh * 0.24)) seams.forEach((b) => b.classList.add("still")); // no WebGL: a still glow
+  else for (const b of seams) { // while resting the fire fades into the same still glow, and back
+    const g = document.createElement("div");
+    g.className = "seam still restglow";
+    g.style.cssText = b.style.cssText;
+    b.after(g);
+  }
 }
 
 // Green fire burning between the rows: flames flickering up, now and then a flash of light, something bursting,
@@ -750,7 +761,9 @@ function seamFire(bands, w, bh) {
   document.addEventListener("pointerdown", onTouch, { passive: true, capture: true });
   const frame = (t) => {
     if (!bands[0].isConnected) { document.removeEventListener("pointerdown", onTouch, { capture: true }); for (const s of S) { const lose = s.gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); } return; }
-    if (!still) requestAnimationFrame(frame);
+    // Resting (or the fire switched off in Diagnóstico): no drawing, a slow tick that still brings the lightning.
+    const off = document.body.classList.contains("diag-off-fire"), resting = restAt != null && t - restAt > 1600;
+    if (!still) { if (resting || off) setTimeout(() => requestAnimationFrame(frame), 250); else requestAnimationFrame(frame); }
     if (document.hidden || t - last < 40 || t < quietUntil) return;
     last = t;
     if (t > nextFlash) {
@@ -761,6 +774,7 @@ function seamFire(bands, w, bh) {
       const s = pick(S); s.burst = { t0: t, x: rnd(0.1, 0.9) }; nextBurst = t + rnd(9000, 22000);
       lightUp(s.band, [[0, 0], [0.08, 0.6], [1, 0]], 1600);
     }
+    if (resting || off) return;
     for (const s of S) {
       const { gl, U } = s;
       const fk = s.flash == null ? 1 : (t - s.flash) / 750;
@@ -828,7 +842,7 @@ export function startRifts(layer) {
     const r = fab && fab.getBoundingClientRect();
     const cx = r && r.left + r.width / 2, cy = r && r.top + r.height / 2;
     const shown = r && r.width > 0 && fab.contains(document.elementFromPoint(cx, cy));
-    if (!document.hidden && !spot.firstChild && shown) {
+    if (!document.hidden && restAt == null && !document.body.classList.contains("diag-off-rifts") && !spot.firstChild && shown) {
       const x = Math.random(), kind = x < 0.4 ? "purple" : x < 0.7 ? "green" : "red";
       spot.style.left = `${cx}px`; spot.style.top = `${cy}px`; // exactly over the ＋
       const hold = rnd(5000, 10000), total = RIFT_OPEN + hold + RIFT_CLOSE;
@@ -847,6 +861,20 @@ export function startRifts(layer) {
     setTimeout(open, rnd(20000, 40000));
   };
   setTimeout(open, rnd(4000, 9000));
+  // While resting: now and then a lone raven crosses the sky (a picture moving: cheap), so the still scene keeps some life.
+  const cross = () => {
+    if (!spot.isConnected) return;
+    if (restAt != null && !document.hidden && !document.body.classList.contains("diag-off-rifts")) {
+      const s = document.createElement("div");
+      s.className = "gd-far";
+      s.style.cssText = `left:${innerWidth + 30}px;top:${(innerHeight * rnd(0.12, 0.4)).toFixed(0)}px`;
+      layer.appendChild(s);
+      raven(s);
+      setTimeout(() => s.remove(), 20000);
+    }
+    setTimeout(cross, rnd(15000, 30000));
+  };
+  setTimeout(cross, rnd(15000, 30000));
 }
 
 function box(layer, x, y) {
@@ -1281,6 +1309,7 @@ export const pacote = {
     if (scale >= 1) startRifts(layer);
   },
   tap(x, y, layer) { grimTap(x, y, layer); }, // a loot drop
+  rest(on) { restAt = on ? performance.now() : null; }, // see the fire, embers, rifts and the CSS for .gd-ash
   chip(chip, name, look) { targetBar(chip, name, look); return true; }, // the name chip becomes a monster's target bar
   async start(ctx) { // the collection (grail.js) while the occasion is live
     const my = ++run;

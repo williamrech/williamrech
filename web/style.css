@@ -1310,3 +1310,15 @@ select.add-time { -webkit-appearance: none; appearance: none; background-image: 
 .dg.dg-more .dg-img { display: grid; place-items: center; font-size: 1.4rem; color: var(--muted); }
 .danger-link { color: #e5574f; }
 .lib-grid .dg:not(.on) .dg-img { opacity: 1; }
+
+/* Rest mode (10 s untouched, see app.js): everything that moves on its own holds still. */
+body.resting #fx *, body.resting #fx-back *, body.resting .nlook, body.resting .nlook *, body.resting #me-chip, body.resting #me-chip * { animation-play-state: paused !important; }
+/* Diagnóstico */
+body.diag-off-looks .nlook, body.diag-off-looks .nlook *, body.diag-off-looks .nlook::before, body.diag-off-looks .nlook::after { animation: none !important; }
+body.diag-off-looks .nlook .cglow, body.diag-off-looks .nlook::before, body.diag-off-looks .nlook::after, body.diag-off-looks .gd-tb-look { display: none !important; }
+body.diag-off-fire .gd-city .seam, body.diag-off-ash .gd-ash, body.diag-off-embers .gd-ember, body.diag-off-city .gd-city .row, body.diag-off-rifts .gd-far { display: none !important; }
+#adm-diag { display: grid; gap: 4px; }
+.diag-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: .92rem; }
+.diag-row input { width: 20px; height: 20px; }
+#fps-meter { position: fixed; left: 6px; top: calc(env(safe-area-inset-top, 0px) + 4px); z-index: 99; pointer-events: none; font: 600 11px/1.2 ui-monospace, monospace;
+  color: #fff; background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 6px; }

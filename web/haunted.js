@@ -152,6 +152,7 @@ function startFog(layer, scale, still) {
   let last = performance.now();
   const frame = (now) => {
     if (!layer.isConnected || !strips[0].el.isConnected) return;
+    if (document.body.classList.contains("resting")) { last = now; setTimeout(() => requestAnimationFrame(frame), 300); return; } // rest: the fog holds still
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     fogPush.vx *= Math.pow(0.25, dt); // momentum fades
@@ -226,7 +227,7 @@ function spider(layer, scale, still) {
   };
   const cycle = () => {
     if (!rig.isConnected) return;
-    if (!document.hidden && !still) {
+    if (!document.hidden && !still && !document.body.classList.contains("resting")) {
       // "down": swinging the whole time it's off the web; "moving": legs going while it travels.
       clearTimeout(rig._settle); rig.style.transition = ""; rig.style.transform = "";
       rig.classList.add("moving", "down");

@@ -30,7 +30,7 @@ export function startEffect(layer, kind, scale = 1, still = false) {
       if (!cup.isConnected) return;
       // While the app is in the background animations are paused: don't pile up puffs that
       // would all float up at once when you come back.
-      if (document.hidden || cup.querySelectorAll(".puff").length >= 3) {
+      if (document.hidden || document.body.classList.contains("resting") || cup.querySelectorAll(".puff").length >= 3) {
         layer._fxTimer = setTimeout(puff, 2500 + Math.random() * 4500);
         return;
       }
@@ -72,7 +72,7 @@ export function startEffect(layer, kind, scale = 1, still = false) {
     burst(Math.round(70 * scale), 1, 50, 50);
     const again = () => {
       if (layer.dataset.fx !== "confetti") return;
-      if (!document.hidden && layer.childElementCount < 100 * scale + 10) {
+      if (!document.hidden && !document.body.classList.contains("resting") && layer.childElementCount < 100 * scale + 10) {
         const r = Math.random();
         const count = r < 0.5 ? rnd(8, 20) : r < 0.85 ? rnd(20, 40) : rnd(45, 80);
         const wide = Math.random() < 0.55;

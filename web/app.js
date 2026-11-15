@@ -406,6 +406,7 @@ function spawnEffect(layer, kind, scale = 1) {
   layer.dataset.fx = kind || "";
   const base = String(kind || "").replace(/-bg$/, "");
   if (!(base in EFFECTS)) return;
+  if (!filePacote(base) && document.body.classList.contains("diag-off-fx")) return; // Diagnóstico: simple effects off
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (filePacote(base)) { // a pacote: "<id>-bg" is its scene behind the feed, "<id>" what floats over it
     loadPacote(base).then((p) => {
@@ -486,6 +487,68 @@ function runEffect(kind) {
   if (auth.currentUser) renderMeChip(); // a pacote may take over the name chip (Grim Dawn: a target bar), and back
   syncPacote();
 }
+// ---------- Rest mode ----------
+// After 10 s without a touch, scroll or key, whatever moves on its own rests (CSS animations pause, see style.css;
+// effects and pacotes go quiet, each in its own way — Grim Dawn keeps its lightning). Any touch wakes it at once.
+// Moving pictures are what keep a phone redrawing the screen (and warm) while the app just sits open.
+const REST_MS = 10000;
+let restTimer = 0;
+function setResting(on) {
+  if (document.body.classList.contains("resting") === on) return;
+  document.body.classList.toggle("resting", on);
+  for (const p of Object.values(pacoteMod)) if (p && p.rest) p.rest(on);
+}
+function wake() {
+  setResting(false);
+  clearTimeout(restTimer);
+  restTimer = setTimeout(() => { if (!diagOff.has("rest")) setResting(true); }, REST_MS);
+}
+for (const ev of ["pointerdown", "touchstart", "keydown", "wheel", "scroll"]) addEventListener(ev, wake, { passive: true, capture: true });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) wake(); });
+
+// ---------- Diagnóstico (Admin → Sistema): switch parts off on this phone to feel what warms it ----------
+// Saved on this phone ("diagOff"); each part off = a body class diag-off-<part> (CSS + the effects check it).
+const DIAG = [["fire", "🔥 Fogo (Grim Dawn)"], ["ash", "🌫️ Cinzas (Grim Dawn)"], ["embers", "✨ Brasas (Grim Dawn)"], ["city", "🏚️ Cidade (Grim Dawn)"],
+  ["rifts", "🌀 Fendas e corvos (Grim Dawn)"], ["looks", "💫 Brilho dos nomes"], ["fx", "❄️ Efeitos simples (neve, confete, vapor…)"], ["rest", "😴 Modo descanso (10 s)"]];
+const diagOff = new Set((() => { try { return JSON.parse(localStorage.getItem("diagOff") || "[]"); } catch { return []; } })());
+function applyDiag() {
+  for (const [k] of DIAG) document.body.classList.toggle("diag-off-" + k, diagOff.has(k));
+  try { localStorage.setItem("diagOff", JSON.stringify([...diagOff])); } catch {}
+}
+applyDiag();
+function renderDiag() {
+  const box = document.getElementById("adm-diag"); if (!box) return;
+  box.innerHTML = DIAG.map(([k, l]) => `<label class="diag-row"><input type="checkbox" data-diag="${k}" ${diagOff.has(k) ? "" : "checked"}> ${l}</label>`).join("")
+    + `<label class="diag-row"><input type="checkbox" data-diag="__fps" ${fpsOn ? "checked" : ""}> 📈 Mostrar fps na tela</label>`;
+  box.querySelectorAll("[data-diag]").forEach((c) => c.onchange = () => {
+    const k = c.dataset.diag;
+    if (k === "__fps") { fpsOn = c.checked; try { localStorage.setItem("fpsOn", fpsOn ? "1" : ""); } catch {} fpsMeter(); return; }
+    if (c.checked) diagOff.delete(k); else diagOff.add(k);
+    applyDiag();
+    if (k === "rest") wake();
+    else { const cur = effectKey; effectKey = null; runEffect(cur); } // restart the effect with the part on/off
+  });
+}
+// A small frames-per-second counter in the corner (😴 while resting).
+var fpsOn = (() => { try { return localStorage.getItem("fpsOn") === "1"; } catch { return false; } })(), fpsRun = false;
+function fpsMeter() {
+  let el = document.getElementById("fps-meter");
+  if (!fpsOn) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement("div"); el.id = "fps-meter"; document.body.appendChild(el); }
+  if (fpsRun) return;
+  fpsRun = true;
+  let n = 0, t0 = performance.now();
+  const tick = (t) => {
+    if (!fpsOn) { fpsRun = false; return; }
+    n++;
+    if (t - t0 >= 1000) { el.textContent = `${Math.round((n * 1000) / (t - t0))} fps${document.body.classList.contains("resting") ? " 😴" : ""}`; n = 0; t0 = t; }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+fpsMeter();
+wake();
+
 // A pacote's extras (Grim Dawn: the collection, web/grail.js) run while it's on and someone is signed in.
 var pacoteOn = null; // "id|uid" — var: runEffect may run before this line is reached
 function syncPacote() {
@@ -2569,6 +2632,7 @@ function renderAdmin() {
   renderAdminPalettes();
   renderAdminOccasions();
   if ($("dlg-lib").open) renderLibrary();
+  renderDiag();
   renderAdminTexts();
 }
 
