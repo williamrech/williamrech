@@ -60,6 +60,19 @@ const CSS = `
 .art-set li { display: flex; gap: 8px; justify-content: space-between; padding: 2px 0; }
 .art-set li.miss { color: #6b675e; }
 .art-set li .k { color: #8d877a; font-size: .72rem; white-space: nowrap; }
+/* The set as small framed tiles (same gold/silver as the big frame); missing pieces are silhouettes */
+.art-tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin: 2px 0 10px; }
+.art-tile { width: 50px; height: 50px; padding: 0; display: grid; place-items: center; border: 2px solid transparent; border-radius: 2px; cursor: pointer; }
+.art-tile.legendary { background: radial-gradient(circle at 50% 45%, rgba(170, 70, 255, .25), transparent 70%) padding-box, linear-gradient(#0d0a10, #070508) padding-box,
+  linear-gradient(135deg, #fff1c2, #d8b06a 22%, #7a5524 48%, #f0d48a 72%, #8a6330) border-box; }
+.art-tile.epic { background: radial-gradient(circle at 50% 45%, rgba(70, 140, 255, .22), transparent 70%) padding-box, linear-gradient(#090b10, #050608) padding-box,
+  linear-gradient(135deg, #ffffff, #c9ced6 22%, #646a73 48%, #e6e9ee 72%, #7d848d) border-box; }
+.art-tile.miss { opacity: .75; }
+.art-tile.cur { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85), 0 0 12px rgba(255, 255, 255, .35); }
+.art-set.done .art-tile { box-shadow: 0 0 10px rgba(95, 224, 138, .55); } .art-set.done .art-tile.cur { box-shadow: 0 0 0 2px #b9ffcb, 0 0 14px rgba(95, 224, 138, .8); }
+.art-tile .ico { background-repeat: no-repeat; }
+.ico.sil, canvas.ico.sil { filter: brightness(0) drop-shadow(0 0 1px rgba(214, 190, 140, .55)) drop-shadow(0 0 4px rgba(214, 190, 140, .2)) !important; }
+.art-frame.ghost { opacity: .9; } .art-name.ghost { opacity: .55; }
 #dlg-grail h4 { margin: 10px 0 4px; font: 700 .7rem/1 "GD Cinzel", Georgia, serif; letter-spacing: .12em; text-transform: uppercase; color: #9a8256; }
 #dlg-grail .gi { display: flex; align-items: center; gap: 8px; padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,.04); font-size: .86rem; }
 #dlg-grail .gi img { width: 26px; height: 26px; object-fit: contain; flex: none; }
@@ -393,27 +406,47 @@ function icon(a, box, maxK = Infinity) { // the icon scaled to fit a box (keeps 
     background-size:${(W * k).toFixed(1)}px ${(H * k).toFixed(1)}px;background-position:${(-a.x * k).toFixed(1)}px ${(-a.y * k).toFixed(1)}px"></i>`;
 }
 function mini(a) { return `<span class="mini">${icon(a, 26).replace('style="display:block;', 'style="display:block;transform:translate(-50%,-50%);')}</span>`; }
+// The card: the item big in its frame (owned: the art; not owned yet: its silhouette), its name, and — for a set piece —
+// the whole set as small framed tiles (tap one to flip the card to it) plus the list of pieces with ✓ or slot.
+// Tapping anywhere else closes it.
+let sheetImg = null;
 async function openArt(name) {
   const a = gdRef.itemArt(name);
   let d = document.getElementById("dlg-art");
   if (!d) {
     d = document.createElement("dialog"); d.id = "dlg-art";
-    d.addEventListener("click", () => d.close());
+    d.addEventListener("click", (e) => { const t = e.target.closest("[data-flip]"); if (t) { e.stopPropagation(); openArt(t.dataset.flip); } else d.close(); });
     document.body.appendChild(d);
   }
-  const r = (a && a.r) || "epic";
-  const show = (inner) => { d.innerHTML = `<div class="art-wrap"><div class="art-frame ${r}">${inner}</div><div class="art-name ${r}">${esc(name)}</div>${setBlock(name)}</div>`; };
+  const r = (a && a.r) || "epic", owned = !!(S && S.counts().items[name] > 0);
+  const show = (inner) => { d.innerHTML = `<div class="art-wrap"><div class="art-frame ${r}${owned ? "" : " ghost"}">${inner}</div><div class="art-name ${r}${owned ? "" : " ghost"}">${esc(name)}</div>${setBlock(name)}</div>`; };
   const silly = () => show(`<div class="msg"><div><b>❓</b>${NO_ART[Math.floor(Math.random() * NO_ART.length)]}</div></div>`);
   show(`<div class="msg"><div>Buscando a arte…</div></div>`);
   if (!d.open) d.showModal();
   if (!a) return silly();
   if (!(await getSheet())) return silly();
   if (S) S.artReady = true;
-  const img = new Image();
-  // At most 2× the original art, so small things (rings) stay sharp.
-  img.onload = () => { if (d.open) show(icon(a, Math.min(180, innerWidth * 0.5), 2)); if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); } };
-  img.onerror = silly;
-  img.src = gdRef.ITEM_SPRITE;
+  if (!sheetImg || !sheetImg.complete) {
+    sheetImg = new Image();
+    sheetImg.src = gdRef.ITEM_SPRITE;
+    try { await sheetImg.decode(); } catch { sheetImg = null; return silly(); }
+    if (S && S.tab !== "iron") { const x = document.getElementById("dlg-grail"); if (x && x.open) S.rerender(); }
+  }
+  if (!d.open) return;
+  show(`<span class="big"></span>`);
+  // Big: at most 1.4× the game's own icon (its art is small; more just blurs), drawn once with the browser's best scaling.
+  d.querySelector(".big").replaceWith(bigIcon(a, Math.min(170, innerWidth * 0.46), 1.4, !owned));
+}
+function bigIcon(a, box, maxK, ghost) {
+  const k = Math.min(box / a.w, box / a.h, maxK), w = a.w * k, h = a.h * k, dpr = Math.min(3, devicePixelRatio || 1);
+  const c = document.createElement("canvas");
+  c.className = "ico" + (ghost ? " sil" : "");
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  c.style.cssText = `display:block;width:${w.toFixed(1)}px;height:${h.toFixed(1)}px`;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  g.drawImage(sheetImg, a.x, a.y, a.w, a.h, 0, 0, c.width, c.height);
+  return c;
 }
 
 // On the art card: the item's set, every piece with ✓ or its slot; a complete set glows.
@@ -421,7 +454,11 @@ function setBlock(name) {
   const set = S && S.setOf && S.setOf[name];
   if (!set) return "";
   const c = S.counts(), have = set.pieces.filter((n) => c.items[n] > 0).length, done = have === set.pieces.length;
-  return `<div class="art-set${done ? " done" : ""}"><span class="t">${done ? "✦ Conjunto completo · " : "Conjunto · "}<b>${esc(set.name)}</b> ${have}/${set.pieces.length}</span><ul>${set.pieces.map((n) => {
+  const tiles = gdRef && S.artReady ? `<div class="art-tiles">${set.pieces.map((n) => {
+    const a = gdRef.itemArt(n), q = c.items[n] > 0;
+    return `<button type="button" class="art-tile ${(a && a.r) || "epic"}${q ? "" : " miss"}${n === name ? " cur" : ""}" data-flip="${esc(n)}" aria-label="${esc(n)}">${a ? icon(a, 38, 1).replace('class="ico"', `class="ico${q ? "" : " sil"}"`) : "❓"}</button>`;
+  }).join("")}</div>` : "";
+  return `<div class="art-set${done ? " done" : ""}"><span class="t">${done ? "✦ Conjunto completo · " : "Conjunto · "}<b>${esc(set.name)}</b> ${have}/${set.pieces.length}</span>${tiles}<ul>${set.pieces.map((n) => {
     const q = c.items[n] > 0;
     return `<li class="${q ? "" : "miss"}"><span>${q ? "✓ " : "· "}${esc(n)}</span><span class="k">${esc(KIND1[S.kindOf[n]] || "")}</span></li>`;
   }).join("")}</ul></div>`;
