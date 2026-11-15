@@ -16,6 +16,9 @@ const KIND1 = { sword: "Espada", sword2h: "Espada 2 mãos", axe: "Machado", axe2
 const NO_ART = ["A arte deste item se perdeu no Vazio. Reclama com o admin.", "O pintor de Cairn ainda não pintou esse. Vai falar com o admin.",
   "Uma fenda engoliu a imagem. Claramente culpa do admin.", "Sem arte por enquanto. O admin sabe o porquê (ou finge que sabe)."];
 const fmt = (n) => Number(n || 0).toLocaleString("pt-BR");
+// Mercador prices (the server has the same ones and is the one that decides).
+const PRICE = { random: { epic: 300, legendary: 900 }, set: { epic: 600, legendary: 1500 } };
+const SELL = { epic: 10, legendary: 40 }; // per extra copy; +50% if it's from a set you have complete
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const CSS = `
@@ -61,6 +64,16 @@ const CSS = `
 .art-set li { display: flex; gap: 8px; justify-content: space-between; padding: 2px 0; }
 .art-set li.miss { color: #6b675e; }
 .art-set li .k { color: #8d877a; font-size: .72rem; white-space: nowrap; }
+/* Mercador */
+#dlg-grail .mercs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 8px; }
+#dlg-grail .gbtn.merc { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; font-size: .86rem; width: 100%; }
+#dlg-grail .gbtn.merc .pr { font-size: .72rem; color: #b8ab8c; }
+#dlg-grail .gbtn.merc.epic { border-color: #2f5a93; } #dlg-grail .gbtn.merc.legendary { border-color: #6a3a99; }
+#dlg-grail .gbtn.merc.sell { margin-bottom: 6px; }
+#dlg-grail .gbtn[disabled], #dlg-art .gbtn[disabled] { opacity: .45; }
+#dlg-grail .gbtn.mini-buy { padding: 2px 7px; font-size: .7rem; margin-left: 6px; flex: none; }
+.art-act { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: -2px 0 10px; font-size: .72rem; }
+.art-act .gbtn { padding: 6px 12px; font-size: .82rem; border-radius: 3px; border: 1px solid #6e5832; background: linear-gradient(180deg, #2b2519, #16130d); color: #e9dcb8; }
 /* The set as small framed tiles (same gold/silver as the big frame); missing pieces are silhouettes */
 .art-tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin: 2px 0 10px; }
 .art-tile { width: 50px; height: 50px; padding: 0; display: grid; place-items: center; border: 2px solid transparent; border-radius: 2px; cursor: pointer; }
@@ -133,6 +146,8 @@ export function startGrail(o) {
   const cat = o.gd.grailCatalog();
   st.rar = {}; for (const r of ["epic", "legendary"]) for (const [n] of cat[r]) st.rar[n] = r;
   st.cat = cat;
+  st.rar = {}; for (const r of ["epic", "legendary"]) for (const [n] of cat[r]) st.rar[n] = r;
+  st.api = o.api; st.toast = o.toast;
   // Item sets: which set each piece belongs to (from the game's data, see gd-sets.js).
   st.sets = o.gd.grailSets ? o.gd.grailSets() : [];
   st.setOf = {}; for (const x of st.sets) for (const n of x.pieces) st.setOf[n] = x;
@@ -311,6 +326,16 @@ export function startGrail(o) {
     }
     return h + (st.filt !== "miss" && !owned ? `<p class="gnote">Nada ainda. Toque no vazio e reze. 🙏</p>` : "") + "</div>";
   }
+  // What "Desmontar repetidos" would give right now (same rule as the server).
+  function sellPreview(c) {
+    let n = 0, iron = 0;
+    for (const [name, q] of Object.entries(c.items)) {
+      const r = st.rar[name]; if (!r || q < 2) continue;
+      const set = st.setOf[name], full = set && set.pieces.every((x) => c.items[x] > 0);
+      n += q - 1; iron += Math.round(SELL[r] * (full ? 1.5 : 1)) * (q - 1);
+    }
+    return { n, iron };
+  }
   function setProgress(set, c) { return { have: set.pieces.filter((n) => c.items[n] > 0).length, of: set.pieces.length }; }
   // Conjuntos: sets you've started (most complete first; complete ones glow), then the rest folded away.
   // Tap a set: its pieces, what you have (tap for the art) and what's missing, with the slot.
@@ -325,7 +350,7 @@ export function startGrail(o) {
         <span class="prog"><i style="width:${(s.have / s.of * 100).toFixed(0)}%"></i></span><span class="gset${isDone ? " done" : ""}">${s.have}/${s.of}</span></div>`;
       if (st.sopen === s.x.name) h += `<div class="spieces">${s.x.app ? `<span class="sapp">${esc(s.x.app)}</span>` : ""}${s.x.pieces.map((n) => {
         const q = c.items[n] || 0, real = q && st.artReady && o.gd.itemArt(n), art = o.gd.grailArt(st.kindOf[n]);
-        return `<div class="gi ${q ? "has" : "miss"}" ${q ? `data-art="${esc(n)}"` : ""}>${real ? mini(real) : `<img src="${art.src}" alt="">`}<span class="nm" ${q ? `style="color:${col}"` : ""}>${esc(n)}</span><span class="meta">${q ? (q > 1 ? `×${q}` : "✓") : esc(KIND1[st.kindOf[n]] || "")}</span></div>`;
+        return `<div class="gi ${q ? "has" : "miss"}" ${q ? `data-art="${esc(n)}"` : ""}>${real ? mini(real) : `<img src="${art.src}" alt="">`}<span class="nm" ${q ? `style="color:${col}"` : ""}>${esc(n)}</span><span class="meta">${q ? (q > 1 ? `×${q}` : "✓") : esc(KIND1[st.kindOf[n]] || "")}</span>${q ? "" : buySetBtn(n, s.x, c)}</div>`;
       }).join("")}</div>`;
       return h;
     };
@@ -337,6 +362,14 @@ export function startGrail(o) {
   function ironTab() {
     const c = counts();
     let h = `<p>Você tem <b style="color:${IRON_COL}">${fmt(c.iron)} Pedaços de Ferro</b>.</p>`;
+    // 🏪 Mercador: a random item you don't have yet; peças de conjunto are bought on the art card (silhouettes)
+    // and in Conjuntos. ♻️ Desmontar: every extra copy → iron (one of each always stays).
+    const buy = (r, label) => { const p = PRICE.random[r], can = c.iron >= p, k = "buy-" + r;
+      return `<button class="gbtn merc ${r}" data-buy="${r}" ${can ? "" : "disabled"}>${st.confirm === k ? "Confirmar? " : ""}🎲 ${label}<span class="pr">${fmt(p)} ⚙️${can ? "" : ` · faltam ${fmt(p - c.iron)}`}</span></button>`; };
+    const sale = sellPreview(c);
+    h += `<h4>🏪 Mercador</h4><p class="gnote">Um item que você ainda não tem, sorteado. Peça de conjunto: toque na silhueta dela.</p>
+      <div class="mercs">${buy("epic", "Épico novo")}${buy("legendary", "Lendário novo")}</div>
+      <button class="gbtn merc sell" data-sellall ${sale.n ? "" : "disabled"}>${st.confirm === "sellall" ? "Confirmar? " : ""}♻️ Desmontar repetidos<span class="pr">${sale.n ? `${sale.n} ${sale.n === 1 ? "item" : "itens"} → +${fmt(sale.iron)} ⚙️` : "nada repetido"}</span></button>`;
     if (c.iron > 0) { st.qty = Math.max(1, Math.min(st.qty || 1, c.iron)); h += `<p class="gnote">Quanto presentear: <input class="gq" type="number" inputmode="numeric" min="1" max="${c.iron}" value="${st.qty}"></p>${sendRow("__iron", `<span class="qn">${fmt(st.qty)}</span> de ferro`)}`; }
     h += `<h4>Presentes a caminho</h4>`;
     h += st.gout.length ? st.gout.map((g) => `<div class="grow"><span class="nm">${giftName(g)} → ${esc(g.toName || "?")} <span class="meta">volta em ${Math.max(1, Math.ceil((g.until - Date.now()) / 864e5))} d se não abrir</span></span><button class="gbtn no" data-cancel="${g.id}">Cancelar</button></div>`).join("")
@@ -374,6 +407,12 @@ export function startGrail(o) {
         st.open = null; st.pick = null; renderList();
       } catch (e) { o.toast(e.message || "Não deu."); b.disabled = false; }
     });
+    B.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => twoTap("buy-" + b.dataset.buy, () => buyItem({ mode: "random", rarity: b.dataset.buy })));
+    B.querySelectorAll("[data-buyset]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); twoTap("set-" + b.dataset.buyset, () => buyItem({ mode: "set", name: b.dataset.buyset })); });
+    B.querySelectorAll("[data-sellall]").forEach((b) => b.onclick = () => twoTap("sellall", async () => {
+      try { const r = await o.api("sellRepeats", {}); o.toast(`♻️ ${r.data.sold} ${r.data.sold === 1 ? "item desmontado" : "itens desmontados"}: +${fmt(r.data.iron)} de ferro`); }
+      catch (e) { o.toast(e.message || "Não deu."); }
+    }));
     B.querySelectorAll("[data-cancel]").forEach((b) => b.onclick = async () => {
       b.disabled = true;
       try { await o.api("cancelGift", { id: b.dataset.cancel }); o.toast("Cancelado. Voltou pra quem mandou."); if (st.tab === "fam") loadFam(); }
@@ -416,11 +455,22 @@ async function openArt(name) {
   let d = document.getElementById("dlg-art");
   if (!d) {
     d = document.createElement("dialog"); d.id = "dlg-art";
-    d.addEventListener("click", (e) => { const t = e.target.closest("[data-flip]"); if (t) { e.stopPropagation(); openArt(t.dataset.flip); } else d.close(); });
+    d.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-flip], [data-buyset], [data-sell1]");
+      if (!t) return d.close();
+      e.stopPropagation();
+      if (t.dataset.flip) openArt(t.dataset.flip);
+      else if (t.dataset.buyset) twoTap("set-" + t.dataset.buyset, () => buyItem({ mode: "set", name: t.dataset.buyset }));
+      else twoTap("sell-" + t.dataset.sell1, async () => {
+        try { const x = (await S.api("sellRepeats", { name: t.dataset.sell1 })).data; S.toast(`♻️ +${fmt(x.iron)} de ferro`); setTimeout(reshow, 400); }
+        catch (err) { S.toast(err.message || "Não deu."); }
+      });
+    });
     document.body.appendChild(d);
   }
   const r = (a && a.r) || "epic", owned = !!(S && S.counts().items[name] > 0);
-  const show = (inner) => { d.innerHTML = `<div class="art-wrap"><div class="art-frame ${r}${owned ? "" : " ghost"}">${inner}</div><div class="art-name ${r}${owned ? "" : " ghost"}">${esc(name)}</div>${setBlock(name)}</div>`; };
+  d.dataset.name = name;
+  const show = (inner) => { d.innerHTML = `<div class="art-wrap"><div class="art-frame ${r}${owned ? "" : " ghost"}">${inner}</div><div class="art-name ${r}${owned ? "" : " ghost"}">${esc(name)}</div>${cardActions(name)}${setBlock(name)}</div>`; };
   const silly = () => show(`<div class="msg"><div><b>❓</b>${NO_ART[Math.floor(Math.random() * NO_ART.length)]}</div></div>`);
   show(`<div class="msg"><div>Buscando a arte…</div></div>`);
   if (!d.open) d.showModal();
@@ -450,7 +500,45 @@ function bigIcon(a, box, maxK, ghost) {
   return c;
 }
 
+// Purchases and sales ask twice: the first tap turns the button into "Confirmar?" for 4 s.
+let confirmTimer = 0;
+function twoTap(key, go) {
+  if (S.confirm === key) { S.confirm = null; clearTimeout(confirmTimer); go(); }
+  else { S.confirm = key; clearTimeout(confirmTimer); confirmTimer = setTimeout(() => { S.confirm = null; reshow(); }, 4000); }
+  reshow();
+}
+function reshow() {
+  const g = document.getElementById("dlg-grail"); if (g && g.open) S.rerender();
+  const a = document.getElementById("dlg-art"), act = a && a.open && a.querySelector(".art-act");
+  if (act) act.outerHTML = cardActions(a.dataset.name) || "<div class=\"art-act\"></div>"; // just the buttons, no redraw
+}
+function buySetBtn(name, set, c, big) {
+  const p = PRICE.set[set.r], can = c.iron >= p;
+  return `<button class="gbtn${big ? "" : " mini-buy"}" data-buyset="${esc(name)}" ${can ? "" : "disabled"}>${S.confirm === "set-" + name ? "Confirmar? " : ""}${big ? "🏪 Comprar · " : ""}${fmt(p)} ⚙️</button>`;
+}
+// Bought: the item drops on screen like loot, then its card opens.
+async function buyItem(args) {
+  try {
+    const r = (await S.api("buyItem", args)).data;
+    for (const id of ["dlg-art", "dlg-grail"]) { const x = document.getElementById(id); if (x && x.open) x.close(); }
+    if (gdRef.dropItem) gdRef.dropItem(r.name, r.rarity);
+    S.toast(`🏪 ${r.name}! (−${fmt(r.price)} de ferro)`);
+    setTimeout(() => openArt(r.name), 2200);
+  } catch (e) { S.toast(e.message || "Não deu."); }
+}
+
 // On the art card: the item's set, every piece with ✓ or its slot; a complete set glows.
+// Under the name: buy it (a missing set piece) or sell one extra copy.
+function cardActions(name) {
+  if (!S || !S.counts) return "";
+  const c = S.counts(), q = c.items[name] || 0, set = S.setOf && S.setOf[name];
+  if (!q && set) { const p = PRICE.set[set.r]; return `<div class="art-act">${buySetBtn(name, set, c, true)}<span class="muted">${c.iron >= p ? "comprar essa peça" : `faltam ${fmt(p - c.iron)} de ferro`}</span></div>`; }
+  if (q > 1 && S.rar[name]) {
+    const full = set && set.pieces.every((x) => c.items[x] > 0), p = Math.round(SELL[S.rar[name]] * (full ? 1.5 : 1));
+    return `<div class="art-act"><button class="gbtn" data-sell1="${esc(name)}">${S.confirm === "sell-" + name ? "Confirmar? " : ""}♻️ Vender 1 repetido · +${fmt(p)} ⚙️</button><span class="muted">você tem ×${q}</span></div>`;
+  }
+  return `<div class="art-act"></div>`;
+}
 function setBlock(name) {
   const set = S && S.setOf && S.setOf[name];
   if (!set) return "";

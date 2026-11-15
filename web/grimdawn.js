@@ -1109,6 +1109,12 @@ function rollItem() {
 // ---------- The grail: the app keeps count of epics, legendaries and iron (web/grail.js) ----------
 let lootHook = null;
 export function onLoot(fn) { lootHook = fn; }
+// A bought item lands on the ground like a drop (the server already gave it).
+export function dropItem(name, rarity) {
+  ensureCss();
+  const layer = document.getElementById("fx");
+  if (layer) loot(innerWidth / 2, innerHeight * 0.42, layer, 1, { name, rarity });
+}
 // Renamed items: "old name": "new name", so copies saved under the old name move to the new one.
 export const ALIASES = {};
 // Every epic and legendary that can drop, with its kind of item (for grouping in the list).
@@ -1120,19 +1126,23 @@ export const ITEM_SPRITE = GDI.SPRITE, ITEM_SHEET = GDI.SHEET;
 // The item picture for a kind (the same pictures the drops use; the first of each kind).
 export function grailArt(kind) { const n = (SPRITE_FOR[KIND_ART[kind] || kind] || SPRITE_FOR.sword)[0], [w, h] = SPR[n]; return { src: SPRITE_URL(n), w, h }; }
 
-function loot(x, y, layer, forceLucky) {
+function loot(x, y, layer, forceLucky, only) {
   const g = box(layer, x, y);
   const items = [];
-  const n = Math.round(rnd(2, 5));
+  const n = only ? 0 : Math.round(rnd(2, 5));
   for (let i = 0; i < n; i++) items.push(rollItem());
+  if (only) { // one given item (a purchase): just it, with its pillar of light
+    const k = (REAL[only.rarity] || []).find((x) => x[0] === only.name);
+    items.push({ name: only.name, col: COLOR[only.rarity], art: KIND_ART[k ? k[1] : "sword"], beam: only.rarity });
+  }
   // Now and then something worth celebrating.
-  const lucky = forceLucky ?? Math.random();
+  const lucky = only ? 1 : forceLucky ?? Math.random();
   if (lucky < 0.035) { const [name, kind] = pick(REAL.legendary); items.push({ name, col: COLOR.legendary, art: KIND_ART[kind], beam: "legendary" }); }
   else if (lucky < 0.13) { const [name, kind] = pick(REAL.epic); items.push({ name, col: COLOR.epic, art: KIND_ART[kind], beam: "epic" }); }
   // Iron is kept and traded, so it's scarce: ~1 tap in 10 gives 1-3, ~1 in 250 a rare chunk of 10-20
   // (about 2 iron per epic/legendary found, on average).
-  const ir = Math.random(), iron = ir < 0.004 ? 10 + Math.floor(Math.random() * 11) : ir < 0.104 ? 1 + Math.floor(Math.random() * 3) : 0;
-  if (lootHook) try { // the grail: report what is worth keeping (epics, legendaries, iron)
+  const ir = only ? 1 : Math.random(), iron = ir < 0.004 ? 10 + Math.floor(Math.random() * 11) : ir < 0.104 ? 1 + Math.floor(Math.random() * 3) : 0;
+  if (lootHook && !only) try { // the grail: report what is worth keeping (epics, legendaries, iron)
     for (const it of items) if (it.beam) lootHook({ name: it.name, rarity: it.beam });
     if (iron) lootHook({ iron });
   } catch (e) { console.warn("grail", e); }

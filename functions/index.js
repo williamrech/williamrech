@@ -1142,6 +1142,65 @@ handlers.sendGift = async (req) => {
   return { id: ref.id };
 };
 
+// ---------------------------------------------------------------------------
+// Mercador: spend iron on an item you don't have; sell repeats for iron. Prices here only (the phones just show
+// them). Item names and sets come from functions/gd-data.json (node scripts/gd-data.mjs, from web/gd-items.js
+// and web/gd-sets.js). Only while Grim Dawn is live for you.
+// ---------------------------------------------------------------------------
+const GD = require("./gd-data.json");
+const RAR_OF = {}; for (const r of ["epic", "legendary"]) for (const n of GD[r]) RAR_OF[n] = r;
+const SET_OF = {}; for (const st of GD.sets) for (const n of st.pieces) SET_OF[n] = st;
+const PRICE = { random: { epic: 300, legendary: 900 }, set: { epic: 600, legendary: 1500 } };
+const SELL = { epic: 10, legendary: 40 }; // per extra copy; +50% for a piece of a set you have complete
+const setDone = (name, items) => { const st = SET_OF[name]; return !!st && st.pieces.every((n) => (items[n] || 0) > 0); };
+const sellPrice = (name, items) => Math.round((SELL[RAR_OF[name]] || 0) * (setDone(name, items) ? 1.5 : 1));
+
+handlers.buyItem = async (req) => {
+  const auth = requireAuth(req);
+  const d = req.data || {};
+  if (!(await grimLiveFor([auth.uid]))[0]) throw new HttpsError("failed-precondition", "O mercador só abre durante o Grim Dawn.");
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(grailRef(auth.uid));
+    const data = snap.exists ? snap.data() : {}, items = data.items || {}, iron = data.iron || 0;
+    let name, price;
+    if (d.mode === "set") {
+      name = String(d.name || "");
+      const st = SET_OF[name];
+      if (!st) throw new HttpsError("invalid-argument", "Esse item não é de conjunto.");
+      if ((items[name] || 0) > 0) throw new HttpsError("failed-precondition", "Você já tem esse.");
+      price = PRICE.set[st.r];
+    } else {
+      const r = d.rarity === "legendary" ? "legendary" : "epic";
+      const pool = GD[r].filter((n) => !((items[n] || 0) > 0));
+      if (!pool.length) throw new HttpsError("failed-precondition", `Você já tem todos os ${r === "legendary" ? "lendários" : "épicos"}! 🏆`);
+      name = pool[Math.floor(Math.random() * pool.length)];
+      price = PRICE.random[r];
+    }
+    if (iron < price) throw new HttpsError("failed-precondition", `Falta ferro: custa ${price}, você tem ${iron}.`);
+    tx.update(grailRef(auth.uid), itemPath(name), 1, "iron", FieldValue.increment(-price), "updatedAt", Date.now());
+    return { name, rarity: RAR_OF[name], price };
+  });
+};
+
+// Sell extra copies (you always keep one): { name } sells one copy of that item, nothing → every extra copy.
+handlers.sellRepeats = async (req) => {
+  const auth = requireAuth(req);
+  const d = req.data || {};
+  if (!(await grimLiveFor([auth.uid]))[0]) throw new HttpsError("failed-precondition", "O mercador só abre durante o Grim Dawn.");
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(grailRef(auth.uid));
+    const items = (snap.exists && snap.data().items) || {};
+    const list = d.name ? [[String(d.name), 1]] : Object.entries(items).map(([n, q]) => [n, (q || 0) - 1]);
+    const sell = list.filter(([n, k]) => k > 0 && RAR_OF[n] && (items[n] || 0) - k >= 1);
+    if (!sell.length) throw new HttpsError("failed-precondition", "Nada repetido pra vender.");
+    let total = 0, count = 0;
+    const args = [];
+    for (const [n, k] of sell) { total += sellPrice(n, items) * k; count += k; args.push(itemPath(n), items[n] - k); }
+    tx.update(grailRef(auth.uid), ...args, "iron", FieldValue.increment(total), "updatedAt", Date.now());
+    return { sold: count, iron: total };
+  });
+};
+
 handlers.answerGift = async (req) => {
   const auth = requireAuth(req);
   const id = String((req.data || {}).id || ""), accept = (req.data || {}).accept === true;
