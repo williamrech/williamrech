@@ -12,7 +12,7 @@ const KINDS = [["sword", "Espadas"], ["sword2h", "Espadas de duas mãos"], ["axe
 const KIND1 = { sword: "Espada", sword2h: "Espada 2 mãos", axe: "Machado", axe2h: "Machado 2 mãos", mace: "Maça", mace2h: "Maça 2 mãos", spear2h: "Lança",
   dagger: "Adaga", scepter: "Cetro", gun1h: "Arma de fogo", gun2h: "Arma de fogo 2 mãos", shield: "Escudo", focus: "Mão secundária", head: "Elmo",
   shoulder: "Ombreira", chest: "Peitoral", hands: "Luvas", waist: "Cinto", legs: "Calças", feet: "Botas", ring: "Anel", amulet: "Amuleto", medal: "Medalha" };
-// When the icon art can't show (no Wi-Fi yet, or GrimTools changed its picture): a silly line instead.
+// When the icon art can't show (the download failed, or GrimTools changed its picture): a silly line instead.
 const NO_ART = ["A arte deste item se perdeu no Vazio. Reclama com o admin.", "O pintor de Cairn ainda não pintou esse. Vai falar com o admin.",
   "Uma fenda engoliu a imagem. Claramente culpa do admin.", "Sem arte por enquanto. O admin sabe o porquê (ou finge que sabe)."];
 const fmt = (n) => Number(n || 0).toLocaleString("pt-BR");
@@ -103,8 +103,6 @@ const CSS = `
 .art-frame .ico { background-repeat: no-repeat; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .8)); }
 .art-frame .msg { width: 200px; min-height: 120px; display: grid; place-items: center; text-align: center; font-size: .9rem; color: #cfc6b0; }
 .art-frame .msg b { display: block; font-size: 2.4rem; margin-bottom: 6px; }
-.art-frame .msg button.art-dl { margin-top: 12px; padding: 8px 12px; font: 700 .8rem/1.2 var(--sans, system-ui); border-radius: 3px; border: 1px solid #8a6f3e;
-  background: linear-gradient(180deg, #4a3c1f, #2a2112); color: #f3d64e; }
 .art-name { font-family: "GD Cinzel", Georgia, serif; font-weight: 700; letter-spacing: .04em; text-align: center; max-width: 80vw; }
 .art-name.legendary { color: #c86bff; } .art-name.epic { color: #4f9dff; }
 `;
@@ -126,8 +124,15 @@ export function startGrail(o) {
   st.setOf = {}; for (const x of st.sets) for (const n of x.pieces) st.setOf[n] = x;
   st.kindOf = {}; for (const r of ["epic", "legendary"]) for (const [n, k] of cat[r]) st.kindOf[n] = k;
   st.sopen = null;
-  st.artReady = false; // GrimTools' icon sheet saved on this phone?
-  hasSheet().then((ok) => { st.artReady = ok; });
+  st.artReady = false; // GrimTools' icon sheet saved on this phone? If not, fetch it now, quietly (any connection).
+  hasSheet().then((ok) => {
+    if (ok) { st.artReady = true; return; }
+    setTimeout(() => getSheet().then((got) => {
+      if (!got) return;
+      st.artReady = true;
+      const x = document.getElementById("dlg-grail"); if (x && x.open && st.tab !== "iron") st.rerender(); // mini icons appear
+    }), 3000); // after the app has settled
+  });
 
   // Footer line
   const line = document.createElement("button");
@@ -363,16 +368,19 @@ export function startGrail(o) {
   }
 }
 
-// ---------- Item art: GrimTools' icon sheet, saved on the phone the first time (Wi-Fi only) ----------
+// ---------- Item art: GrimTools' icon sheet (5.6 MB), saved on the phone when the collection starts ----------
+// Any connection, no asking (William's call: family phones, he pays the internet). One download per phone.
 const ART_CACHE = "gd-art";
 let gdRef = null;
 async function hasSheet() {
   try { return !!(gdRef && "caches" in self && await (await caches.open(ART_CACHE)).match(gdRef.ITEM_SPRITE)); } catch { return false; }
 }
-const netType = () => (navigator.connection && navigator.connection.type) || "unknown"; // "wifi", "cellular", … or unknown (many phones don't say)
-async function getSheet(confirmed) {
+let sheetLoad = null; // one download at a time
+function getSheet() {
+  return (sheetLoad ||= fetchSheet().finally(() => { sheetLoad = null; }));
+}
+async function fetchSheet() {
   if (await hasSheet()) return true;
-  if (netType() !== "wifi" && !confirmed) return false;
   try {
     const res = await fetch(gdRef.ITEM_SPRITE, { mode: "no-cors" }); // their server doesn't share; an opaque copy is enough to show it
     await (await caches.open(ART_CACHE)).put(gdRef.ITEM_SPRITE, res);
@@ -385,7 +393,7 @@ function icon(a, box, maxK = Infinity) { // the icon scaled to fit a box (keeps 
     background-size:${(W * k).toFixed(1)}px ${(H * k).toFixed(1)}px;background-position:${(-a.x * k).toFixed(1)}px ${(-a.y * k).toFixed(1)}px"></i>`;
 }
 function mini(a) { return `<span class="mini">${icon(a, 26).replace('style="display:block;', 'style="display:block;transform:translate(-50%,-50%);')}</span>`; }
-async function openArt(name, confirmed) {
+async function openArt(name) {
   const a = gdRef.itemArt(name);
   let d = document.getElementById("dlg-art");
   if (!d) {
@@ -399,16 +407,7 @@ async function openArt(name, confirmed) {
   show(`<div class="msg"><div>Buscando a arte…</div></div>`);
   if (!d.open) d.showModal();
   if (!a) return silly();
-  if (!(await getSheet(confirmed))) {
-    // The phone didn't say it's on Wi-Fi: let the person confirm it (unless it said it's on mobile data).
-    if (netType() === "unknown" && !confirmed) {
-      show(`<div class="msg"><div><b>📶❓</b>Seu celular não contou se está no Wi-Fi.<br><button class="art-dl">Tô no Wi-Fi, baixar a arte (5,6 MB)</button></div></div>`);
-      const btn = d.querySelector(".art-dl");
-      btn.onclick = (e) => { e.stopPropagation(); openArt(name, true); };
-      return;
-    }
-    return silly();
-  }
+  if (!(await getSheet())) return silly();
   if (S) S.artReady = true;
   const img = new Image();
   // At most 2× the original art, so small things (rings) stay sharp.
