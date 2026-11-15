@@ -2,6 +2,7 @@
 // Row: rarity|set name (official PT)|piece;piece;… (piece names exactly as in gd-items.js).
 // Source: GrimTools' itemSets (set → member item ids) and allItems (item → set), both agreeing, matched to our items by
 // item id — never by name. Awakened sets carry the base set's name (their pieces are the awakened ones). 14.11.2026.
+// Plus app-only sets at the end (marked app), e.g. the joke versions of Shadowheart (15.11).
 export const SETS = `
 L|A Alma do Vazio|Semblante da Alma do Vazio;Armadura da Alma do Vazio;Manto da Alma do Vazio;Baluarte da Alma do Vazio
 L|A Marca da Morte|Capuz Marcado pela Morte;Jaqueta Marcada pela Morte;Guarda-ombros Marcados pela Morte;Garra Marcada pela Morte;Decapitador Marcado pela Morte
@@ -136,4 +137,9 @@ L|Vidente Flamejante|Sinete do Vidente Flamejante;Timbre do Vidente Flamejante;C
 L|Vingador da Natureza|Armadura do Vingador;Brafoneiras do Vingador;Trituradora do Vingador;Cinturão do Vingador
 L|Visão do Adivinho|Máscara do Adivinho;Indumentária do Adivinho;Manto do Adivinho;Códice do Adivinho
 L|[ms]Arsenal de Igirron|Visor de Igirron;Destruidora de Igirron;Rupturadora de Igirron;Fragmentos de Igirron
-`.trim().split("\n").map((l) => { const [r, name, p] = l.split("|"); return { r: r === "L" ? "legendary" : "epic", name, pieces: p.split(";") }; });
+`.trim().split("\n").map((l) => { const [r, name, p] = l.split("|"); return { r: r === "L" ? "legendary" : "epic", name, pieces: p.split(";") }; })
+  // Sets made for this app only (not in the game), so look-alike items don't confuse anyone. app: a note shown with it.
+  .concat([
+    { r: "legendary", name: "Coração das Sombras e as Paródias", app: "Conjunto só do app: a adaga de verdade e as versões-piada que o próprio jogo esconde (Shadowfart & cia.).",
+      pieces: ["Coração das Sombras", "Corassao das Sumbras", "Coraçaum das Sombras", "Corassaum das Sombras", "Coração das Sobras", "Coraçao das Sobras"] },
+  ]);

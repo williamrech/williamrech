@@ -56,6 +56,7 @@ const CSS = `
 .art-set { max-width: min(320px, 86vw); font-size: .8rem; color: #cfc6b0; text-align: left; }
 .art-set .t { display: block; text-align: center; margin: 0 0 6px; font-family: "GD Cinzel", Georgia, serif; }
 .art-set.done .t { color: #b9ffcb; }
+.art-set .app, #dlg-grail .sapp { display: block; text-align: center; margin: -2px 0 8px; font-size: .7rem; color: #8d877a; font-style: italic; }
 .art-set ul { list-style: none; margin: 0; padding: 0; }
 .art-set li { display: flex; gap: 8px; justify-content: space-between; padding: 2px 0; }
 .art-set li.miss { color: #6b675e; }
@@ -322,7 +323,7 @@ export function startGrail(o) {
       const isDone = s.have === s.of, col = RAR[s.x.r].col;
       let h = `<div class="srow${isDone ? " sdone" : ""}" data-set="${esc(s.x.name)}"><span class="nm" style="color:${s.have ? col : "#8d877a"}">${isDone ? "✦ " : ""}${esc(s.x.name)}</span>
         <span class="prog"><i style="width:${(s.have / s.of * 100).toFixed(0)}%"></i></span><span class="gset${isDone ? " done" : ""}">${s.have}/${s.of}</span></div>`;
-      if (st.sopen === s.x.name) h += `<div class="spieces">${s.x.pieces.map((n) => {
+      if (st.sopen === s.x.name) h += `<div class="spieces">${s.x.app ? `<span class="sapp">${esc(s.x.app)}</span>` : ""}${s.x.pieces.map((n) => {
         const q = c.items[n] || 0, real = q && st.artReady && o.gd.itemArt(n), art = o.gd.grailArt(st.kindOf[n]);
         return `<div class="gi ${q ? "has" : "miss"}" ${q ? `data-art="${esc(n)}"` : ""}>${real ? mini(real) : `<img src="${art.src}" alt="">`}<span class="nm" ${q ? `style="color:${col}"` : ""}>${esc(n)}</span><span class="meta">${q ? (q > 1 ? `×${q}` : "✓") : esc(KIND1[st.kindOf[n]] || "")}</span></div>`;
       }).join("")}</div>`;
@@ -458,7 +459,7 @@ function setBlock(name) {
     const a = gdRef.itemArt(n), q = c.items[n] > 0;
     return `<button type="button" class="art-tile ${(a && a.r) || "epic"}${q ? "" : " miss"}${n === name ? " cur" : ""}" data-flip="${esc(n)}" aria-label="${esc(n)}">${a ? icon(a, 38, 1).replace('class="ico"', `class="ico${q ? "" : " sil"}"`) : "❓"}</button>`;
   }).join("")}</div>` : "";
-  return `<div class="art-set${done ? " done" : ""}"><span class="t">${done ? "✦ Conjunto completo · " : "Conjunto · "}<b>${esc(set.name)}</b> ${have}/${set.pieces.length}</span>${tiles}<ul>${set.pieces.map((n) => {
+  return `<div class="art-set${done ? " done" : ""}"><span class="t">${done ? "✦ Conjunto completo · " : "Conjunto · "}<b>${esc(set.name)}</b> ${have}/${set.pieces.length}</span>${set.app ? `<span class="app">${esc(set.app)}</span>` : ""}${tiles}<ul>${set.pieces.map((n) => {
     const q = c.items[n] > 0;
     return `<li class="${q ? "" : "miss"}"><span>${q ? "✓ " : "· "}${esc(n)}</span><span class="k">${esc(KIND1[S.kindOf[n]] || "")}</span></li>`;
   }).join("")}</ul></div>`;
