@@ -1,0 +1,21 @@
+# One-off read-only diagnostics (scripts/diag-*.js). Runs when this file changes. Prints anonymous facts only.
+name: Diagnostics
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/diag.yml"]
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    env:
+      SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --omit=dev
+        working-directory: functions
+      - name: Notifications for one person
+        run: |
+          echo "$SA_KEY" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" GCLOUD_PROJECT=williamrech-firebase DIAG_HASH=e07bc8e922ac2ce3 NODE_PATH=functions/node_modules node scripts/diag-notif.js
