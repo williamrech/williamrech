@@ -72,12 +72,7 @@ export function startEffect(layer, kind, scale = 1, still = false) {
     burst(Math.round(70 * scale), 1, 50, 50);
     const again = () => {
       if (layer.dataset.fx !== "confetti") return;
-      if (!document.hidden && !document.body.classList.contains("resting") && layer.childElementCount < 100 * scale + 10 && Math.random() < 0.35) {
-        // Now and then a party cannon instead: a stream shot sideways from a bottom corner (sometimes both).
-        const both = Math.random() < 0.3, left = Math.random() < 0.5;
-        if (both || left) cannon(layer, scale, colors, true);
-        if (both || !left) cannon(layer, scale, colors, false);
-      } else if (!document.hidden && !document.body.classList.contains("resting") && layer.childElementCount < 100 * scale + 10) {
+      if (!document.hidden && !document.body.classList.contains("resting") && layer.childElementCount < 100 * scale + 10) {
         const r = Math.random();
         const count = r < 0.5 ? rnd(8, 20) : r < 0.85 ? rnd(20, 40) : rnd(45, 80);
         const wide = Math.random() < 0.55;
@@ -159,11 +154,37 @@ function cannon(layer, scale, colors, fromLeft) {
   const x = fromLeft ? -6 : W + 6, y = H * 0.92, dir = fromLeft ? 1 : -1;
   fling(layer, x, y, colors, Math.round(36 * Math.max(scale, 0.5)), (rnd) => [dir * rnd(0.35, 0.95) * W, rnd(0.35, 0.75) * H]);
 }
-// A tap on the background: a little pop of confetti right there (only "confetti" reacts to taps).
+// The umbrella pop (same path as Grim Dawn's loot): every piece rises and falls on a gravity arc, the arcs fanned
+// out evenly left to right like the ribs of an open umbrella — the middle ones highest, the outer ones lower and wider.
+// y(s) = a s² + b s with y(1) = dy and the top of the arc at peak (< 0); x moves steadily.
+function umbrella(layer, x, y, colors, n) {
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const arc = (dx, dy, peak, spin) => {
+    const P = Math.min(peak, dy - 10), b = 2 * P - 2 * Math.sqrt(P * P - P * dy), a = dy - b, fr = [];
+    for (let i = 0; i <= 18; i++) {
+      const t = i / 18;
+      fr.push({ transform: `translate(-50%,-50%) translate(${(dx * t).toFixed(1)}px, ${(a * t * t + b * t).toFixed(1)}px) rotate(${(spin * t).toFixed(0)}deg)`, opacity: t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25, offset: t });
+    }
+    return fr;
+  };
+  for (let i = 0; i < n; i++) {
+    const fan = (i / (n - 1)) * 2 - 1;
+    const dx = fan * 130 + rnd(-12, 12), dy = rnd(70, 130) + Math.abs(fan) * 25, peak = -(rnd(95, 140) - Math.abs(fan) * 45);
+    const el = document.createElement("i");
+    el.className = "confetti-fly";
+    el.style.cssText = `left:${x}px;top:${y}px;width:${rnd(5, 9)}px;height:${rnd(8, 13)}px;background:${colors[Math.floor(Math.random() * colors.length)]}`;
+    layer.appendChild(el);
+    el.animate(arc(dx, dy, peak, rnd(-700, 700)), { duration: rnd(950, 1250), delay: rnd(0, 80), easing: "linear", fill: "both" })
+      .finished.then(() => el.remove(), () => el.remove());
+  }
+}
+// A tap on the background (only "confetti" reacts): two times out of three an umbrella pop right there; the third,
+// a party cannon fires from the bottom corner on that side, shooting a stream up and across.
 export function tapEffect(kind, x, y, layer) {
   if (kind !== "confetti" || !layer) return;
   const css = getComputedStyle(layer);
   const colors = ["--caramel", "--crema", "--fg", "--muted"].map((v) => css.getPropertyValue(v).trim()).filter(Boolean).concat(["#ff8fb1", "#7fc8f8", "#f5d76e"]);
-  fling(layer, x, y, colors, 26, (rnd) => { const a = rnd(-Math.PI * 0.9, -Math.PI * 0.1), sp = rnd(60, 170); return [Math.cos(a) * sp * 1.4, -Math.sin(a) * sp + 40]; });
+  if (Math.random() < 1 / 3) cannon(layer, 1, colors, x < (layer.clientWidth || innerWidth) / 2);
+  else umbrella(layer, x, y, colors, 24);
 }
 
