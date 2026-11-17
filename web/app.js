@@ -569,7 +569,7 @@ function fpsMeter() {
   const tick = (t) => {
     if (!fpsOn) { fpsRun = false; return; }
     n++;
-    if (t - t0 >= 1000) { el.textContent = `${Math.round((n * 1000) / (t - t0))} fps${document.body.classList.contains("resting") ? " 😴" : ""}`; n = 0; t0 = t; }
+    if (t - t0 >= 1000) { el.textContent = `${Math.round((n * 1000) / (t - t0))} fps${document.body.classList.contains("resting") ? " 😴" : ""} · pág ${document.scrollingElement.scrollHeight}/${innerHeight}`; n = 0; t0 = t; }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
