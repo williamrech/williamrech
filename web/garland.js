@@ -1,0 +1,211 @@
+// 🎉 Varal: a party letter garland hanging across the top, over everything (it's meant to be in the way: tilt the
+// phone to swing it aside). Foil letters joined by little rings and string, ends pinned at random heights, a word
+// picked at random. Physics: points + rods (Verlet). Each letter is a rod between its two rings and hangs rigidly
+// below it; between letters, string with two points of its own so it sags. Gravity follows the phone (devicemotion),
+// a shake jiggles it, a finger can grab, drag and flick a letter, a tap bumps it. When nothing moves it sleeps
+// (no frames at all) until the phone tilts, shakes or a finger touches it. Part of the Festa pacote (festa.js).
+const WORDS = ["LETRAS", "BOLO!", "REFRIGERANTE", "BRIGADEIRO", "OBA!", "VARAL", "CONFETE", "COXINHA", "PARABÉNS?", "SALGADINHO",
+  "BEXIGA", "EBA!", "DOCINHO", "GUARANÁ", "PIPOCA", "SURPRESA!", "VIVA!", "TCHAU DIETA", "BALÃO", "FESTA?"];
+const FOILS = ["#2f7fe0", "#d42a7a", "#e8b52a", "#2fa84f", "#c3c8d0", "#ff7a1a", "#8a4fe0"];
+const FONT = '900 {S}px "Arial Rounded MT Bold", "Nunito", "Varela Round", system-ui, sans-serif';
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+export function startGarland(layer, _colors, still) {
+  const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+  const W = innerWidth, CH = Math.min(320, innerHeight * 0.45), dpr = Math.min(2.5, devicePixelRatio || 1);
+  const cv = document.createElement("canvas");
+  cv.className = "fx-garland";
+  cv.width = Math.round(W * dpr); cv.height = Math.round(CH * dpr);
+  cv.style.cssText = `position:absolute;left:0;top:0;width:${W}px;height:${CH}px;pointer-events:none`;
+  layer.appendChild(cv);
+  const g = cv.getContext("2d");
+
+  // ---- the chain ----
+  const chars = [...word], n = chars.filter((c) => c !== " ").length;
+  let lw = Math.max(22, Math.min(50, (W * 0.98) / (chars.length * 1.12)));
+  const yL = rnd(8, 52), yR = rnd(8, 52), chord = Math.hypot(W + 8, yR - yL), slack = rnd(1.07, 1.16);
+  const pts = [], rods = [], letters = [];
+  const P = (x, y, pin) => { const p = { x, y, px: x, py: y, pin: !!pin }; pts.push(p); return p; };
+  const rod = (a, b, len) => rods.push({ a, b, len });
+  // lay everything out on the straight chord first; the sag comes by itself
+  let rodLen = lw * 0.78, gaps = chars.length + 1 + chars.filter((c) => c === " ").length;
+  let sLen = (chord * slack - n * rodLen) / (gaps * 3);
+  if (sLen < 4) { lw *= 0.8; rodLen = lw * 0.78; sLen = Math.max(4, (chord * slack - n * rodLen) / (gaps * 3)); }
+  const lh = lw * 1.18;
+  const A = P(-4, yL, true), B = P(W + 4, yR, true);
+  let t = 0, prev = A;
+  const along = (d) => { t += d; const k = t / (chord * slack); return [A.x + (B.x - A.x) * k, A.y + (B.y - A.y) * k]; };
+  const string = (to) => { // 3 segments of string from prev to a new point
+    let p = prev;
+    for (let i = 0; i < 2; i++) { const [x, y] = along(sLen); const q = P(x, y); rod(p, q, sLen); p = q; }
+    const [x, y] = along(sLen); const end = to || P(x, y); rod(p, end, sLen); return end;
+  };
+  let ci = 0;
+  for (const c of chars) {
+    if (c === " ") { prev = string(); continue; }
+    const a = string();
+    const [x, y] = along(rodLen); const b = P(x, y); rod(a, b, rodLen);
+    letters.push({ a, b, c, col: FOILS[ci++ % FOILS.length], tilt: rnd(-0.06, 0.06) });
+    prev = b;
+  }
+  string(B);
+  pts.splice(pts.indexOf(B), 1); pts.push(B);
+
+  // ---- gravity from the phone ----
+  let gx = 0, gy = 1, sleeping = false, resting = document.body.classList.contains("resting"), dead = false, still0 = 0;
+  const onMotion = (e) => {
+    const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+    const nx = -a.x / 9.81, ny = a.y / 9.81; // screen coordinates: x right, y down
+    const sx = nx - gx, sy = ny - gy;
+    gx += sx * 0.15; gy += sy * 0.15;
+    if (Math.hypot(sx, sy) > 0.6) for (const p of pts) if (!p.pin) { p.px -= sx * rnd(1, 3); p.py -= sy * rnd(1, 3); } // a shake
+    if (Math.hypot(sx, sy) > 0.04) wake();
+  };
+  addEventListener("devicemotion", onMotion);
+
+  // ---- finger ----
+  let grab = null;
+  const letterAt = (x, y) => {
+    for (let i = letters.length - 1; i >= 0; i--) {
+      const L = letters[i], ux = L.b.x - L.a.x, uy = L.b.y - L.a.y, len = Math.hypot(ux, uy) || 1, cx = ux / len, cy = uy / len;
+      const mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2, dx = x - mx, dy = y - my;
+      const lx = dx * cx + dy * cy, ly = -dx * cy + dy * cx; // along the rod, and below it
+      if (Math.abs(lx) < lw * 0.6 && ly > -lw * 0.25 && ly < lh * 1.05) return { L, lx, ly };
+    }
+    return null;
+  };
+  const onDown = (e) => {
+    if (resting && !document.body.classList.contains("resting")) resting = false;
+    const r = cv.getBoundingClientRect(), hit = letterAt(e.clientX - r.left, e.clientY - r.top);
+    if (!hit) return;
+    e.stopPropagation(); e.preventDefault(); // no text selection / page drag underneath
+    grab = { ...hit, x: e.clientX - r.left, y: e.clientY - r.top, moved: false, id: e.pointerId };
+    wake();
+  };
+  const onMove = (e) => {
+    if (!grab || e.pointerId !== grab.id) return;
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    if (Math.hypot(x - grab.x, y - grab.y) > 6) grab.moved = true;
+    grab.x = x; grab.y = y;
+  };
+  const onUp = (e) => {
+    if (!grab || e.pointerId !== grab.id) return;
+    if (!grab.moved) { grab.L.a.py -= rnd(6, 10); grab.L.b.py -= rnd(6, 10); grab.L.a.px += rnd(-3, 3); } // a tap: a little bump
+    grab = null; lastGrab = performance.now();
+  };
+  // touches on a letter don't reach what's underneath (a click there, or the page scrolling while dragging)
+  let lastGrab = -1e9;
+  const onClick = (e) => { if (performance.now() - lastGrab < 600) { e.stopPropagation(); e.preventDefault(); } };
+  const onTouchMove = (e) => { if (grab) e.preventDefault(); };
+  addEventListener("pointerdown", onDown, true);
+  addEventListener("pointermove", onMove, true);
+  addEventListener("pointerup", onUp, true);
+  addEventListener("pointercancel", onUp, true);
+  addEventListener("click", onClick, true);
+  addEventListener("touchmove", onTouchMove, { passive: false, capture: true });
+
+  // ---- simulation ----
+  const G = 1500, DT = 1 / 60;
+  function step() {
+    // phone flat on a table: gravity barely points along the screen; keep at least a gentle pull (down if unsure)
+    const m = Math.hypot(gx, gy), ex = m < 0.15 ? 0 : (gx / m) * Math.max(m, 0.6), ey = m < 0.15 ? 0.6 : (gy / m) * Math.max(m, 0.6);
+    for (const p of pts) {
+      if (p.pin) continue;
+      const vx = (p.x - p.px) * 0.985, vy = (p.y - p.py) * 0.985;
+      p.px = p.x; p.py = p.y;
+      p.x += vx + ex * G * DT * DT; p.y += vy + ey * G * DT * DT;
+    }
+    for (let k = 0; k < 14; k++) {
+      for (const r of rods) {
+        const dx = r.b.x - r.a.x, dy = r.b.y - r.a.y, d = Math.hypot(dx, dy) || 0.001, f = (d - r.len) / d;
+        const wa = r.a.pin ? 0 : r.b.pin ? 1 : 0.5, wb = r.b.pin ? 0 : r.a.pin ? 1 : 0.5;
+        r.a.x += dx * f * wa; r.a.y += dy * f * wa; r.b.x -= dx * f * wb; r.b.y -= dy * f * wb;
+      }
+      if (grab) { // the grabbed spot follows the finger
+        const L = grab.L, ux = L.b.x - L.a.x, uy = L.b.y - L.a.y, len = Math.hypot(ux, uy) || 1, cx = ux / len, cy = uy / len;
+        const mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2;
+        const wx = mx + grab.lx * cx - grab.ly * cy, wy = my + grab.lx * cy + grab.ly * cx;
+        const ex = (grab.x - wx) * 0.35, ey = (grab.y - wy) * 0.35;
+        L.a.x += ex; L.a.y += ey; L.b.x += ex; L.b.y += ey;
+      }
+    }
+    for (const p of pts) { p.x = Math.max(-20, Math.min(W + 20, p.x)); p.y = Math.max(-40, Math.min(CH - lh * 0.6, p.y)); }
+  }
+  function energy() { let e = 0; for (const p of pts) e += (p.x - p.px) ** 2 + (p.y - p.py) ** 2; return e; }
+
+  // ---- drawing ----
+  const fontPx = Math.round(lh * 0.92);
+  function foil(col, x0, y0, x1, y1) {
+    const gr = g.createLinearGradient(x0, y0, x1, y1);
+    gr.addColorStop(0, shade(col, -0.35)); gr.addColorStop(0.35, col); gr.addColorStop(0.5, shade(col, 0.55)); gr.addColorStop(0.62, col); gr.addColorStop(1, shade(col, -0.3));
+    return gr;
+  }
+  function draw() {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, CH);
+    g.lineWidth = 1.4; g.strokeStyle = "rgba(240, 200, 110, .9)"; // string
+    g.beginPath();
+    for (const r of rods) { if (letters.some((L) => L.a === r.a && L.b === r.b)) continue; g.moveTo(r.a.x, r.a.y); g.lineTo(r.b.x, r.b.y); }
+    g.stroke();
+    g.font = FONT.replace("{S}", fontPx); g.textAlign = "center"; g.textBaseline = "top";
+    for (const L of letters) {
+      const ang = Math.atan2(L.b.y - L.a.y, L.b.x - L.a.x) + L.tilt, mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2;
+      g.save(); g.translate(mx, my); g.rotate(ang);
+      const hw = lw * 0.52, tabH = lw * 0.3;
+      g.fillStyle = foil(L.col, -hw, -tabH, hw, lh);
+      g.beginPath(); g.roundRect(-hw, -tabH * 0.5, hw * 2, tabH, tabH * 0.5); g.fill(); // the top tab with the rings
+      g.lineWidth = 1; g.strokeStyle = shade(L.col, -0.45); g.stroke();
+      g.fillText(L.c, 0, tabH * 0.15);
+      g.lineWidth = 1.2; g.strokeText(L.c, 0, tabH * 0.15);
+      for (const s of [-1, 1]) { // the little metal rings
+        g.beginPath(); g.arc(s * rodLen / 2, 0, 2.6, 0, Math.PI * 2); g.fillStyle = "#3a3020"; g.fill();
+        g.lineWidth = 1.3; g.strokeStyle = "#f2d38a"; g.stroke();
+      }
+      g.restore();
+    }
+  }
+
+  // ---- loop: runs only while something moves ----
+  let raf = 0;
+  function frame() {
+    raf = 0;
+    if (dead || !cv.isConnected) return stop();
+    step(); draw();
+    if (!grab && energy() < 0.05) still0++; else still0 = 0;
+    if (still0 > 45 || resting) { sleeping = true; return; }
+    raf = requestAnimationFrame(frame);
+  }
+  function wake() {
+    if (dead || still || resting) return;
+    if (!cv.isConnected) return stop();
+    sleeping = false; still0 = 0;
+    if (!raf) raf = requestAnimationFrame(frame);
+  }
+  function stop() {
+    dead = true;
+    if (raf) cancelAnimationFrame(raf);
+    removeEventListener("devicemotion", onMotion);
+    removeEventListener("pointerdown", onDown, true);
+    removeEventListener("pointermove", onMove, true);
+    removeEventListener("pointerup", onUp, true);
+    removeEventListener("pointercancel", onUp, true);
+    removeEventListener("click", onClick, true);
+    removeEventListener("touchmove", onTouchMove, { capture: true });
+    cv.remove();
+  }
+  // settle into the curve before the first picture (no swinging in from a straight line)
+  for (let i = 0; i < 240; i++) step();
+  for (const p of pts) { p.px = p.x; p.py = p.y; }
+  const firstDraw = () => { if (!dead) { draw(); if (!still) { // a small swing on arrival
+    for (const L of letters) { L.a.px -= rnd(-4, 4); L.b.px -= rnd(-4, 4); } wake(); } } };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(firstDraw); else firstDraw();
+  return {
+    rest(on) { resting = on; if (!on) wake(); },
+    stop,
+  };
+}
+
+function shade(hex, k) { // k > 0 lighter, < 0 darker
+  const n = parseInt(hex.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return `rgb(${c.map((v) => Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k))).join(",")})`;
+}

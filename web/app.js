@@ -364,7 +364,7 @@ function placeDecor(spec, force = false) {
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 // One list of names, used in the palette studio, the occasion editor and Configurações.
-const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Chuva de confete", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando", grimdawn: "⚔️ Grim Dawn" };
+const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Festa (confete, balões, varal)", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando", grimdawn: "⚔️ Grim Dawn" };
 // ---------- Pacotes ----------
 // A pacote is a big experience in its own file, fetched only while it's on (same version as app.js). The file
 // exports `pacote` with any of:
@@ -378,11 +378,12 @@ const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subin
 const PACOTES = {
   grimdawn: { file: "grimdawn.js", skin: "gd-skin", occasionOnly: true },
   haunted: { file: "haunted.js", backOverImage: true }, // Assombrado (its web and fog stay on over a background image)
+  confetti: { file: "festa.js" }, // 🎉 Festa: confetti, taps, balloons, the varal (key kept: temas already use "confetti")
 };
 const OCCASION_ONLY_FX = Object.keys(PACOTES).filter((k) => PACOTES[k].occasionOnly);
 const filePacote = (k) => !!(k && PACOTES[k] && PACOTES[k].file);
 const pacoteLoads = {}, pacoteMod = {}; // pacoteMod: the ones that have arrived (the name chip needs them without waiting)
-// The simple effects (snow, confetti, bubbles, sparkles, hearts, coffee steam) live in web/effects.js; fetched right
+// The simple effects (snow, bubbles, sparkles, hearts, coffee steam) live in web/effects.js; fetched right
 // away so they're ready by the time the look is applied.
 const effectsMod = import(new URL("effects.js" + new URL(import.meta.url).search, import.meta.url).href);
 const loadPacote = (id) => (pacoteLoads[id] ||= import(new URL(PACOTES[id].file + new URL(import.meta.url).search, import.meta.url).href)
@@ -509,7 +510,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) wake
 // ---------- Diagnóstico (Admin → Sistema): switch parts off on this phone to feel what warms it ----------
 // Saved on this phone ("diagOff"); each part off = a body class diag-off-<part> (CSS + the effects check it).
 const DIAG = [["fire", "🔥 Fogo (Grim Dawn)"], ["ash", "🌫️ Cinzas (Grim Dawn)"], ["embers", "✨ Brasas (Grim Dawn)"], ["city", "🏚️ Cidade (Grim Dawn)"],
-  ["rifts", "🌀 Fendas e corvos (Grim Dawn)"], ["looks", "💫 Brilho dos nomes"], ["fx", "❄️ Efeitos simples (neve, confete, vapor…)"], ["rest", "😴 Modo descanso (10 s)"]];
+  ["rifts", "🌀 Fendas e corvos (Grim Dawn)"], ["looks", "💫 Brilho dos nomes"], ["fx", "❄️ Efeitos simples (neve, bolhas, vapor…)"], ["rest", "😴 Modo descanso (10 s)"]];
 const diagOff = new Set((() => { try { return JSON.parse(localStorage.getItem("diagOff") || "[]"); } catch { return []; } })());
 function applyDiag() {
   for (const [k] of DIAG) document.body.classList.toggle("diag-off-" + k, diagOff.has(k));
@@ -581,12 +582,10 @@ function tapDoesSomething(el) {
   return false;
 }
 document.addEventListener("click", (e) => {
-  const simpleTap = effectKey === "confetti" && !document.body.classList.contains("diag-off-fx"); // simple effects that react: confetti pops
-  if ((!filePacote(effectKey) && !simpleTap) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (!filePacote(effectKey) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (tapWasClosing || !(e.target instanceof Element) || tapDoesSomething(e.target)) return;
   if (document.querySelector("dialog[open]")) return;
   const x = e.clientX, y = e.clientY, k = effectKey;
-  if (simpleTap) { effectsMod.then((m) => m.tapEffect && m.tapEffect(k, x, y, document.getElementById("fx"))).catch(() => {}); return; }
   loadPacote(k).then((p) => { if (effectKey === k && p.tap) p.tap(x, y, document.getElementById("fx")); }).catch((err) => console.warn(k, err));
 });
 

@@ -6,8 +6,8 @@ Four kinds of things decide how the app looks. All of them live in Firestore `co
 |---|---|---|
 | **Tema** | Colours (6), drawings, an effect or pacote, a background image. | `config/fun.palettes.<id>` · Admin → 🎨 Visual → Temas |
 | **Ocasião** | A date rule + which tema + banner, version text, maldições. It looks exactly like its tema. | `config/fun.occasions.<id>` · Admin → 🎨 Visual → Ocasiões |
-| **Efeito** | Decoration only: steam, bubbles, snow, confetti, sparkles, hearts. | `web/effects.js` (CSS in `style.css`) |
-| **Pacote** | A big experience: restyles the app, reacts to taps, may keep state. | its own file: `web/grimdawn.js`, `web/haunted.js` |
+| **Efeito** | Decoration only: steam, bubbles, snow, sparkles, hearts. | `web/effects.js` (CSS in `style.css`) |
+| **Pacote** | A big experience: restyles the app, reacts to taps, may keep state. | its own file: `web/grimdawn.js`, `web/haunted.js`, `web/festa.js` (+ `garland.js`, key "confetti") |
 
 On a normal day each person sees the tema they picked (and can turn its effect off). On an occasion day the last active occasion with a tema (sorted by só-admin, then priority) decides the whole look for everyone. Admin → 🎨 Visual → Ocasiões → 🗓️ Calendário shows which occasion wins each day and why (tap one to edit it).
 
