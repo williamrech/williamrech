@@ -521,7 +521,9 @@ applyDiag();
 function renderDiag() {
   const box = document.getElementById("adm-diag"); if (!box) return;
   box.innerHTML = DIAG.map(([k, l]) => `<label class="diag-row"><input type="checkbox" data-diag="${k}" ${diagOff.has(k) ? "" : "checked"}> ${l}</label>`).join("")
-    + `<label class="diag-row"><input type="checkbox" data-diag="__fps" ${fpsOn ? "checked" : ""}> 📈 Mostrar fps na tela</label>`;
+    + `<label class="diag-row"><input type="checkbox" data-diag="__fps" ${fpsOn ? "checked" : ""}> 📈 Mostrar fps na tela</label>`
+    + `<p class="diag-row" id="diag-sensor">📱 Sensor de movimento: esperando… (gire o celular)</p>`;
+  sensorWatch();
   box.querySelectorAll("[data-diag]").forEach((c) => c.onchange = () => {
     const k = c.dataset.diag;
     if (k === "__fps") { fpsOn = c.checked; try { localStorage.setItem("fpsOn", fpsOn ? "1" : ""); } catch {} fpsMeter(); return; }
@@ -530,6 +532,20 @@ function renderDiag() {
     if (k === "rest") wake();
     else { const cur = effectKey; effectKey = null; runEffect(cur); } // restart the effect with the part on/off
   });
+}
+// Live readout of the phone's motion sensors (what the varal uses to know where "down" is).
+let sensorOn = false;
+function sensorWatch() {
+  if (sensorOn) return; sensorOn = true;
+  const n = { m: 0, o: 0 }; let last = "";
+  addEventListener("devicemotion", (e) => { n.m++; const a = e.accelerationIncludingGravity; last = a && a.x != null ? `x ${a.x.toFixed(1)} · y ${a.y.toFixed(1)} · z ${(a.z || 0).toFixed(1)}` : "sem gravidade"; });
+  addEventListener("deviceorientation", (e) => { n.o++; if (!n.m) last = e.beta != null ? `inclinação ${Math.round(e.beta)}° / ${Math.round(e.gamma)}°` : "sem ângulos"; });
+  setInterval(() => {
+    const el = document.getElementById("diag-sensor"); if (!el) return;
+    const ang = (screen.orientation && screen.orientation.angle) || 0;
+    el.textContent = n.m || n.o ? `📱 Sensor: ${n.m} leituras de movimento, ${n.o} de ângulo · ${last} · tela ${ang}°`
+      : `📱 Sensor de movimento: nenhuma leitura ainda (gire o celular)${window.isSecureContext ? "" : " · página sem https"}`;
+  }, 500);
 }
 // A small frames-per-second counter in the corner (😴 while resting).
 var fpsOn = (() => { try { return localStorage.getItem("fpsOn") === "1"; } catch { return false; } })(), fpsRun = false;

@@ -59,9 +59,22 @@ export function startGarland(layer, _colors, still) {
 
   // ---- gravity from the phone ----
   let gx = 0, gy = 1, sleeping = false, resting = document.body.classList.contains("resting"), dead = false, still0 = 0, restG = [0, 1];
+  // Down, in screen coordinates (x right, y down), from the device's own axes; turned to match the screen if it rotated.
+  const toScreen = (dx, dy) => {
+    const ang = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI / 180;
+    return [dx * Math.cos(ang) + dy * Math.sin(ang), -dx * Math.sin(ang) + dy * Math.cos(ang)];
+  };
+  let gotMotion = false;
   const onMotion = (e) => {
-    const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
-    const nx = -a.x / 9.81, ny = a.y / 9.81; // screen coordinates: x right, y down
+    let nx, ny;
+    if (e.type === "devicemotion") {
+      const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+      gotMotion = true; [nx, ny] = toScreen(-a.x / 9.81, a.y / 9.81);
+    } else { // fallback when the phone only reports its angles
+      if (gotMotion || e.beta == null) return;
+      const b = e.beta * Math.PI / 180, g = (e.gamma || 0) * Math.PI / 180;
+      [nx, ny] = toScreen(Math.sin(g) * Math.cos(b), Math.sin(b));
+    }
     const sx = nx - gx, sy = ny - gy;
     gx += sx * 0.15; gy += sy * 0.15;
     if (Math.hypot(sx, sy) > 0.6) for (const p of pts) if (!p.pin) { p.px -= sx * rnd(1, 3); p.py -= sy * rnd(1, 3); } // a shake
@@ -70,6 +83,7 @@ export function startGarland(layer, _colors, still) {
     if (Math.hypot(sx, sy) > 0.04) wake();
   };
   addEventListener("devicemotion", onMotion);
+  addEventListener("deviceorientation", onMotion);
 
   // ---- finger ----
   let grab = null;
@@ -246,7 +260,7 @@ export function startGarland(layer, _colors, still) {
   function stop() {
     dead = true;
     if (raf) cancelAnimationFrame(raf);
-    removeEventListener("devicemotion", onMotion);
+    removeEventListener("devicemotion", onMotion); removeEventListener("deviceorientation", onMotion);
     removeEventListener("pointerdown", onDown, true);
     removeEventListener("pointermove", onMove, true);
     removeEventListener("pointerup", onUp, true);
