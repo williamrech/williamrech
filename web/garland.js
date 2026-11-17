@@ -12,7 +12,7 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 
 export function startGarland(layer, _colors, still) {
   const word = WORDS[Math.floor(Math.random() * WORDS.length)];
-  const W = innerWidth, CH = Math.min(320, innerHeight * 0.45), dpr = Math.min(2.5, devicePixelRatio || 1);
+  const W = innerWidth, CH = innerHeight, dpr = Math.min(2, devicePixelRatio || 1); // the whole screen: no invisible floor
   const cv = document.createElement("canvas");
   cv.className = "fx-garland";
   cv.width = Math.round(W * dpr); cv.height = Math.round(CH * dpr);
@@ -25,7 +25,9 @@ export function startGarland(layer, _colors, still) {
   // metal ring pins two letters together, free to pivot). String only at the two ends, up to the pins on the edges.
   // A space is a short metal link instead of a letter.
   const chars = [...word], n = chars.filter((c) => c !== " ").length, spaces = chars.length - n;
-  const yL = rnd(8, 52), yR = rnd(8, 52), chord = Math.hypot(W + 8, yR - yL), slack = rnd(1.07, 1.16);
+  // Hung in a hurry: one end high, the other clearly lower (which side, at random), so the line runs skewed.
+  const hi = rnd(6, 40), lo = rnd(95, 190), leftHigh = Math.random() < 0.5, yL = leftHigh ? hi : lo, yR = leftHigh ? lo : hi;
+  const chord = Math.hypot(W + 8, yR - yL), slack = rnd(1.07, 1.16);
   let lw = Math.max(20, Math.min(72, (chord * 0.9) / (n + spaces * 0.4))); // the letters fill the width: end strings stay short
   const rodLen = lw, linkLen = lw * 0.4, lh = lw * 1.18;
   const sLen = Math.max(3, (chord * slack - n * rodLen - spaces * linkLen) / 6); // 3 string segments at each end
@@ -126,16 +128,27 @@ export function startGarland(layer, _colors, still) {
         L.a.x += ex; L.a.y += ey; L.b.x += ex; L.b.y += ey;
       }
     }
-    for (const p of pts) { p.x = Math.max(-20, Math.min(W + 20, p.x)); p.y = Math.max(-40, Math.min(CH - lh * 0.6, p.y)); }
+    for (const p of pts) { p.x = Math.max(-20, Math.min(W + 20, p.x)); p.y = Math.max(-40, Math.min(CH - 8, p.y)); }
   }
   function energy() { let e = 0; for (const p of pts) e += (p.x - p.px) ** 2 + (p.y - p.py) ** 2; return e; }
 
   // ---- drawing ----
   const fontPx = Math.round(lh * 0.92);
+  // Foil: hard bands of light and dark across the piece (like crumpled metallic paper catching the light),
+  // not a soft plastic gradient.
   function foil(col, x0, y0, x1, y1) {
     const gr = g.createLinearGradient(x0, y0, x1, y1);
-    gr.addColorStop(0, shade(col, -0.35)); gr.addColorStop(0.35, col); gr.addColorStop(0.5, shade(col, 0.55)); gr.addColorStop(0.62, col); gr.addColorStop(1, shade(col, -0.3));
+    const stops = [[0, -0.45], [0.14, 0], [0.24, 0.7], [0.3, 0.15], [0.44, -0.35], [0.56, 0.05], [0.66, 0.55], [0.72, 0], [0.86, -0.4], [1, 0.2]];
+    for (const [o, k] of stops) gr.addColorStop(o, k ? shade(col, k) : col);
     return gr;
+  }
+  // A letter with a dark rim: the glyph drawn dark a hair larger all around, then the foil on top. (Stroking the text
+  // would also trace the font's inner overlaps — the broken lines inside A, R…)
+  function glyph(c, y, col, hw) {
+    g.fillStyle = shade(col, -0.6);
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; g.fillText(c, Math.cos(a) * 1.3, y + Math.sin(a) * 1.3); }
+    g.fillStyle = foil(col, -hw, y, hw * 0.7, y + lh);
+    g.fillText(c, 0, y);
   }
   function draw() {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -150,11 +163,10 @@ export function startGarland(layer, _colors, still) {
       const ang = Math.atan2(L.b.y - L.a.y, L.b.x - L.a.x), mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2;
       g.save(); g.translate(mx, my); g.rotate(ang);
       const hw = rodLen / 2 + 3, tabH = lw * 0.3;
-      g.fillStyle = foil(L.col, -hw, -tabH, hw, lh);
+      g.fillStyle = foil(L.col, -hw, -tabH, hw * 0.5, tabH * 2);
       g.beginPath(); g.roundRect(-hw, -tabH * 0.5, hw * 2, tabH, tabH * 0.5); g.fill(); // the top tab, ring to ring
       g.lineWidth = 1; g.strokeStyle = shade(L.col, -0.45); g.stroke();
-      g.fillText(L.c, 0, tabH * 0.15);
-      g.lineWidth = 1.2; g.strokeText(L.c, 0, tabH * 0.15);
+      glyph(L.c, tabH * 0.15, L.col, hw);
       g.restore();
     }
     for (const p of rings) { // one metal ring per joint, pinning the two letters together
