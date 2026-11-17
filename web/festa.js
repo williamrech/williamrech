@@ -99,7 +99,7 @@ function umbrella(layer, x, y, colors, n, wide = 1) {
   }
 }
 // Now and then a balloon (the Festa drawing, web/decor/balloon.svg) inflates at the bottom and floats up on its
-// string, swaying. Tap it: it pops into confetti.
+// string, swaying. Tap it: it pops like a piñata, candy and a little confetti.
 let balloonSvg = null;
 const BALLOON_COLS = ["#ff5d8f", "#ffb703", "#7fc8f8", "#b388ff", "#6ee7b7", "#ff8a5c"];
 async function balloon(layer, colors) {
@@ -133,8 +133,22 @@ async function balloon(layer, colors) {
     ring.style.cssText = `left:${cx}px;top:${cy}px;border-color:${col}`;
     layer.appendChild(ring);
     ring.animate([{ transform: "translate(-50%,-50%) scale(.3)", opacity: 0.9 }, { transform: "translate(-50%,-50%) scale(1.6)", opacity: 0 }], { duration: 380, easing: "ease-out" }).finished.then(() => ring.remove());
-    umbrella(layer, cx, cy, [col, col, ...colors], 28, 1.15);
+    umbrella(layer, cx, cy, [col, col, ...colors], 16, 1.15);
+    candy(layer, cx, cy);
   }, { once: true });
+}
+
+// Candy from a popped balloon: heavier than paper, so it goes up less and falls all the way down, tumbling.
+const CANDY = ["🍬", "🍭", "🍫", "🍬", "🍭", "🍡", "🧁", "🍬"];
+function candy(layer, x, y) {
+  const H = layer.clientHeight || innerHeight, n = 11;
+  for (let i = 0; i < n; i++) {
+    const fan = (i / (n - 1)) * 2 - 1, el = document.createElement("i");
+    el.className = "fx-candy"; el.textContent = CANDY[Math.floor(Math.random() * CANDY.length)];
+    el.style.cssText = `left:${x}px;top:${y}px;font-size:${rndf(18, 26).toFixed(0)}px`;
+    layer.appendChild(el);
+    fly(el, arcFrames(fan * rndf(70, 150), H - y + 40, -rndf(50, 110) * (1 - Math.abs(fan) * 0.4), rndf(-540, 540), 0.5), rndf(1500, 2000), rndf(0, 90));
+  }
 }
 
 // A tap on the background: two times out of three an umbrella pop right there; the third, a party cannon fires from
