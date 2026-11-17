@@ -581,10 +581,12 @@ function tapDoesSomething(el) {
   return false;
 }
 document.addEventListener("click", (e) => {
-  if (!filePacote(effectKey) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const simpleTap = effectKey === "confetti" && !document.body.classList.contains("diag-off-fx"); // simple effects that react: confetti pops
+  if ((!filePacote(effectKey) && !simpleTap) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (tapWasClosing || !(e.target instanceof Element) || tapDoesSomething(e.target)) return;
   if (document.querySelector("dialog[open]")) return;
   const x = e.clientX, y = e.clientY, k = effectKey;
+  if (simpleTap) { effectsMod.then((m) => m.tapEffect && m.tapEffect(k, x, y, document.getElementById("fx"))).catch(() => {}); return; }
   loadPacote(k).then((p) => { if (effectKey === k && p.tap) p.tap(x, y, document.getElementById("fx")); }).catch((err) => console.warn(k, err));
 });
 

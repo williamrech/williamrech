@@ -572,6 +572,7 @@ dialog h2 { margin-bottom: 4px; }
   padding: 2px 6px; border-radius: 6px; background: var(--crema); color: var(--on-accent); vertical-align: middle; }
 #fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
 .confetti { position: absolute; top: -20px; border-radius: 2px; animation: confetti-fall linear forwards; }
+.confetti-fly { position: absolute; border-radius: 2px; will-change: transform; }
 @keyframes confetti-fall {
   to { transform: translate(var(--drift), var(--fall, 105vh)) rotate(var(--spin)); opacity: 0.6; }
 }

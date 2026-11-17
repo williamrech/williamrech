@@ -72,7 +72,12 @@ export function startEffect(layer, kind, scale = 1, still = false) {
     burst(Math.round(70 * scale), 1, 50, 50);
     const again = () => {
       if (layer.dataset.fx !== "confetti") return;
-      if (!document.hidden && !document.body.classList.contains("resting") && layer.childElementCount < 100 * scale + 10) {
+      if (!document.hidden && !document.body.classList.contains("resting") && layer.childElementCount < 100 * scale + 10 && Math.random() < 0.35) {
+        // Now and then a party cannon instead: a stream shot sideways from a bottom corner (sometimes both).
+        const both = Math.random() < 0.3, left = Math.random() < 0.5;
+        if (both || left) cannon(layer, scale, colors, true);
+        if (both || !left) cannon(layer, scale, colors, false);
+      } else if (!document.hidden && !document.body.classList.contains("resting") && layer.childElementCount < 100 * scale + 10) {
         const r = Math.random();
         const count = r < 0.5 ? rnd(8, 20) : r < 0.85 ? rnd(20, 40) : rnd(45, 80);
         const wide = Math.random() < 0.55;
@@ -128,3 +133,37 @@ export function startEffect(layer, kind, scale = 1, still = false) {
     }
   }
 }
+
+// ---------- Confetti that flies (a tap pop, the side cannons) ----------
+// Each piece is thrown from (x, y) with a speed and arcs down under "gravity": three keyframes (launch, top of the
+// arc, fall) with ease-out going up and ease-in coming down. Web Animations, removed when done.
+function fling(layer, x, y, colors, n, aim) {
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  for (let i = 0; i < n; i++) {
+    const [vx, vy] = aim(rnd), dur = rnd(1100, 1900), spin = rnd(-900, 900), w = rnd(5, 9), h = rnd(8, 13);
+    const el = document.createElement("i");
+    el.className = "confetti-fly";
+    el.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;background:${colors[Math.floor(Math.random() * colors.length)]}`;
+    layer.appendChild(el);
+    const fall = Math.max(180, innerHeight - y + 40);
+    el.animate([
+      { transform: "translate(-50%,-50%) translate(0,0) rotate(0)", opacity: 1, easing: "cubic-bezier(.2,.7,.4,1)" },
+      { transform: `translate(-50%,-50%) translate(${vx * 0.55}px,${-vy}px) rotate(${spin * 0.4}deg)`, opacity: 1, offset: 0.32, easing: "cubic-bezier(.5,0,.85,.6)" },
+      { transform: `translate(-50%,-50%) translate(${vx}px,${fall * rnd(0.35, 0.7)}px) rotate(${spin}deg)`, opacity: 0 },
+    ], { duration: dur, delay: rnd(0, 120), fill: "both" }).finished.then(() => el.remove(), () => el.remove());
+  }
+}
+// A party cannon in a bottom corner, shooting a stream up and inward.
+function cannon(layer, scale, colors, fromLeft) {
+  const W = layer.clientWidth || innerWidth, H = layer.clientHeight || innerHeight;
+  const x = fromLeft ? -6 : W + 6, y = H * 0.92, dir = fromLeft ? 1 : -1;
+  fling(layer, x, y, colors, Math.round(36 * Math.max(scale, 0.5)), (rnd) => [dir * rnd(0.35, 0.95) * W, rnd(0.35, 0.75) * H]);
+}
+// A tap on the background: a little pop of confetti right there (only "confetti" reacts to taps).
+export function tapEffect(kind, x, y, layer) {
+  if (kind !== "confetti" || !layer) return;
+  const css = getComputedStyle(layer);
+  const colors = ["--caramel", "--crema", "--fg", "--muted"].map((v) => css.getPropertyValue(v).trim()).filter(Boolean).concat(["#ff8fb1", "#7fc8f8", "#f5d76e"]);
+  fling(layer, x, y, colors, 26, (rnd) => { const a = rnd(-Math.PI * 0.9, -Math.PI * 0.1), sp = rnd(60, 170); return [Math.cos(a) * sp * 1.4, -Math.sin(a) * sp + 40]; });
+}
+
