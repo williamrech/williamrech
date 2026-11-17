@@ -505,6 +505,7 @@ function wake() {
   restTimer = setTimeout(() => { if (!diagOff.has("rest")) setResting(true); }, REST_MS);
 }
 for (const ev of ["pointerdown", "touchstart", "keydown", "wheel", "scroll"]) addEventListener(ev, wake, { passive: true, capture: true });
+addEventListener("app-wake", wake); // e.g. the varal, when the phone is tilted
 document.addEventListener("visibilitychange", () => { if (!document.hidden) wake(); });
 
 // ---------- Diagnóstico (Admin → Sistema): switch parts off on this phone to feel what warms it ----------

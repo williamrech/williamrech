@@ -58,13 +58,15 @@ export function startGarland(layer, _colors, still) {
   for (let i = 0; i + 1 < strings.length; i++) if (strings[i].b === strings[i + 1].a) bends.push({ a: strings[i].a, b: strings[i + 1].b, min: 2 * sLen * 0.92 });
 
   // ---- gravity from the phone ----
-  let gx = 0, gy = 1, sleeping = false, resting = document.body.classList.contains("resting"), dead = false, still0 = 0;
+  let gx = 0, gy = 1, sleeping = false, resting = document.body.classList.contains("resting"), dead = false, still0 = 0, restG = [0, 1];
   const onMotion = (e) => {
     const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
     const nx = -a.x / 9.81, ny = a.y / 9.81; // screen coordinates: x right, y down
     const sx = nx - gx, sy = ny - gy;
     gx += sx * 0.15; gy += sy * 0.15;
     if (Math.hypot(sx, sy) > 0.6) for (const p of pts) if (!p.pin) { p.px -= sx * rnd(1, 3); p.py -= sy * rnd(1, 3); } // a shake
+    // Tilting the phone is not a touch, so the app's rest mode wouldn't notice it: a real tilt or shake wakes the app.
+    if (resting && Math.hypot(gx - restG[0], gy - restG[1]) > 0.3) dispatchEvent(new Event("app-wake"));
     if (Math.hypot(sx, sy) > 0.04) wake();
   };
   addEventListener("devicemotion", onMotion);
@@ -260,7 +262,7 @@ export function startGarland(layer, _colors, still) {
     for (const L of letters) { L.a.px -= rnd(-4, 4); L.b.px -= rnd(-4, 4); } wake(); } } };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(firstDraw); else firstDraw();
   return {
-    rest(on) { resting = on; if (!on) wake(); },
+    rest(on) { resting = on; if (on) restG = [gx, gy]; else wake(); },
     stop,
   };
 }
