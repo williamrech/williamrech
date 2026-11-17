@@ -522,6 +522,7 @@ function renderDiag() {
   const box = document.getElementById("adm-diag"); if (!box) return;
   box.innerHTML = DIAG.map(([k, l]) => `<label class="diag-row"><input type="checkbox" data-diag="${k}" ${diagOff.has(k) ? "" : "checked"}> ${l}</label>`).join("")
     + `<label class="diag-row"><input type="checkbox" data-diag="__fps" ${fpsOn ? "checked" : ""}> 📈 Mostrar fps na tela</label>`
+    + `<p class="diag-row" id="diag-page">📏 Página: …</p>`
     + `<p class="diag-row" id="diag-sensor">📱 Sensor de movimento: esperando… (gire o celular)</p>`;
   sensorWatch();
   box.querySelectorAll("[data-diag]").forEach((c) => c.onchange = () => {
@@ -541,6 +542,15 @@ function sensorWatch() {
   addEventListener("devicemotion", (e) => { n.m++; const a = e.accelerationIncludingGravity; last = a && a.x != null ? `x ${a.x.toFixed(1)} · y ${a.y.toFixed(1)} · z ${(a.z || 0).toFixed(1)}` : "sem gravidade"; });
   addEventListener("deviceorientation", (e) => { n.o++; if (!n.m) last = e.beta != null ? `inclinação ${Math.round(e.beta)}° / ${Math.round(e.gamma)}°` : "sem ângulos"; });
   setInterval(() => {
+    const pg = document.getElementById("diag-page");
+    if (pg) { // how tall the page is vs the screen, and the lowest thing in it (to find what makes it scroll)
+      let low = null, lowB = 0;
+      for (const e of document.querySelectorAll("body *")) {
+        if (e.closest("#fx, #fx-back, #decor, dialog") || getComputedStyle(e).position === "fixed") continue;
+        const b = e.getBoundingClientRect().bottom + scrollY; if (b > lowB) { lowB = b; low = e; }
+      }
+      pg.textContent = `📏 Página ${document.scrollingElement.scrollHeight} · tela ${innerHeight} · 100dvh ${Math.round(parseFloat(getComputedStyle(document.body).minHeight))} · mais baixo: ${low ? (low.id || low.className || low.tagName).toString().slice(0, 30) : "-"} ${Math.round(lowB)}`;
+    }
     const el = document.getElementById("diag-sensor"); if (!el) return;
     const ang = (screen.orientation && screen.orientation.angle) || 0;
     el.textContent = n.m || n.o ? `📱 Sensor: ${n.m} leituras de movimento, ${n.o} de ângulo · ${last} · tela ${ang}°`
