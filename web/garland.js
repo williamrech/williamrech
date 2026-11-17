@@ -159,14 +159,16 @@ export function startGarland(layer, _colors, still) {
   // ---- each letter drawn once, as one cut-out piece (like the H in the photo) ----
   // A wide top with rounded ears where the rings go, flowing straight into the letter: one silhouette, one foil,
   // a dark rim around the whole outline and a pressed line just inside it. Saved as a picture; frames only place it.
-  const tabH = lw * 0.34, hwTab = rodLen / 2 + tabH * 0.45, PADX = 6, PADY = 6;
+  // the ears are thinner than the letter's own strokes
+  const tabH = Math.max(6.5, lw * 0.13), hwTab = rodLen / 2 + tabH * 0.45, PADX = 6, PADY = 6;
   const PW = Math.ceil(hwTab * 2 + PADX * 2), PH = Math.ceil(tabH / 2 + lh + PADY * 2), OX = PW / 2, OY = PADY + tabH / 2; // OY: the ring line
   const mk = () => { const c = document.createElement("canvas"); c.width = Math.ceil(PW * dpr); c.height = Math.ceil(PH * dpr); const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [c, x]; };
   function silhouette(ch, x) {
     x.fillStyle = "#000";
     x.beginPath(); x.roundRect(OX - hwTab, OY - tabH / 2, hwTab * 2, tabH, tabH / 2); x.fill();
-    x.font = FONT.replace("{S}", fontPx); x.textAlign = "center"; x.textBaseline = "top";
-    x.fillText(ch, OX, OY - tabH * 0.2);
+    x.font = FONT.replace("{S}", fontPx); x.textAlign = "center"; x.textBaseline = "alphabetic";
+    const asc = x.measureText(ch).actualBoundingBoxAscent; // the letter's ink starts right at the ring line
+    x.fillText(ch, OX, OY - tabH * 0.15 + asc);
   }
   function erode(src, r) { // the shape shrunk by r px
     const [c, x] = mk(); x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(src, 0, 0);
