@@ -33,7 +33,7 @@ const CSS = `
 .gift-card button, #dlg-grail .gbtn { padding: 6px 10px; font-size: .8rem; border-radius: 3px; border: 1px solid #6e5832; background: linear-gradient(180deg, #2b2519, #16130d); color: #e9dcb8; }
 .gift-card button.no, #dlg-grail .gbtn.no { background: none; color: #a59d8a; }
 #dlg-grail { padding: 16px 14px 12px; }
-#dlg-grail[open] { height: min(88dvh, 760px); display: flex; flex-direction: column; } /* same height on every tab and filter: nothing jumps */
+#dlg-grail[open] { height: min(88%, 760px); display: flex; flex-direction: column; } /* same height on every tab and filter: nothing jumps */
 #dlg-grail .gbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 #dlg-grail h2 { margin: 0 0 8px; font-family: "GD Cinzel", Georgia, serif; letter-spacing: .06em; }
 #dlg-grail .gtabs { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 3px; margin: 0 0 8px; }
