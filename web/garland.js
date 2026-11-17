@@ -27,7 +27,7 @@ export function startGarland(layer, _colors, still) {
   const chars = [...word], n = chars.filter((c) => c !== " ").length, spaces = chars.length - n;
   // Hung in a hurry: one end high, the other clearly lower (which side, at random), so the line runs skewed.
   const hi = rnd(6, 40), lo = rnd(95, 190), leftHigh = Math.random() < 0.5, yL = leftHigh ? hi : lo, yR = leftHigh ? lo : hi;
-  const chord = Math.hypot(W + 8, yR - yL), slack = rnd(1.07, 1.16);
+  const chord = Math.hypot(W + 8, yR - yL), slack = rnd(1.12, 1.24); // enough slack to pull a U into a V
   let lw = Math.max(20, Math.min(72, (chord * 0.9) / (n + spaces * 0.4))); // the letters fill the width: end strings stay short
   const rodLen = lw, linkLen = lw * 0.4, lh = lw * 1.18;
   const sLen = Math.max(3, (chord * slack - n * rodLen - spaces * linkLen) / 6); // 3 string segments at each end
@@ -41,7 +41,7 @@ export function startGarland(layer, _colors, still) {
   let ring = string3(A), ci = 0;
   for (const c of chars) {
     const len = c === " " ? linkLen : rodLen, next = P(...along(len)), r = rod(ring, next, len);
-    if (c === " ") links.push(r); else letters.push({ a: ring, b: next, c, col: FOILS[ci++ % FOILS.length] });
+    if (c === " ") links.push(r); else letters.push({ a: ring, b: next, r, c, col: FOILS[ci++ % FOILS.length] });
     ring = next;
   }
   t = chord * slack - 2 * sLen; // the last string runs to the right pin
@@ -49,6 +49,13 @@ export function startGarland(layer, _colors, still) {
   const lastS = strings[strings.length - 1]; // reattach the very end to B
   pts.splice(pts.indexOf(lastS.b), 1); lastS.b = B;
   const rings = [...new Set(letters.flatMap((L) => [L.a, L.b]).concat(links.flatMap((r) => [r.a, r.b])))];
+  // Metal cord: it never stretches. Rods are in order from A to B, so each letter's distance along the cord from
+  // either pin is known: a pulled letter can't go farther from a pin than that (pull down and the U becomes a V).
+  const total = rods.reduce((s, r) => s + r.len, 0);
+  { let c = 0; for (const r of rods) { r.fromA = c; c += r.len; } }
+  // The end cords are a bit stiff, like wire: points two apart don't fold onto each other (smooth bends, no kinks).
+  const bends = [];
+  for (let i = 0; i + 1 < strings.length; i++) if (strings[i].b === strings[i + 1].a) bends.push({ a: strings[i].a, b: strings[i + 1].b, min: 2 * sLen * 0.92 });
 
   // ---- gravity from the phone ----
   let gx = 0, gy = 1, sleeping = false, resting = document.body.classList.contains("resting"), dead = false, still0 = 0;
@@ -114,19 +121,34 @@ export function startGarland(layer, _colors, still) {
       p.px = p.x; p.py = p.y;
       p.x += vx + ex * G * DT * DT; p.y += vy + ey * G * DT * DT;
     }
-    for (let k = 0; k < 14; k++) {
-      for (const r of rods) {
-        const dx = r.b.x - r.a.x, dy = r.b.y - r.a.y, d = Math.hypot(dx, dy) || 0.001, f = (d - r.len) / d;
-        const wa = r.a.pin ? 0 : r.b.pin ? 1 : 0.5, wb = r.b.pin ? 0 : r.a.pin ? 1 : 0.5;
-        r.a.x += dx * f * wa; r.a.y += dy * f * wa; r.b.x -= dx * f * wb; r.b.y -= dy * f * wb;
+    // Where the grabbed letter's middle should go: under the finger, but only as far as the cord reaches.
+    let tx = 0, ty = 0;
+    if (grab) {
+      const L = grab.L, ux = L.b.x - L.a.x, uy = L.b.y - L.a.y, len = Math.hypot(ux, uy) || 1, cx = ux / len, cy = uy / len;
+      tx = grab.x - (grab.lx * cx - grab.ly * cy); ty = grab.y - (grab.lx * cy + grab.ly * cx);
+      const rA = L.r.fromA + L.r.len / 2, rB = total - rA;
+      for (let k = 0; k < 6; k++) for (const [o, rr] of [[A, rA], [B, rB]]) {
+        const dx = tx - o.x, dy = ty - o.y, d = Math.hypot(dx, dy);
+        if (d > rr * 0.98) { tx = o.x + (dx / d) * rr * 0.98; ty = o.y + (dy / d) * rr * 0.98; }
       }
-      if (grab) { // the grabbed spot follows the finger
-        const L = grab.L, ux = L.b.x - L.a.x, uy = L.b.y - L.a.y, len = Math.hypot(ux, uy) || 1, cx = ux / len, cy = uy / len;
-        const mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2;
-        const wx = mx + grab.lx * cx - grab.ly * cy, wy = my + grab.lx * cy + grab.ly * cx;
-        const ex = (grab.x - wx) * 0.35, ey = (grab.y - wy) * 0.35;
+      if (Math.hypot(grab.x - tx - (grab.lx * cx - grab.ly * cy), grab.y - ty - (grab.lx * cy + grab.ly * cx)) > 170) { grab = null; lastGrab = performance.now(); } // pulled too hard: it slips out of the finger
+    }
+    const fix = (r) => {
+      const dx = r.b.x - r.a.x, dy = r.b.y - r.a.y, d = Math.hypot(dx, dy) || 0.001, f = (d - r.len) / d;
+      const wa = r.a.pin ? 0 : r.b.pin ? 1 : 0.5, wb = r.b.pin ? 0 : r.a.pin ? 1 : 0.5;
+      r.a.x += dx * f * wa; r.a.y += dy * f * wa; r.b.x -= dx * f * wb; r.b.y -= dy * f * wb;
+    };
+    for (let k = 0; k < 50; k++) {
+      if (grab && k < 16) { // pull the letter toward the reachable spot
+        const L = grab.L, mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2, ex = (tx - mx) * 0.4, ey = (ty - my) * 0.4;
         L.a.x += ex; L.a.y += ey; L.b.x += ex; L.b.y += ey;
       }
+      for (const b2 of bends) { // wire: resist folding
+        const dx = b2.b.x - b2.a.x, dy = b2.b.y - b2.a.y, d = Math.hypot(dx, dy) || 0.001;
+        if (d < b2.min) { const f = ((d - b2.min) / d) * 0.15, wa = b2.a.pin ? 0 : 0.5, wb = b2.b.pin ? 0 : 0.5; b2.a.x += dx * f * wa; b2.a.y += dy * f * wa; b2.b.x -= dx * f * wb; b2.b.y -= dy * f * wb; }
+      }
+      // forward then backward: the length settles from both pins, so nothing is left stretched
+      if (k % 2) for (let i = rods.length - 1; i >= 0; i--) fix(rods[i]); else for (const r of rods) fix(r);
     }
     for (const p of pts) { p.x = Math.max(-20, Math.min(W + 20, p.x)); p.y = Math.max(-40, Math.min(CH - 8, p.y)); }
   }
@@ -134,21 +156,51 @@ export function startGarland(layer, _colors, still) {
 
   // ---- drawing ----
   const fontPx = Math.round(lh * 0.92);
-  // Foil: hard bands of light and dark across the piece (like crumpled metallic paper catching the light),
-  // not a soft plastic gradient.
-  function foil(col, x0, y0, x1, y1) {
-    const gr = g.createLinearGradient(x0, y0, x1, y1);
-    const stops = [[0, -0.45], [0.14, 0], [0.24, 0.7], [0.3, 0.15], [0.44, -0.35], [0.56, 0.05], [0.66, 0.55], [0.72, 0], [0.86, -0.4], [1, 0.2]];
-    for (const [o, k] of stops) gr.addColorStop(o, k ? shade(col, k) : col);
-    return gr;
+  // ---- each letter drawn once, as one cut-out piece (like the H in the photo) ----
+  // A wide top with rounded ears where the rings go, flowing straight into the letter: one silhouette, one foil,
+  // a dark rim around the whole outline and a pressed line just inside it. Saved as a picture; frames only place it.
+  const tabH = lw * 0.34, hwTab = rodLen / 2 + tabH * 0.45, PADX = 6, PADY = 6;
+  const PW = Math.ceil(hwTab * 2 + PADX * 2), PH = Math.ceil(tabH / 2 + lh + PADY * 2), OX = PW / 2, OY = PADY + tabH / 2; // OY: the ring line
+  const mk = () => { const c = document.createElement("canvas"); c.width = Math.ceil(PW * dpr); c.height = Math.ceil(PH * dpr); const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [c, x]; };
+  function silhouette(ch, x) {
+    x.fillStyle = "#000";
+    x.beginPath(); x.roundRect(OX - hwTab, OY - tabH / 2, hwTab * 2, tabH, tabH / 2); x.fill();
+    x.font = FONT.replace("{S}", fontPx); x.textAlign = "center"; x.textBaseline = "top";
+    x.fillText(ch, OX, OY - tabH * 0.2);
   }
-  // A letter with a dark rim: the glyph drawn dark a hair larger all around, then the foil on top. (Stroking the text
-  // would also trace the font's inner overlaps — the broken lines inside A, R…)
-  function glyph(c, y, col, hw) {
-    g.fillStyle = shade(col, -0.6);
-    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; g.fillText(c, Math.cos(a) * 1.3, y + Math.sin(a) * 1.3); }
-    g.fillStyle = foil(col, -hw, y, hw * 0.7, y + lh);
-    g.fillText(c, 0, y);
+  function erode(src, r) { // the shape shrunk by r px
+    const [c, x] = mk(); x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(src, 0, 0);
+    x.globalCompositeOperation = "destination-in";
+    for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; x.drawImage(src, Math.cos(a) * r * dpr, Math.sin(a) * r * dpr); }
+    return c;
+  }
+  function piece(L) {
+    const [mask, mx] = mk(); silhouette(L.c, mx);
+    const [out, o] = mk(); o.setTransform(1, 0, 0, 1, 0, 0);
+    // rim: the silhouette a hair larger, dark
+    for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; o.drawImage(mask, Math.cos(a) * 1.4 * dpr, Math.sin(a) * 1.4 * dpr); }
+    o.globalCompositeOperation = "source-in"; o.fillStyle = shade(L.col, -0.62); o.fillRect(0, 0, out.width, out.height);
+    // foil inside
+    const [f, fx] = mk(); fx.setTransform(1, 0, 0, 1, 0, 0); fx.drawImage(mask, 0, 0);
+    fx.globalCompositeOperation = "source-in"; fx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const gr = fx.createLinearGradient(0, 0, PW * 0.8, PH);
+    for (const [s0, k] of [[0, -0.45], [0.14, 0], [0.24, 0.7], [0.3, 0.15], [0.44, -0.35], [0.56, 0.05], [0.66, 0.55], [0.72, 0], [0.86, -0.4], [1, 0.2]]) gr.addColorStop(s0, k ? shade(L.col, k) : L.col);
+    fx.fillStyle = gr; fx.fillRect(0, 0, PW, PH);
+    fx.globalCompositeOperation = "source-atop"; // crumpled foil: a few soft creases
+    for (let k = 0; k < 7; k++) {
+      fx.strokeStyle = Math.random() < 0.5 ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.14)"; fx.lineWidth = rnd(1, 3);
+      fx.beginPath(); const y0 = rnd(0, PH); fx.moveTo(-5, y0); fx.lineTo(PW + 5, y0 + rnd(-PH * 0.6, PH * 0.6)); fx.stroke();
+    }
+    o.globalCompositeOperation = "source-over"; o.setTransform(1, 0, 0, 1, 0, 0); o.drawImage(f, 0, 0);
+    // the pressed line just inside the outline: a thin band between two insets, dark, with a light edge above it
+    const in1 = erode(mask, 2.6), in2 = erode(mask, 3.8);
+    const [ln, lx] = mk(); lx.setTransform(1, 0, 0, 1, 0, 0); lx.drawImage(in1, 0, 0);
+    lx.globalCompositeOperation = "destination-out"; lx.drawImage(in2, 0, 0);
+    lx.globalCompositeOperation = "source-in"; lx.fillStyle = shade(L.col, -0.5); lx.fillRect(0, 0, ln.width, ln.height);
+    o.globalAlpha = 0.75; o.drawImage(ln, 0, 0);
+    o.globalCompositeOperation = "lighter"; o.globalAlpha = 0.35; o.drawImage(ln, -dpr, -dpr); // light catching the edge
+    o.globalCompositeOperation = "source-over"; o.globalAlpha = 1;
+    return out;
   }
   function draw() {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -158,15 +210,11 @@ export function startGarland(layer, _colors, still) {
     g.beginPath(); for (const r of strings) { g.moveTo(r.a.x, r.a.y); g.lineTo(r.b.x, r.b.y); } g.stroke();
     g.lineWidth = 2.2; g.strokeStyle = "#cfd3da"; // metal links (spaces)
     g.beginPath(); for (const r of links) { g.moveTo(r.a.x, r.a.y); g.lineTo(r.b.x, r.b.y); } g.stroke();
-    g.font = FONT.replace("{S}", fontPx); g.textAlign = "center"; g.textBaseline = "top";
     for (const L of letters) {
+      L.img ||= piece(L);
       const ang = Math.atan2(L.b.y - L.a.y, L.b.x - L.a.x), mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2;
       g.save(); g.translate(mx, my); g.rotate(ang);
-      const hw = rodLen / 2 + 3, tabH = lw * 0.3;
-      g.fillStyle = foil(L.col, -hw, -tabH, hw * 0.5, tabH * 2);
-      g.beginPath(); g.roundRect(-hw, -tabH * 0.5, hw * 2, tabH, tabH * 0.5); g.fill(); // the top tab, ring to ring
-      g.lineWidth = 1; g.strokeStyle = shade(L.col, -0.45); g.stroke();
-      glyph(L.c, tabH * 0.15, L.col, hw);
+      g.drawImage(L.img, -OX, -OY, PW, PH);
       g.restore();
     }
     for (const p of rings) { // one metal ring per joint, pinning the two letters together
