@@ -1,7 +1,7 @@
 // 🎉 Varal: a party letter garland hanging across the top, over everything (it's meant to be in the way: tilt the
-// phone to swing it aside). Foil letters joined by little rings and string, ends pinned at random heights, a word
-// picked at random. Physics: points + rods (Verlet). Each letter is a rod between its two rings and hangs rigidly
-// below it; between letters, string with two points of its own so it sags. Gravity follows the phone (devicemotion),
+// phone to swing it aside). Foil letters pinned to each other by little metal rings (string only at the two ends,
+// up to pins at random heights), a word picked at random. Physics: points + rods (Verlet). Each letter is a rod
+// between its two rings and hangs rigidly below it; neighbours share a ring. Gravity follows the phone (devicemotion),
 // a shake jiggles it, a finger can grab, drag and flick a letter, a tap bumps it. When nothing moves it sleeps
 // (no frames at all) until the phone tilts, shakes or a finger touches it. Part of the Festa pacote (festa.js).
 const WORDS = ["LETRAS", "BOLO!", "REFRIGERANTE", "BRIGADEIRO", "OBA!", "VARAL", "CONFETE", "COXINHA", "PARABÉNS?", "SALGADINHO",
@@ -21,35 +21,32 @@ export function startGarland(layer, _colors, still) {
   const g = cv.getContext("2d");
 
   // ---- the chain ----
-  const chars = [...word], n = chars.filter((c) => c !== " ").length;
-  let lw = Math.max(22, Math.min(50, (W * 0.98) / (chars.length * 1.12)));
+  // Letters hang edge to edge: each one is a rod between two rings, and neighbours share the ring between them (one
+  // metal ring pins two letters together, free to pivot). String only at the two ends, up to the pins on the edges.
+  // A space is a short metal link instead of a letter.
+  const chars = [...word], n = chars.filter((c) => c !== " ").length, spaces = chars.length - n;
   const yL = rnd(8, 52), yR = rnd(8, 52), chord = Math.hypot(W + 8, yR - yL), slack = rnd(1.07, 1.16);
-  const pts = [], rods = [], letters = [];
+  let lw = Math.max(20, Math.min(72, (chord * 0.9) / (n + spaces * 0.4))); // the letters fill the width: end strings stay short
+  const rodLen = lw, linkLen = lw * 0.4, lh = lw * 1.18;
+  const sLen = Math.max(3, (chord * slack - n * rodLen - spaces * linkLen) / 6); // 3 string segments at each end
+  const pts = [], rods = [], letters = [], strings = [], links = [];
   const P = (x, y, pin) => { const p = { x, y, px: x, py: y, pin: !!pin }; pts.push(p); return p; };
-  const rod = (a, b, len) => rods.push({ a, b, len });
-  // lay everything out on the straight chord first; the sag comes by itself
-  let rodLen = lw * 0.78, gaps = chars.length + 1 + chars.filter((c) => c === " ").length;
-  let sLen = (chord * slack - n * rodLen) / (gaps * 3);
-  if (sLen < 4) { lw *= 0.8; rodLen = lw * 0.78; sLen = Math.max(4, (chord * slack - n * rodLen) / (gaps * 3)); }
-  const lh = lw * 1.18;
+  const rod = (a, b, len) => { const r = { a, b, len }; rods.push(r); return r; };
   const A = P(-4, yL, true), B = P(W + 4, yR, true);
-  let t = 0, prev = A;
-  const along = (d) => { t += d; const k = t / (chord * slack); return [A.x + (B.x - A.x) * k, A.y + (B.y - A.y) * k]; };
-  const string = (to) => { // 3 segments of string from prev to a new point
-    let p = prev;
-    for (let i = 0; i < 2; i++) { const [x, y] = along(sLen); const q = P(x, y); rod(p, q, sLen); p = q; }
-    const [x, y] = along(sLen); const end = to || P(x, y); rod(p, end, sLen); return end;
-  };
-  let ci = 0;
+  let t = 0;
+  const along = (d) => { t += d; const k = Math.min(1, t / (chord * slack)); return [A.x + (B.x - A.x) * k, A.y + (B.y - A.y) * k]; };
+  const string3 = (from, to) => { let p = from; for (let i = 0; i < 3; i++) { const q = i < 2 ? P(...along(sLen)) : to || P(...along(sLen)); strings.push(rod(p, q, sLen)); p = q; } return p; };
+  let ring = string3(A), ci = 0;
   for (const c of chars) {
-    if (c === " ") { prev = string(); continue; }
-    const a = string();
-    const [x, y] = along(rodLen); const b = P(x, y); rod(a, b, rodLen);
-    letters.push({ a, b, c, col: FOILS[ci++ % FOILS.length], tilt: rnd(-0.06, 0.06) });
-    prev = b;
+    const len = c === " " ? linkLen : rodLen, next = P(...along(len)), r = rod(ring, next, len);
+    if (c === " ") links.push(r); else letters.push({ a: ring, b: next, c, col: FOILS[ci++ % FOILS.length] });
+    ring = next;
   }
-  string(B);
-  pts.splice(pts.indexOf(B), 1); pts.push(B);
+  t = chord * slack - 2 * sLen; // the last string runs to the right pin
+  string3(ring, null);
+  const lastS = strings[strings.length - 1]; // reattach the very end to B
+  pts.splice(pts.indexOf(lastS.b), 1); lastS.b = B;
+  const rings = [...new Set(letters.flatMap((L) => [L.a, L.b]).concat(links.flatMap((r) => [r.a, r.b])))];
 
   // ---- gravity from the phone ----
   let gx = 0, gy = 1, sleeping = false, resting = document.body.classList.contains("resting"), dead = false, still0 = 0;
@@ -143,25 +140,26 @@ export function startGarland(layer, _colors, still) {
   function draw() {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, CH);
-    g.lineWidth = 1.4; g.strokeStyle = "rgba(240, 200, 110, .9)"; // string
-    g.beginPath();
-    for (const r of rods) { if (letters.some((L) => L.a === r.a && L.b === r.b)) continue; g.moveTo(r.a.x, r.a.y); g.lineTo(r.b.x, r.b.y); }
-    g.stroke();
+    g.lineCap = "round";
+    g.lineWidth = 1.4; g.strokeStyle = "rgba(240, 200, 110, .9)"; // the two end strings
+    g.beginPath(); for (const r of strings) { g.moveTo(r.a.x, r.a.y); g.lineTo(r.b.x, r.b.y); } g.stroke();
+    g.lineWidth = 2.2; g.strokeStyle = "#cfd3da"; // metal links (spaces)
+    g.beginPath(); for (const r of links) { g.moveTo(r.a.x, r.a.y); g.lineTo(r.b.x, r.b.y); } g.stroke();
     g.font = FONT.replace("{S}", fontPx); g.textAlign = "center"; g.textBaseline = "top";
     for (const L of letters) {
-      const ang = Math.atan2(L.b.y - L.a.y, L.b.x - L.a.x) + L.tilt, mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2;
+      const ang = Math.atan2(L.b.y - L.a.y, L.b.x - L.a.x), mx = (L.a.x + L.b.x) / 2, my = (L.a.y + L.b.y) / 2;
       g.save(); g.translate(mx, my); g.rotate(ang);
-      const hw = lw * 0.52, tabH = lw * 0.3;
+      const hw = rodLen / 2 + 3, tabH = lw * 0.3;
       g.fillStyle = foil(L.col, -hw, -tabH, hw, lh);
-      g.beginPath(); g.roundRect(-hw, -tabH * 0.5, hw * 2, tabH, tabH * 0.5); g.fill(); // the top tab with the rings
+      g.beginPath(); g.roundRect(-hw, -tabH * 0.5, hw * 2, tabH, tabH * 0.5); g.fill(); // the top tab, ring to ring
       g.lineWidth = 1; g.strokeStyle = shade(L.col, -0.45); g.stroke();
       g.fillText(L.c, 0, tabH * 0.15);
       g.lineWidth = 1.2; g.strokeText(L.c, 0, tabH * 0.15);
-      for (const s of [-1, 1]) { // the little metal rings
-        g.beginPath(); g.arc(s * rodLen / 2, 0, 2.6, 0, Math.PI * 2); g.fillStyle = "#3a3020"; g.fill();
-        g.lineWidth = 1.3; g.strokeStyle = "#f2d38a"; g.stroke();
-      }
       g.restore();
+    }
+    for (const p of rings) { // one metal ring per joint, pinning the two letters together
+      g.beginPath(); g.arc(p.x, p.y, 2.8, 0, Math.PI * 2); g.fillStyle = "#3a3020"; g.fill();
+      g.lineWidth = 1.4; g.strokeStyle = "#f2d38a"; g.stroke();
     }
   }
 
