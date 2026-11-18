@@ -12,7 +12,7 @@
 const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-const GW = 1300;        // wave gravity (px/s²): how fast waves travel
+const GW = 820;         // wave gravity (px/s²): how fast waves travel (lower = a bit thicker, lazier coffee)
 const GS = 2300;        // stream gravity (px/s²)
 const DX = 4;           // column width (px)
 const SUB = 1 / 360;    // simulation step (s)
@@ -23,6 +23,8 @@ const C = {
   h: null, q: null, fm: null,             // depth, flow between i and i+1, foam thickness
   drops: [], spl: [], bubs: [],           // stream drops, splash droplets, bubbles
   gx: 0, gy: 1,                           // gravity in screen coordinates (smoothed)
+  lx: 0, ly: 1,                           // the gravity the coffee feels: follows gx/gy with a short delay (body)
+  spilled: 0,                             // coffee lost over the top edge
   pouring: false, poured: 0, goal: 0, rate: 0, emitAcc: 0, emitT: 0,
   kind: "warm", onFull: null, onDraw: null, raf: 0, last: 0, liveUntil: 0, resting: false, t: 0,
   listening: false, gotMotion: false, mottle: null,
@@ -77,14 +79,14 @@ function volume() { let v = 0; for (let i = 0; i < C.N; i++) v += C.h[i]; return
 // ---------- physics ----------
 function stepFluid(dt) {
   const { h, q, N } = C, d = dx();
-  const [ex, ey] = grav(), gy = Math.max(ey, 0.25), ratio = clamp(ex / gy, -1.4, 1.4);
+  const ex = C.lx, ey = C.ly, gy = Math.max(ey, 0.1), ratio = clamp(ex / gy, -4, 4); // steep enough to reach the top and spill
   for (let s = 0, n = Math.ceil(dt / SUB), sdt = dt / n; s < n; s++) {
     for (let i = 0; i < N - 1; i++) {
       const ha = (h[i] + h[i + 1]) * 0.5;
       q[i] += sdt * GW * gy * ha * ((h[i] - h[i + 1]) / d + ratio);
-      q[i] *= 1 - 0.9 * sdt;
+      q[i] *= 1 - 1.5 * sdt;
     }
-    for (let i = 1; i < N - 2; i++) q[i] += (q[i - 1] + q[i + 1] - 2 * q[i]) * 0.07; // viscosity: no jagged ripples
+    for (let i = 1; i < N - 2; i++) q[i] += (q[i - 1] + q[i + 1] - 2 * q[i]) * 0.1; // viscosity: no jagged ripples, a little body
     for (let i = 0; i < N - 1; i++) { const m = (h[i + 1] - h[i]) * 0.015; h[i] += m; h[i + 1] -= m; } // surface tension (keeps the volume)
     for (let i = 0; i < N; i++) { // never take more than a column holds
       const outR = i < N - 1 && q[i] > 0 ? q[i] : 0, outL = i > 0 && q[i - 1] < 0 ? -q[i - 1] : 0, out = (outR + outL) * sdt;
@@ -93,12 +95,27 @@ function stepFluid(dt) {
     for (let i = 0; i < N; i++) h[i] = Math.max(0, h[i] - (sdt * ((i < N - 1 ? q[i] : 0) - (i > 0 ? q[i - 1] : 0))) / d);
   }
 }
+// The top of the screen is the cup's rim: coffee that climbs past it is gone (a few drops fly off).
+// Upside down, it pours out over the top.
+function spill(dt) {
+  const { h, H, N } = C, d = dx();
+  let lost = 0;
+  for (let i = 0; i < N; i++) if (h[i] > H) {
+    lost += (h[i] - H) * d; h[i] = H;
+    if (Math.random() < 0.15 && C.spl.length < 60) C.spl.push({ x: i * d, y: 3, vx: C.lx * rnd(60, 160), vy: -rnd(40, 120), r: rnd(1.2, 2.6) });
+  }
+  if (C.ly < -0.3) { // the phone is upside down: it runs out
+    const k = Math.min(1, (-C.ly - 0.3) * 1.4 * dt);
+    for (let i = 0; i < N; i++) { lost += h[i] * k * d; h[i] -= h[i] * k; }
+  }
+  if (lost > 0) { C.spilled += lost; wake(1500); }
+}
 function flowAt(i) { const a = i > 0 ? C.q[i - 1] : 0, b = i < C.N - 1 ? C.q[i] : 0; return (a + b) / 2 / Math.max(C.h[i], 4); }
 function stepFoam(dt) {
   const { fm, N, h } = C, d = dx(), [rest, max] = FOAM[C.kind];
   const nf = new Float32Array(N);
   for (let i = 0; i < N; i++) { // carried by the flow (a bit slower than the coffee)
-    const src = clamp(i - (flowAt(i) * dt * 0.85) / d, 0, N - 1), k = Math.floor(src), f = src - k;
+    const src = clamp(i - (flowAt(i) * dt * 0.7) / d, 0, N - 1), k = Math.floor(src), f = src - k;
     nf[i] = fm[k] * (1 - f) + fm[Math.min(k + 1, N - 1)] * f;
   }
   for (let i = 0; i < N; i++) {
@@ -122,8 +139,8 @@ function land(x, vy, mass) {
   const push = mass * Math.min(vy, 1600) * 0.006;
   if (k > 0) C.q[k - 1] -= push; if (k < C.N - 1) C.q[k] += push;
   if (Math.random() < bub) addBubble(x + rnd(-12, 12));
-  if (Math.random() < 0.3 && C.spl.length < 60) {
-    const [ex, ey] = grav(), sp = rnd(140, 340), side = rnd(-1, 1);
+  if (Math.random() < 0.22 && C.spl.length < 60) {
+    const [ex, ey] = grav(), sp = rnd(110, 260), side = rnd(-1, 1);
     C.spl.push({ x, y: surfY(x) - 2, vx: -ex * sp + side * 160, vy: -ey * sp, r: rnd(1.1, 2.5) });
   }
 }
@@ -167,7 +184,7 @@ function stepBubbles(dt) {
   for (const b of C.bubs) {
     if (b.pop) { b.pop += dt; if (b.pop < 0.18) keep.push(b); continue; }
     const i = col(b.x);
-    b.x = clamp(b.x + flowAt(i) * dt * 0.85 + Math.sin((C.t + b.j) * 1.7) * 2 * dt, 1, C.W - 1);
+    b.x = clamp(b.x + flowAt(i) * dt * 0.7 + Math.sin((C.t + b.j) * 1.7) * 2 * dt, 1, C.W - 1);
     b.d = Math.max(0.05, b.d - dt * 0.03);
     b.life -= dt;
     if (b.life <= 0 || C.fm[i] < b.r * 0.9) { b.pop = 1e-6; if (b.r > 2.5) C.fm[i] = Math.max(0, C.fm[i] - 0.5); }
@@ -290,7 +307,11 @@ function frame(now) {
   const dt = Math.min(0.033, (now - (C.last || now)) / 1000 || 0.016);
   C.last = now; C.t += dt;
   fit();
-  stepStream(dt); stepFluid(dt); stepFoam(dt); stepBubbles(dt);
+  { // the coffee follows the phone's gravity with a short delay (~0.3 s): it has some body
+    const [ex, ey] = grav(), k = Math.min(1, dt * 3.5);
+    C.lx += (ex - C.lx) * k; C.ly += (ey - C.ly) * k;
+  }
+  stepStream(dt); stepFluid(dt); spill(dt); stepFoam(dt); stepBubbles(dt);
   draw();
   if (!C.pouring && !C.drops.length && C.full === false) { C.full = true; if (C.onFull) C.onFull(); }
   const busy = C.pouring || C.drops.length || C.spl.length || energy() > 3 || performance.now() < C.liveUntil || C.bubs.some((b) => b.pop);
@@ -344,5 +365,7 @@ export const coffee = {
     if (tap && C.kind !== "cold" && Math.random() < 0.6) addBubble(x, true);
     wake();
   },
+  // How much coffee there is, as a share of the screen.
+  amount() { return C.N ? volume() / (C.W * C.H) : 0; },
   rest(on) { C.resting = on; if (on) { cancelAnimationFrame(C.raf); C.raf = 0; } else wake(1500); },
 };

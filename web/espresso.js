@@ -45,7 +45,7 @@ const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const keepAwake = () => dispatchEvent(new Event("app-wake")); // the countdown and the pour shouldn't fall asleep halfway
 
 // ---------- state (until reload) ----------
-const S = { temp: 50, water: 50, touched: new Set(), phase: "idle", count: 10, brewTemp: 50 };
+const S = { temp: 50, water: 50, touched: new Set(), phase: "idle", count: 10, brewTemp: 50, brewed: 0 };
 const target = () => (18 + S.water * 0.68) / 100; // share of the screen height the coffee reaches
 let el = null, layerRef = null, tick = 0, awakeTimer = 0, cf = null;
 
@@ -105,6 +105,8 @@ function render() {
 }
 let steamAt = -1;
 function placeSteam(pct) {
+  // Almost all of it spilled out: the bars wake up for a new brew (what's left becomes part of it).
+  if (S.phase === "full" && pct / 100 < S.brewed * 0.12) { S.phase = "idle"; S.touched.clear(); render(); return; }
   if (!el || !el.steams.firstChild || Math.abs(pct - steamAt) < 0.3) return;
   steamAt = pct;
   for (const s of el.steams.children) s.style.bottom = pct + "%";
@@ -132,7 +134,7 @@ function startCount() {
   countLoop();
 }
 function startPour() {
-  S.phase = "pour"; S.brewTemp = S.temp;
+  S.phase = "pour"; S.brewTemp = S.temp; S.brewed = target();
   keepAwake();
   clearInterval(awakeTimer);
   awakeTimer = setInterval(keepAwake, 4000); // until it's full (onFull)
