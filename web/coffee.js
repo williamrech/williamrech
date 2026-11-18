@@ -114,13 +114,13 @@ function stepTilt(dt) {
   C.om = clamp(C.om + acc * dt, -6, 6);
   C.th = wrap(C.th + C.om * dt);
   const G = C.geo; // a quick turn also kicks the first waves (bounded)
-  if (G) { C.v[0] += clamp(-acc * G.L * 0.012, -120, 120) * dt; C.v[1] += clamp(-acc * G.L * 0.004, -60, 60) * dt; }
+  if (G) { C.v[0] += clamp(-acc * G.L * 0.025, -250, 250) * dt; C.v[1] += clamp(-acc * G.L * 0.01, -120, 120) * dt; }
 }
 function stepWaves(dt) {
   const G = C.geo; if (!G) return;
-  const depth = clamp(C.V / G.L, 4, 2000), lim = Math.min(10, G.L * 0.03); // coffee in a cup: small waves
+  const depth = clamp(C.V / G.L, 4, 2000), lim = Math.min(18, G.L * 0.05); // coffee in a cup: modest waves
   for (let k = 0; k < MODES; k++) {
-    const kk = ((k + 1) * Math.PI) / G.L, w = Math.sqrt(GW * kk * Math.tanh(kk * depth)), z = 0.28 + 0.05 * k + (C.kind === "hot" ? 0.06 : 0); // crema damps quickly: waves settle in about a second
+    const kk = ((k + 1) * Math.PI) / G.L, w = Math.sqrt(GW * kk * Math.tanh(kk * depth)), z = 0.14 + 0.04 * k + (C.kind === "hot" ? 0.03 : 0); // crema damps quickly: waves settle in about a second
     C.v[k] += (-w * w * C.a[k] - 2 * z * w * C.v[k]) * dt;
     C.a[k] = clamp(C.a[k] + C.v[k] * dt, -lim, lim);
     if (Math.abs(C.a[k]) >= lim) C.v[k] *= 0.5;
@@ -161,7 +161,7 @@ function addFoam(f, amount) {
 // A drop lands at 0..1 along the surface: its coffee, a dent (waves), foam, a bubble.
 function land(f, speed, mass) {
   C.V += mass; C.landed += mass;
-  const imp = clamp(mass * Math.min(speed, 1600) * 0.000008, 0, 1.2); // a small dimple per drop, not a crater
+  const imp = clamp(mass * Math.min(speed, 1600) * 0.000015, 0, 2.5); // a small dimple per drop, not a crater
   for (let k = 0; k < MODES; k++) C.v[k] -= (imp * Math.cos((k + 1) * Math.PI * clamp(f, 0, 1))) / (k + 1);
   addFoam(f, (mass / Math.max(40, C.geo.L)) * (C.kind === "cold" ? 0.15 : 1.4));
 }
@@ -260,7 +260,7 @@ function candidates() {
   out.sort((a, b) => a.v - b.v); // deeper (smaller) first, so the big ones on top are drawn over them
   return (C.cand = out);
 }
-const COLORS = { hot: ["#e4b678", "#c38a4c", "#7a3c18"], warm: ["#d6a66c", "#b07a40", "#6a3214"], cold: ["#a08b7b", "#6b5444", "#3a2418"] };
+const COLORS = { hot: ["#c99256", "#9c5a28", "#5a2410"], warm: ["#bb8650", "#8e5224", "#4e200c"], cold: ["#a08b7b", "#6b5444", "#3a2418"] };
 const SAMPLES = 90;
 function draw() {
   const { g, W, H, dpr } = C, G = C.geo;
@@ -273,7 +273,8 @@ function draw() {
   for (let i = 0; i <= SAMPLES; i++) { // the surface, from past one edge to past the other: the screen cuts the crema straight, not at an angle
     const s = G.s0 - 80 + ((G.L + 160) * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
     sx.push(x); sy.push(y);
-    fv.push(C.V > W * H * 0.15 ? foamAt(f) : Math.min(foamAt(f), under(x, y) * 0.35)); // the 'little coffee' limit only when there's little coffee (at the edges it cut the crema)
+    const lumpy = 1 + 0.1 * Math.sin(f * 23 + C.t * 0.11) + 0.07 * Math.sin(f * 57 - C.t * 0.07); // crema isn't a flat slab
+    fv.push((C.V > W * H * 0.15 ? foamAt(f) : Math.min(foamAt(f), under(x, y) * 0.35)) * lumpy); // the 'little coffee' limit only when there's little coffee (at the edges it cut the crema)
     if (f >= 0 && f <= 1) { ySum += y; yN++; }
   }
   if (C.onDraw) C.onDraw((C.V / (W * H)) * 100, yN ? ((H - ySum / yN) / H) * 100 : 0, C.goal > 0 ? clamp(C.landed / C.goal, 0, 1) : 1);
@@ -286,14 +287,14 @@ function draw() {
     g.closePath();
     const mid = (G.s0 + G.s1) / 2, [ax, ay] = P(mid, G.c - 40), [bx, by] = P(mid, G.deep);
     const body = g.createLinearGradient(ax, ay, bx, by);
-    body.addColorStop(0, C.kind === "cold" ? "#2e1b12" : "#5a240c"); body.addColorStop(0.12, "#3d1607");
-    body.addColorStop(0.5, "#1c0803"); body.addColorStop(1, "#0a0301");
+    body.addColorStop(0, C.kind === "cold" ? "#2a160c" : "#3a1507"); body.addColorStop(0.12, "#241004");
+    body.addColorStop(0.5, "#120602"); body.addColorStop(1, "#060201");
     g.fillStyle = body; g.fill();
     g.save(); g.clip(); // warm light moving slowly inside it
     const depth = Math.max(40, G.deep - G.c);
     for (const [pj, pt, r, a] of [[0.3 + Math.sin(C.t * 0.23) * 0.12, 0.25, 0.6, 0.14], [0.72 + Math.cos(C.t * 0.17) * 0.1, 0.45, 0.45, 0.08]]) {
       const [cx, cy] = P(G.s0 + G.L * pj, G.c + depth * pt), rr = W * r, gr = g.createRadialGradient(cx, cy, 0, cx, cy, rr);
-      gr.addColorStop(0, `rgba(201,139,79,${a})`); gr.addColorStop(1, "rgba(201,139,79,0)");
+      gr.addColorStop(0, `rgba(140,58,22,${a * 0.6})`); gr.addColorStop(1, "rgba(140,58,22,0)");
       g.fillStyle = gr; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);
     }
     g.restore();
@@ -309,7 +310,7 @@ function draw() {
     cg.addColorStop(0, c0); cg.addColorStop(k * 0.55, c1); cg.addColorStop(k, c2); cg.addColorStop(1, "rgba(40,18,8,0)");
     g.globalAlpha = C.kind === "cold" ? 0.6 : 1; g.fillStyle = cg; g.fill(); g.globalAlpha = 1;
     if (C.kind !== "cold") {
-      g.save(); g.clip(); g.globalAlpha = 0.12;
+      g.save(); g.clip(); g.globalAlpha = 0.45;
       g.fillStyle = g.createPattern(mottle(), "repeat");
       const off = (C.t * 6) % 160;
       g.translate(off, 0); g.fillRect(-off - 10, -10, W + 180, H + 20);
