@@ -333,12 +333,13 @@ function draw() {
     }
     const lerp = (a, f) => { const x = clamp(f, 0, 1) * NB, k = Math.min(NB - 1, Math.floor(x)), r = x - k; return a[k] * (1 - r) + a[k + 1] * r; };
     for (const b of cand) {
-      const T = lerp(bT, b.f);
+      const bf = -0.2 + b.f * 1.4; // bubbles run past both edges, so the screen cuts them straight
+      const T = lerp(bT, bf);
       if (b.keep > Math.min(1, (T / fmax) * 1.3) || T < 3) continue; // the foam is made of bubbles, packed through its whole thickness // bubbles in the upper part of the crema
       const live = clamp((Math.sin(t * b.rate + b.ph) + 0.9) * 4, 0, 1);
       if (live <= 0.02) continue;
       const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.45);
-      const z = b.v * T * 0.92 + r * 0.3, e = lerp(bE, b.f), s0 = G.s0 + b.f * G.L;
+      const z = b.v * T * 0.92 + r * 0.3, e = lerp(bE, bf), s0 = G.s0 + bf * G.L;
       const x = s0 * G.ux + (G.c - e - z) * G.nx, y = s0 * G.uy + (G.c - e - z) * G.ny;
       g.globalAlpha = live * (C.kind === "cold" ? 0.6 : 0.92);
       g.drawImage(spr, x - r, y - r, r * 2, r * 2);
