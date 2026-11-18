@@ -22,7 +22,7 @@ const MODES = 5;          // standing waves on the surface
 const TILT_K = 13;        // the surface's spring towards level (rad/s²/rad): ~0.57 Hz slosh
 const TILT_D = 2.6;       // its damping (coffee with crema: settles in ~2 s)
 const FN = 48;            // crema samples along the surface
-const FOAM = { hot: [17, 30, 1.25], warm: [9, 18, 0.7], cold: [2.5, 5, 0.12] }; // [rest thickness, max, bubbles per drop]
+const FOAM = { hot: [6, 30], warm: [4, 20], cold: [1.5, 6] }; // crema: [the thin layer it never goes below, max]
 
 const C = {
   canvas: null, g: null, dpr: 1, W: 0, H: 0,
@@ -30,7 +30,7 @@ const C = {
   th: 0, om: 0, aim: 0,                 // surface angle (0 = phone upright), its speed, the (filtered) gravity angle
   a: new Float32Array(MODES), v: new Float32Array(MODES), // waves: amplitude (px, up = positive), speed
   fm: new Float32Array(FN),             // crema thickness along the surface (0..1 from one wall to the other)
-  drops: [], bubs: [],
+  drops: [], rise: [], riseT: 2, amb: 0, sprites: {}, cand: null,
   gx: 0, gy: 1,                         // phone gravity on the screen (smoothed)
   spilled: 0, landed: 0,
   pouring: false, poured: 0, goal: 0, rate: 0, emitAcc: 0, emitT: 0, full: null,
@@ -137,13 +137,20 @@ function spill(dt) {
   C.V -= out; C.spilled += out;
   wake(1500);
 }
+// The crema: left alone its bubbles slowly pop and it thins (never below a thin layer); sloshing, tilting and
+// fingers whip it back up where the coffee moves; the pour builds it (land).
 function stepFoam(dt) {
-  const [rest] = FOAM[C.kind], f = C.fm, n = new Float32Array(FN);
+  const [floor, max] = FOAM[C.kind], f = C.fm, n = new Float32Array(FN);
+  const stir = C.kind === "cold" ? 0.004 : 0.02, swirl = Math.abs(C.om) * (C.geo ? C.geo.L : 300) * 0.3;
   for (let i = 0; i < FN; i++) {
     const l = f[i > 0 ? i - 1 : i], r = f[i < FN - 1 ? i + 1 : i];
     let v = f[i] + (l + r - 2 * f[i]) * 0.25;
-    if (v > rest) v -= (v - rest) * Math.min(1, 0.35 * dt);
-    n[i] = C.V < 1 ? 0 : v;
+    if (v > floor) v -= (v - floor) * Math.min(1, dt / 45); // ~45 s to thin out
+    else v += (floor - v) * Math.min(1, dt * 0.5);          // the thin layer always re-forms
+    let vel = 0; const fi = i / (FN - 1);
+    for (let k = 0; k < MODES; k++) vel += C.v[k] * Math.cos((k + 1) * Math.PI * fi);
+    v += Math.min((Math.abs(vel) + swirl) * stir, 12) * dt;
+    n[i] = C.V < 1 ? 0 : Math.min(v, max);
   }
   C.fm = n;
 }
@@ -151,18 +158,12 @@ function addFoam(f, amount) {
   const [, max] = FOAM[C.kind], c = clamp(f, 0, 1) * (FN - 1);
   for (let i = Math.max(0, Math.floor(c - 5)); i <= Math.min(FN - 1, Math.ceil(c + 5)); i++) C.fm[i] = Math.min(max * 1.3, C.fm[i] + amount * Math.exp(-((i - c) ** 2) / 6));
 }
-function addBubble(f, big) {
-  if (C.bubs.length >= 150) return;
-  C.bubs.push({ f: clamp(f, 0.01, 0.99), d: rnd(0.15, 0.85), r: big ? rnd(3, 4.6) : Math.random() < 0.15 ? rnd(2.4, 3.6) : rnd(0.7, 2.2), life: rnd(1.5, C.kind === "hot" ? 9 : 5), pop: 0, ph: rnd(0, 6.28) });
-}
 // A drop lands at 0..1 along the surface: its coffee, a dent (waves), foam, a bubble.
 function land(f, speed, mass) {
   C.V += mass; C.landed += mass;
   const imp = clamp(mass * Math.min(speed, 1600) * 0.00003, 0, 6); // a small dimple per drop, not a crater
   for (let k = 0; k < MODES; k++) C.v[k] -= (imp * Math.cos((k + 1) * Math.PI * clamp(f, 0, 1))) / (k + 1);
-  const [, , bub] = FOAM[C.kind];
   addFoam(f, (mass / Math.max(40, C.geo.L)) * (C.kind === "cold" ? 0.15 : 1.4));
-  if (Math.random() < bub) addBubble(f + rnd(-0.03, 0.03));
 }
 function stepStream(dt) {
   const [ex, ey] = grav();
@@ -188,17 +189,29 @@ function stepStream(dt) {
   }
   C.drops = keep;
 }
-function stepBubbles(dt) {
-  const keep = [];
-  for (const b of C.bubs) {
-    if (b.pop) { b.pop += dt; if (b.pop < 0.18) keep.push(b); continue; }
-    b.f = clamp(b.f + Math.sin((C.t + b.ph) * 1.7) * 0.004 * dt, 0.01, 0.99);
-    b.d = Math.max(0.05, b.d - dt * 0.03); b.life -= dt;
-    if (b.life <= 0 || foamAt(b.f) < b.r * 0.9) b.pop = 1e-6;
-    keep.push(b);
+// How much coffee is under a screen point, along "down" to the screen's edge.
+function under(x, y) {
+  const G = C.geo, W = C.W, H = C.H;
+  x = clamp(x, 0, W); y = clamp(y, 0, H);
+  const tx = G.nx > 1e-6 ? (W - x) / G.nx : G.nx < -1e-6 ? -x / G.nx : 1e9, ty = G.ny > 1e-6 ? (H - y) / G.ny : G.ny < -1e-6 ? -y / G.ny : 1e9;
+  return Math.max(0, Math.min(tx, ty));
+}
+const surfPt = (f) => { const G = C.geo; return [(G.s0 + f * G.L) * G.ux + (G.c - eta(f)) * G.nx, (G.s0 + f * G.L) * G.uy + (G.c - eta(f)) * G.ny]; };
+// Now and then a small bubble comes up from inside the coffee, wobbling, and joins the crema.
+function stepRise(dt) {
+  if (C.still || C.V < C.W * C.H * 0.02 || !C.geo) { C.rise.length = 0; return; }
+  if ((C.riseT -= dt) <= 0) {
+    const [a, b] = C.kind === "hot" ? [1.5, 5] : C.kind === "warm" ? [2.5, 7] : [5, 12];
+    C.riseT = rnd(a, b);
+    const f = rnd(0.08, 0.92), [x, y] = surfPt(f), deep = under(x, y);
+    if (deep > 70 && C.rise.length < 12) C.rise.push({ f, d: rnd(40, Math.min(280, deep * 0.8)), sp: rnd(18, 34), r: rnd(1.1, 2.4), ph: rnd(0, 6.28) });
   }
-  C.bubs = keep;
-  if (!C.pouring && C.kind === "hot" && C.V > 1 && performance.now() < C.liveUntil && Math.random() < dt * 5) addBubble(rnd(0.02, 0.98));
+  const keep = [];
+  for (const b of C.rise) {
+    b.sp += 7 * dt; b.d -= b.sp * dt;
+    if (b.d <= 0) { if (C.kind !== "cold") addFoam(b.f, 0.4); } else keep.push(b);
+  }
+  C.rise = keep;
 }
 function moving() {
   let e = 0; for (let k = 0; k < MODES; k++) e += Math.abs(C.a[k]) + Math.abs(C.v[k]) * 0.1;
@@ -219,6 +232,34 @@ function mottle() { // a soft speckled texture for the crema (made once)
   }
   return (C.mottle = c);
 }
+// A bubble, drawn once per kind and then stamped: thin bright wall, see-through middle, a sharp highlight.
+function sprite(kind) {
+  if (C.sprites[kind]) return C.sprites[kind];
+  const S = 64, c = document.createElement("canvas"); c.width = c.height = S;
+  const g = c.getContext("2d"), m = S / 2, R = S / 2 - 2;
+  const cold = kind === "cold", wall = cold ? "200,210,215" : "246,214,172", dark = cold ? "40,30,25" : "92,46,16";
+  let gr = g.createRadialGradient(m, m, R * 0.2, m, m, R);
+  gr.addColorStop(0, `rgba(${wall},${cold ? .06 : .14})`); gr.addColorStop(0.72, `rgba(${wall},${cold ? .16 : .26})`); gr.addColorStop(0.92, `rgba(${wall},.55)`); gr.addColorStop(1, `rgba(${dark},.55)`);
+  g.fillStyle = gr; g.beginPath(); g.arc(m, m, R, 0, 7); g.fill();
+  g.strokeStyle = `rgba(${dark},.45)`; g.lineWidth = 2; g.beginPath(); g.arc(m, m, R - 1, 0, 7); g.stroke();
+  gr = g.createRadialGradient(m - R * 0.38, m - R * 0.42, 0, m - R * 0.38, m - R * 0.42, R * 0.34);
+  gr.addColorStop(0, "rgba(255,255,250,.95)"); gr.addColorStop(1, "rgba(255,255,250,0)");
+  g.fillStyle = gr; g.beginPath(); g.arc(m - R * 0.38, m - R * 0.42, R * 0.34, 0, 7); g.fill();
+  g.strokeStyle = "rgba(255,250,240,.35)"; g.lineWidth = 2.2; g.beginPath(); g.arc(m, m, R * 0.72, 0.35, 1.25); g.stroke(); // a soft reflection low right
+  return (C.sprites[kind] = c);
+}
+// Where the crema's bubbles sit: a fixed random packing per stretch of surface (so they don't jump around),
+// each with its own size, its own slow life (now and then it pops and forms again) and a little wobble.
+function candidates() {
+  if (C.cand) return C.cand;
+  const out = [];
+  for (let b = 0; b < FN; b++) for (let i = 0; i < 22; i++) {
+    const v = Math.random();
+    out.push({ f: (b + Math.random()) / FN, v, keep: Math.random(), rs: rnd(0.9, 1.25) * (0.8 + v * 2.6) * (Math.random() < 0.08 ? 1.6 : 1), ph: rnd(0, 6.28), rate: rnd(0.12, 0.45) });
+  }
+  out.sort((a, b) => a.v - b.v); // deeper (smaller) first, so the big ones on top are drawn over them
+  return (C.cand = out);
+}
 const COLORS = { hot: ["#f0c08a", "#c98646", "#7d431f"], warm: ["#d9a46c", "#ad6c38", "#5f3218"], cold: ["#a08b7b", "#6b5444", "#3a2418"] };
 const SAMPLES = 90;
 function draw() {
@@ -227,14 +268,7 @@ function draw() {
   g.clearRect(0, 0, W, H);
   const P = (s, d) => [s * G.ux + d * G.nx, s * G.uy + d * G.ny]; // along, depth → screen
   const sx = [], sy = [], fv = [];
-  // How much coffee there is under a surface point (along "down", to the screen's edge). The crema and its
-  // bubbles never get thicker than a share of it: with little coffee left, the crema thins out instead of
-  // sitting as a thick band on a sliver of coffee (18.11).
-  const under = (x, y) => {
-    x = clamp(x, 0, W); y = clamp(y, 0, H);
-    const tx = G.nx > 1e-6 ? (W - x) / G.nx : G.nx < -1e-6 ? -x / G.nx : 1e9, ty = G.ny > 1e-6 ? (H - y) / G.ny : G.ny < -1e-6 ? -y / G.ny : 1e9;
-    return Math.max(0, Math.min(tx, ty));
-  };
+  // The crema never gets thicker than a share of the coffee under it (a sliver of coffee = thin crema).
   let ySum = 0, yN = 0;
   for (let i = 0; i <= SAMPLES; i++) { // the surface, wall to wall (a little past them so the edges are clean)
     const s = G.s0 - 30 + ((G.L + 60) * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
@@ -265,38 +299,57 @@ function draw() {
     g.lineWidth = 14; g.strokeStyle = "rgba(10,4,1,.35)"; // the shade just under the crema
     g.beginPath(); for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] + G.nx * 7, sy[i] + G.ny * 7); g.stroke();
     g.restore();
-    g.beginPath(); // the crema
-    for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] - G.nx * fv[i], sy[i] - G.ny * fv[i]);
+    // the crema: a soft foam body underneath…
+    g.beginPath();
+    for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] - G.nx * fv[i] * 0.7, sy[i] - G.ny * fv[i] * 0.7);
     for (let i = SAMPLES; i >= 0; i--) g.lineTo(sx[i] + G.nx * 0.5, sy[i] + G.ny * 0.5);
     g.closePath();
     const [c0, c1, c2] = COLORS[C.kind], fmax = FOAM[C.kind][1];
-    const [fx0, fy0] = P(mid, G.c - fmax), [fx1, fy1] = P(mid, G.c + 2);
+    const [fx0, fy0] = P(mid, G.c - fmax * 0.7), [fx1, fy1] = P(mid, G.c + 2);
     const cg = g.createLinearGradient(fx0, fy0, fx1, fy1);
     cg.addColorStop(0, c0); cg.addColorStop(0.45, c1); cg.addColorStop(1, c2);
-    g.fillStyle = cg; g.fill();
+    g.globalAlpha = C.kind === "cold" ? 0.6 : 0.9; g.fillStyle = cg; g.fill(); g.globalAlpha = 1;
     if (C.kind !== "cold") {
-      g.save(); g.clip(); g.globalAlpha = 0.5;
+      g.save(); g.clip(); g.globalAlpha = 0.35;
       g.fillStyle = g.createPattern(mottle(), "repeat");
       const off = (C.t * 6) % 160;
       g.translate(off, 0); g.fillRect(-off - 10, -10, W + 180, H + 20);
       g.restore();
     }
-    g.beginPath(); for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] - G.nx * fv[i], sy[i] - G.ny * fv[i]);
-    if (C.kind === "cold") {
+    if (C.kind === "cold") { // the cold glow along the top
+      g.beginPath(); for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] - G.nx * fv[i], sy[i] - G.ny * fv[i]);
       const a = 0.55 + Math.sin(C.t * 2) * 0.25;
       g.strokeStyle = `rgba(127,200,248,${0.12 * a})`; g.lineWidth = 14; g.stroke();
       g.strokeStyle = `rgba(127,200,248,${0.3 * a})`; g.lineWidth = 5; g.stroke();
-      g.strokeStyle = "rgba(200,236,255,.85)"; g.lineWidth = 1.4; g.stroke();
-    } else { g.strokeStyle = "rgba(255,238,210,.55)"; g.lineWidth = 1.2; g.stroke(); }
-    for (const b of C.bubs) {
-      const s = G.s0 + b.f * G.L, [x0, y0] = P(s, G.c - eta(b.f)), th = Math.min(foamAt(b.f), under(x0, y0) * 0.35);
-      if (!b.pop && th < b.r * 1.8) continue; // too little crema there for this bubble
-      const x = x0 - G.nx * th * (1 - b.d), y = y0 - G.ny * th * (1 - b.d);
-      if (b.pop) { g.strokeStyle = `rgba(255,240,215,${0.6 * (1 - b.pop / 0.18)})`; g.lineWidth = 0.8; g.beginPath(); g.arc(x, y, b.r * (1 + b.pop * 8), 0, 7); g.stroke(); continue; }
-      g.fillStyle = "rgba(255,244,225,.14)"; g.strokeStyle = "rgba(255,240,215,.5)"; g.lineWidth = 0.7;
-      g.beginPath(); g.arc(x, y, b.r, 0, 7); g.fill(); g.stroke();
-      if (b.r > 1.6) { g.fillStyle = "rgba(255,250,240,.75)"; g.beginPath(); g.arc(x - b.r * 0.35, y - b.r * 0.35, b.r * 0.22, 0, 7); g.fill(); }
     }
+    // …made of real bubbles: as many as the crema is thick, small below and bigger on top; thinner crema =
+    // fewer, smaller bubbles; each pops now and then and forms again
+    const spr = sprite(C.kind), cand = candidates(), t = C.t;
+    const NB = FN, bE = new Float32Array(NB + 1), bT = new Float32Array(NB + 1); // surface height and crema per stretch (once, not per bubble)
+    for (let i = 0; i <= NB; i++) {
+      const f = i / NB, e = eta(f), s0 = G.s0 + f * G.L;
+      bE[i] = e;
+      bT[i] = Math.min(foamAt(f) * clamp(1 - curv(f) * 60, 0.5, 1.7), under(s0 * G.ux + (G.c - e) * G.nx, s0 * G.uy + (G.c - e) * G.ny) * 0.35);
+    }
+    const lerp = (a, f) => { const x = clamp(f, 0, 1) * NB, k = Math.min(NB - 1, Math.floor(x)), r = x - k; return a[k] * (1 - r) + a[k + 1] * r; };
+    for (const b of cand) {
+      const T = lerp(bT, b.f);
+      if (b.keep > T / fmax || T < 1) continue;
+      const live = clamp((Math.sin(t * b.rate + b.ph) + 0.9) * 4, 0, 1);
+      if (live <= 0.02) continue;
+      const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.55 + 0.6);
+      const z = b.v * T * 0.92 + r * 0.3, e = lerp(bE, b.f), s0 = G.s0 + b.f * G.L;
+      const x = s0 * G.ux + (G.c - e - z) * G.nx, y = s0 * G.uy + (G.c - e - z) * G.ny;
+      g.globalAlpha = live * (C.kind === "cold" ? 0.7 : 0.95);
+      g.drawImage(spr, x - r, y - r, r * 2, r * 2);
+    }
+    // bubbles rising from inside
+    g.globalAlpha = 0.6;
+    for (const b of C.rise) {
+      const e = eta(b.f), s0 = G.s0 + b.f * G.L + Math.sin(t * 3 + b.ph) * 2.2, d = G.c - e + b.d;
+      g.drawImage(spr, s0 * G.ux + d * G.nx - b.r, s0 * G.uy + d * G.ny - b.r, b.r * 2, b.r * 2);
+    }
+    g.globalAlpha = 1;
   }
   const D = C.drops; // the stream: thick at the spout, thinner as it speeds up
   if (D.length > 1) {
@@ -328,15 +381,20 @@ function frame(now) {
   C.last = now; C.t += dt;
   fit();
   for (let i = 0; i < 2; i++) { stepTilt(dt / 2); solve(); stepWaves(dt / 2); }
-  stepStream(dt); spill(dt); solve(); stepFoam(dt); stepBubbles(dt);
+  stepStream(dt); spill(dt); solve(); stepFoam(dt); stepRise(dt);
   draw();
   if (!C.pouring && !C.drops.length && C.full === false) { C.full = true; if (C.onFull) C.onFull(); }
-  const busy = C.pouring || C.drops.length || moving() || performance.now() < C.liveUntil || C.bubs.some((b) => b.pop);
-  if (busy && !C.resting && !document.hidden) { if (!C.raf) C.raf = requestAnimationFrame(frame); } // (a wake() during this frame may have asked already)
+  const busy = C.pouring || C.drops.length || moving() || performance.now() < C.liveUntil;
+  // With coffee on the screen the crema stays alive (pops, thins, rising bubbles) but slowly: ~25 frames a second.
+  const ambient = C.V > C.W * C.H * 0.002 && !C.still;
+  if (C.resting || document.hidden) { if (!C.raf) C.last = 0; }
+  else if (busy) { if (!C.raf) C.raf = requestAnimationFrame(frame); } // (a wake() during this frame may have asked already)
+  else if (ambient) { if (!C.raf && !C.amb) C.amb = setTimeout(() => { C.amb = 0; if (!C.raf && !C.resting) C.raf = requestAnimationFrame(frame); }, 30); }
   else if (!C.raf) C.last = 0;
 }
 function wake(ms = 4000) {
   C.liveUntil = Math.max(C.liveUntil, performance.now() + ms);
+  if (C.amb) { clearTimeout(C.amb); C.amb = 0; }
   if (!C.raf && !C.resting && C.canvas && C.canvas.isConnected) { C.last = 0; C.raf = requestAnimationFrame(frame); }
 }
 
@@ -354,7 +412,7 @@ export const coffee = {
   },
   detach() {
     if (C.listening) { C.listening = false; removeEventListener("devicemotion", onMotion); removeEventListener("deviceorientation", onMotion); }
-    cancelAnimationFrame(C.raf); C.raf = 0;
+    cancelAnimationFrame(C.raf); C.raf = 0; clearTimeout(C.amb); C.amb = 0;
   },
   // Pour until the coffee fills `frac` of the screen; temp 0..100 decides the crema. What's there stays in.
   pour(frac, temp, still) {
@@ -366,7 +424,7 @@ export const coffee = {
     C.rate = Math.max(C.goal / 14, 0.06 * C.W * C.H); // ~6% of the screen a second (at most 14 s)
     C.full = false;
     if (still) { // reduced motion: just there
-      C.V += C.goal; C.landed = C.goal; C.fm.fill(FOAM[C.kind][0]); C.pouring = false; solve(); draw();
+      C.V += C.goal; C.landed = C.goal; C.fm.fill((FOAM[C.kind][0] + FOAM[C.kind][1]) / 2); C.pouring = false; solve(); draw();
       C.full = true; if (C.onFull) C.onFull(); return;
     }
     C.pouring = true; wake();
@@ -377,7 +435,7 @@ export const coffee = {
     const G = C.geo, f = clamp(along(x, y), 0, 1);
     if (!mx && !my) {
       for (let k = 0; k < MODES; k++) C.v[k] -= (140 * Math.cos((k + 1) * Math.PI * f)) / (k + 1);
-      if (C.kind !== "cold" && Math.random() < 0.6) addBubble(f, true);
+      if (C.kind !== "cold") addFoam(f, 2.5);
     } else {
       const push = clamp(mx * G.ux + my * G.uy, -40, 40);
       for (let k = 0; k < MODES; k++) C.v[k] += (push * 6 * Math.sin((k + 1) * Math.PI * f)) / (k + 1);
@@ -386,5 +444,5 @@ export const coffee = {
   },
   // How much coffee there is, as a share of the screen.
   amount() { return C.W ? C.V / (C.W * C.H) : 0; },
-  rest(on) { C.resting = on; if (on) { cancelAnimationFrame(C.raf); C.raf = 0; } else wake(1500); },
+  rest(on) { C.resting = on; if (on) { cancelAnimationFrame(C.raf); C.raf = 0; clearTimeout(C.amb); C.amb = 0; } else wake(1500); },
 };
