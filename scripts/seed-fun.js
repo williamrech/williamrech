@@ -170,6 +170,13 @@ const ref = getFirestore().doc("config/fun");
     }
     update.configVersion = 19;
   }
+  // configVersion 20: the Espresso tema switches from the plain "smoke" effect to the ☕ Espresso pacote
+  // (espresso.js; same cup and steam for now). Only if it still has "smoke" (an admin's own choice stays).
+  if ((Number(cur.configVersion) || 0) < 20) {
+    const e = cur.palettes && cur.palettes.espresso;
+    if (e && e.effect === "smoke") update["palettes.espresso.effect"] = "espresso";
+    update.configVersion = 20;
+  }
   if ("versionSpecials" in cur) update.versionSpecials = FieldValue.delete();
   if ("friday13" in cur) update.friday13 = FieldValue.delete();
   update._como_usar = defaults._como_usar;

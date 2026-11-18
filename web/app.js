@@ -87,7 +87,7 @@ function matchesPattern(pat, t) {
 // The first five are plain text styles; the rest are animated (sparks, frost, hearts…) and wrap the name.
 const NAME_LOOKS = { none: "Normal", glow: "Brilho", rainbow: "Arco-íris", wavy: "Ondinha", shadow: "Sombra", ecto: "🟢 Ectoplasma", frost: "🧊 Gelo", gold: "🥇 Dourado", fizz: "🫧 Efervescente", glitter: "✨ Purpurina", steam: "♨️ Vapor", hearts: "💗 Corações", ember: "🔥 Brasas" };
 const ANIM_LOOKS = new Set(["ecto", "frost", "gold", "fizz", "glitter", "steam", "hearts", "ember"]);
-const EFFECT_LOOK = { grimdawn: "ember", haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", hearts: "hearts" };
+const EFFECT_LOOK = { grimdawn: "ember", haunted: "ecto", snow: "frost", confetti: "gold", bubbles: "fizz", sparkles: "glitter", smoke: "steam", espresso: "steam", hearts: "hearts" };
 // Swapped names are capped so they always fit the top chip without "…" (they skip the clipping).
 const CURSE_MAX = 22;
 const autoLook = (effect) => EFFECT_LOOK[effect] || "glitter"; // no effect → glitter
@@ -364,7 +364,7 @@ function placeDecor(spec, force = false) {
 // lets a soft wisp of steam rise and vanish).
 // Occasions can force one for everyone; a theme can have its own, which each person can switch off.
 // One list of names, used in the palette studio, the occasion editor and Configurações.
-const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Festa (confete, balões, varal)", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando", grimdawn: "⚔️ Grim Dawn" };
+const EFFECTS = { smoke: "☕ Xícara fumegante", bubbles: "🫧 Bolhinhas subindo", snow: "❄️ Neve caindo", confetti: "🎉 Festa (confete, balões, varal)", sparkles: "✨ Brilhinhos", haunted: "🕸️ Assombrado", hearts: "💕 Corações flutuando", grimdawn: "⚔️ Grim Dawn", espresso: "☕ Espresso (xícara + joguinhos)" };
 // ---------- Pacotes ----------
 // A pacote is a big experience in its own file, fetched only while it's on (same version as app.js). The file
 // exports `pacote` with any of:
@@ -379,6 +379,7 @@ const PACOTES = {
   grimdawn: { file: "grimdawn.js", skin: "gd-skin", occasionOnly: true },
   haunted: { file: "haunted.js", backOverImage: true }, // Assombrado (its web and fog stay on over a background image)
   confetti: { file: "festa.js" }, // 🎉 Festa: confetti, taps, balloons, the varal (key kept: temas already use "confetti")
+  espresso: { file: "espresso.js", backOverImage: true }, // ☕ Espresso: the steaming cup for now; home for game-like extras
 };
 const OCCASION_ONLY_FX = Object.keys(PACOTES).filter((k) => PACOTES[k].occasionOnly);
 const filePacote = (k) => !!(k && PACOTES[k] && PACOTES[k].file);
@@ -3140,7 +3141,7 @@ function renderStudio() {
   const fxl = box.querySelector(".mini-fx");
   if (fxl.dataset.k !== st.effect) {
     fxl.dataset.k = st.effect;
-    fxl.classList.toggle("back", st.effect === "smoke");
+    fxl.classList.toggle("back", st.effect === "smoke" || st.effect === "espresso");
     spawnEffect(fxl, st.effect, 0.45);
   }
 
