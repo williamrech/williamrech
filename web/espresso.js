@@ -40,6 +40,15 @@ html.esp-rumble.esp-hard :is(#bgimg,#decor,#fx-back,#fx,header,footer,#view-app 
 .esp-bar .esp-lit,.esp-bar .esp-cap{opacity:.45}.esp-bar .esp-halo{opacity:.12}
 .esp-bar.on .esp-lit,.esp-bar.on .esp-cap{opacity:1}.esp-bar.on .esp-halo{opacity:.28}
 .esp.full .esp-bar .esp-lit,.esp.full .esp-bar .esp-cap{opacity:.6}
+/* a little tutorial: an untouched bar shines now and then (each stops once touched, back when the bars reset) */
+.esp-bar.hint{animation:esp-hint-frame 2.8s ease-in-out infinite}
+.esp-bar.hint .esp-lit,.esp-bar.hint .esp-cap{animation:esp-hint 2.8s ease-in-out infinite}
+.esp-bar.hint .esp-halo{animation:esp-hint-halo 2.8s ease-in-out infinite}
+.esp-bar.r.hint,.esp-bar.r.hint .esp-lit,.esp-bar.r.hint .esp-cap,.esp-bar.r.hint .esp-halo{animation-delay:.35s}
+@keyframes esp-hint{0%,62%,100%{opacity:.45}76%{opacity:1}}
+@keyframes esp-hint-halo{0%,62%,100%{opacity:.12}76%{opacity:.4}}
+@keyframes esp-hint-frame{0%,62%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 12px rgba(0,0,0,.6)}76%{box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 12px rgba(0,0,0,.6),0 0 14px 2px rgba(242,230,214,.22)}}
+@media (prefers-reduced-motion: reduce){.esp-bar.hint,.esp-bar.hint *{animation:none!important}}
 .esp ~ .steam-cup{transition:opacity 4s ease-in}
 .esp.brew ~ .steam-cup,.esp.full ~ .steam-cup{opacity:0;transition:opacity 2s}
 @keyframes esp-rise{0%{transform:translate(-50%,0) scale(.7);opacity:0}25%{opacity:.5}100%{transform:translate(-50%,-120px) scale(1.4);opacity:0}}
@@ -102,6 +111,8 @@ function render() {
   setBar(el.barR, S.water, "hsl(198 90% 70%)", "hsl(198 100% 65% / .45)");
   el.barL.classList.toggle("on", S.touched.has("temp"));
   el.barR.classList.toggle("on", S.touched.has("water"));
+  el.barL.classList.toggle("hint", S.phase === "idle" && !S.touched.has("temp"));
+  el.barR.classList.toggle("hint", S.phase === "idle" && !S.touched.has("water"));
   el.root.classList.toggle("brew", S.phase === "pour");
   el.root.classList.toggle("full", S.phase === "full");
   el.timer.classList.toggle("on", S.phase === "pour");
