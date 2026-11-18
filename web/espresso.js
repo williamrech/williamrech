@@ -20,11 +20,13 @@ const CSS = `
 .esp-timer.on{opacity:1}
 .esp-timer i{position:absolute;inset:2px 3px;border-radius:2px;background:repeating-linear-gradient(to right,rgba(242,230,214,.07) 0 7px,transparent 7px 10px)}
 .esp-timer b{position:absolute;inset:2px 3px;border-radius:2px;background:repeating-linear-gradient(to right,hsl(135 85% 58%) 0 7px,transparent 7px 10px);clip-path:inset(0 var(--left,0%) 0 0);filter:drop-shadow(0 0 3px hsl(135 100% 55% / .7)) drop-shadow(0 0 8px hsl(135 100% 50% / .45))}
-html.esp-rumble{animation:esp-rumble .09s linear infinite}
-html.esp-rumble.esp-hard{animation-duration:.06s}
-@keyframes esp-rumble{0%{transform:translate(0,0)}25%{transform:translate(.8px,-.6px)}50%{transform:translate(-.7px,.7px)}75%{transform:translate(.6px,.5px)}100%{transform:translate(0,0)}}
-html.esp-rumble.esp-hard{animation-name:esp-rumble2}
-@keyframes esp-rumble2{0%{transform:translate(0,0)}25%{transform:translate(1.6px,-1.2px)}50%{transform:translate(-1.5px,1.4px)}75%{transform:translate(1.2px,1px)}100%{transform:translate(0,0)}}
+/* The whole screen shakes in the countdown. Not by moving <html> (that breaks fixed things like the ＋ once the
+   feed is scrolled, and it pushed the page past the edge so the phone kept flashing its scroll bar): every layer
+   and block moves by itself, together, with the "translate" property, and only up/left so nothing pokes out. */
+html.esp-rumble :is(#bgimg,#decor,#fx-back,#fx,header,footer,#view-app > :not(#tab-feed),#tab-feed > *){animation:esp-rumble .09s linear infinite}
+html.esp-rumble.esp-hard :is(#bgimg,#decor,#fx-back,#fx,header,footer,#view-app > :not(#tab-feed),#tab-feed > *){animation:esp-rumble2 .06s linear infinite}
+@keyframes esp-rumble{0%{translate:0 0}25%{translate:-.8px -.3px}50%{translate:-.2px -.8px}75%{translate:-.7px -.6px}100%{translate:0 0}}
+@keyframes esp-rumble2{0%{translate:0 0}25%{translate:-1.6px -.5px}50%{translate:-.4px -1.6px}75%{translate:-1.4px -1.2px}100%{translate:0 0}}
 .esp-steam{position:absolute;border-radius:50%;background:rgba(242,230,214,.32);filter:blur(10px);opacity:0;animation:esp-rise 3.6s ease-out infinite}
 .esp-count{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--serif,Georgia,serif);font-weight:700;font-size:140px;line-height:1;color:rgba(226,195,155,.18);animation:esp-pulse 1s ease-in-out infinite}
 .esp-count.last{font-size:170px;color:rgba(226,195,155,.32)}
