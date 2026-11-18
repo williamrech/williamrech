@@ -22,7 +22,7 @@ const MODES = 5;          // standing waves on the surface
 const TILT_K = 13;        // the surface's spring towards level (rad/s²/rad): ~0.57 Hz slosh
 const TILT_D = 2.6;       // its damping (coffee with crema: settles in ~2 s)
 const FN = 48;            // crema samples along the surface
-const FOAM = { hot: [26, 54], warm: [18, 40], cold: [5, 12] }; // crema: [the thin layer it never goes below, max]
+const FOAM = { hot: [16, 34], warm: [11, 26], cold: [4, 9] }; // crema: [the thin layer it never goes below, max]
 
 const C = {
   canvas: null, g: null, dpr: 1, W: 0, H: 0,
@@ -273,7 +273,7 @@ function draw() {
   for (let i = 0; i <= SAMPLES; i++) { // the surface, wall to wall (a little past them so the edges are clean)
     const s = G.s0 + (G.L * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
     sx.push(x); sy.push(y);
-    fv.push(Math.min(foamAt(f) * clamp(1 - curv(f) * 60, 0.5, 1.7), under(x, y) * 0.35));
+    fv.push(Math.min(foamAt(f), under(x, y) * 0.35));
     if (f >= 0 && f <= 1) { ySum += y; yN++; }
   }
   if (C.onDraw) C.onDraw((C.V / (W * H)) * 100, yN ? ((H - ySum / yN) / H) * 100 : 0, C.goal > 0 ? clamp(C.landed / C.goal, 0, 1) : 1);
@@ -308,8 +308,8 @@ function draw() {
     const cg = g.createLinearGradient(fx0, fy0, fx1, fy1), k = avgT / (avgT + melt);
     cg.addColorStop(0, c0); cg.addColorStop(k * 0.55, c1); cg.addColorStop(k, c2); cg.addColorStop(1, "rgba(40,18,8,0)");
     g.globalAlpha = C.kind === "cold" ? 0.6 : 1; g.fillStyle = cg; g.fill(); g.globalAlpha = 1;
-    if (false) {
-      g.save(); g.clip(); g.globalAlpha = 0.22;
+    if (C.kind !== "cold") {
+      g.save(); g.clip(); g.globalAlpha = 0.12;
       g.fillStyle = g.createPattern(mottle(), "repeat");
       const off = (C.t * 6) % 160;
       g.translate(off, 0); g.fillRect(-off - 10, -10, W + 180, H + 20);
@@ -328,18 +328,18 @@ function draw() {
     for (let i = 0; i <= NB; i++) {
       const f = i / NB, e = eta(f), s0 = G.s0 + f * G.L;
       bE[i] = e;
-      bT[i] = Math.min(foamAt(f) * clamp(1 - curv(f) * 60, 0.5, 1.7), under(s0 * G.ux + (G.c - e) * G.nx, s0 * G.uy + (G.c - e) * G.ny) * 0.35);
+      bT[i] = Math.min(foamAt(f), under(s0 * G.ux + (G.c - e) * G.nx, s0 * G.uy + (G.c - e) * G.ny) * 0.35);
     }
     const lerp = (a, f) => { const x = clamp(f, 0, 1) * NB, k = Math.min(NB - 1, Math.floor(x)), r = x - k; return a[k] * (1 - r) + a[k + 1] * r; };
     for (const b of cand) {
       const T = lerp(bT, b.f);
-      if (b.keep > (T / fmax) * 0.25 || T < 1 || b.v < 0.7) continue; // only a few faint bubbles, near the top
+      if (b.keep > (T / fmax) * 0.8 || T < 2 || b.v < 0.35) continue; // bubbles in the upper part of the crema
       const live = clamp((Math.sin(t * b.rate + b.ph) + 0.9) * 4, 0, 1);
       if (live <= 0.02) continue;
       const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.55 + 0.6);
       const z = b.v * T * 0.92 + r * 0.3, e = lerp(bE, b.f), s0 = G.s0 + b.f * G.L;
       const x = s0 * G.ux + (G.c - e - z) * G.nx, y = s0 * G.uy + (G.c - e - z) * G.ny;
-      g.globalAlpha = live * (C.kind === "cold" ? 0.5 : 0.35);
+      g.globalAlpha = live * (C.kind === "cold" ? 0.6 : 0.8);
       g.drawImage(spr, x - r, y - r, r * 2, r * 2);
     }
     // bubbles rising from inside
