@@ -16,6 +16,15 @@ const coffeeMod = import(new URL("coffee.js" + ver, import.meta.url).href).then(
 const CSS = `
 .esp{position:absolute;inset:0;z-index:1;pointer-events:none}
 .esp-canvas{position:absolute;inset:0;width:100%;height:100%}
+.esp-timer{position:absolute;left:10px;right:10px;top:4px;height:9px;border-radius:5px;box-sizing:border-box;padding:2px 3px;background:linear-gradient(to bottom,rgba(255,255,255,.05),rgba(0,0,0,.4));border:1px solid rgba(242,230,214,.10);opacity:0;transition:opacity .6s}
+.esp-timer.on{opacity:1}
+.esp-timer i{position:absolute;inset:2px 3px;border-radius:2px;background:repeating-linear-gradient(to right,rgba(242,230,214,.07) 0 7px,transparent 7px 10px)}
+.esp-timer b{position:absolute;inset:2px 3px;border-radius:2px;background:repeating-linear-gradient(to right,hsl(135 85% 58%) 0 7px,transparent 7px 10px);clip-path:inset(0 var(--left,0%) 0 0);filter:drop-shadow(0 0 3px hsl(135 100% 55% / .7)) drop-shadow(0 0 8px hsl(135 100% 50% / .45))}
+.esp.rumble{animation:esp-rumble .09s linear infinite}
+.esp.rumble.hard{animation-duration:.06s}
+@keyframes esp-rumble{0%{transform:translate(0,0)}25%{transform:translate(.8px,-.6px)}50%{transform:translate(-.7px,.7px)}75%{transform:translate(.6px,.5px)}100%{transform:translate(0,0)}}
+.esp.rumble.hard{animation-name:esp-rumble2}
+@keyframes esp-rumble2{0%{transform:translate(0,0)}25%{transform:translate(1.6px,-1.2px)}50%{transform:translate(-1.5px,1.4px)}75%{transform:translate(1.2px,1px)}100%{transform:translate(0,0)}}
 .esp-steam{position:absolute;border-radius:50%;background:rgba(242,230,214,.32);filter:blur(10px);opacity:0;animation:esp-rise 3.6s ease-out infinite}
 .esp-count{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--serif,Georgia,serif);font-weight:700;font-size:140px;line-height:1;color:rgba(226,195,155,.18);animation:esp-pulse 1s ease-in-out infinite}
 .esp-count.last{font-size:170px;color:rgba(226,195,155,.32)}
@@ -55,16 +64,17 @@ function build(layer) {
   root.className = "esp";
   root.innerHTML = `
     <div class="esp-steams"></div>
+    <div class="esp-timer"><i></i><b></b></div>
     <div class="esp-count" hidden></div>
     <div class="esp-bar l"><div class="esp-led"><div class="esp-lit"></div><div class="esp-cap"></div></div><div class="esp-halo"></div></div>
     <div class="esp-bar r"><div class="esp-led"><div class="esp-lit"></div><div class="esp-cap"></div></div><div class="esp-halo"></div></div>`;
   layer.prepend(root); // before the cup (the cup fades away while brewing)
   const q = (s) => root.querySelector(s);
-  el = { root, steams: q(".esp-steams"), count: q(".esp-count"), barL: q(".esp-bar.l"), barR: q(".esp-bar.r") };
+  el = { root, steams: q(".esp-steams"), timer: q(".esp-timer"), count: q(".esp-count"), barL: q(".esp-bar.l"), barR: q(".esp-bar.r") };
   render();
   coffeeMod.then((c) => {
     cf = c;
-    if (el && el.root === root && root.isConnected) c.attach(root, { onFull, onDraw: placeSteam });
+    if (el && el.root === root && root.isConnected) c.attach(root, { onFull, onDraw });
   }).catch((e) => console.warn("coffee", e));
   if (S.phase === "count") countLoop();
 }
@@ -90,6 +100,9 @@ function render() {
   el.barR.classList.toggle("on", S.touched.has("water"));
   el.root.classList.toggle("brew", S.phase === "pour");
   el.root.classList.toggle("full", S.phase === "full");
+  el.timer.classList.toggle("on", S.phase === "pour");
+  if (S.phase !== "pour") { el.timer.style.setProperty("--left", "0%"); timerAt = -1; }
+  if (S.phase !== "count" && S.phase !== "pour") rumble(0);
   // steam on a hot, full cup (it follows the coffee's level, see placeSteam)
   const wantSteam = S.phase === "full" && S.brewTemp > 66 && !reduced();
   if (wantSteam && !el.steams.firstChild) {
@@ -103,18 +116,30 @@ function render() {
   el.count.hidden = S.phase !== "count";
   if (S.phase === "count") { el.count.textContent = S.count; el.count.classList.toggle("last", S.count <= 3); }
 }
-let steamAt = -1;
-function placeSteam(pct) {
+let steamAt = -1, timerAt = -1;
+function onDraw(amount, surface, progress) {
   // Almost all of it spilled out: the bars wake up for a new brew (what's left becomes part of it).
-  if (S.phase === "full" && pct / 100 < S.brewed * 0.12) { S.phase = "idle"; S.touched.clear(); render(); return; }
-  if (!el || !el.steams.firstChild || Math.abs(pct - steamAt) < 0.3) return;
-  steamAt = pct;
-  for (const s of el.steams.children) s.style.bottom = pct + "%";
+  if (S.phase === "full" && amount / 100 < S.brewed * 0.12) { S.phase = "idle"; S.touched.clear(); render(); return; }
+  if (!el) return;
+  // the green LED timer at the top drains as the coffee lands
+  const left = S.phase === "pour" ? 1 - progress : 0;
+  if (Math.abs(left - timerAt) > 0.004) { timerAt = left; el.timer.style.setProperty("--left", ((1 - left) * 100).toFixed(1) + "%"); }
+  if (!el.steams.firstChild || Math.abs(surface - steamAt) < 0.3) return;
+  steamAt = surface;
+  for (const s of el.steams.children) s.style.bottom = surface + "%";
+}
+// The machine gets ready: a little hum in the last seconds, a buzz on the phone with each tick.
+const buzz = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch {} };
+function rumble(level) {
+  if (!el) return;
+  const on = level > 0 && !reduced();
+  el.root.classList.toggle("rumble", on);
+  el.root.classList.toggle("hard", on && level > 1);
 }
 function onFull() {
   clearInterval(awakeTimer);
   if (S.phase !== "pour") return;
-  S.phase = "full"; steamAt = -1;
+  S.phase = "full"; steamAt = -1; rumble(0);
   render();
 }
 
@@ -125,17 +150,19 @@ function countLoop() {
     if (S.phase !== "count") return;
     S.count--;
     keepAwake();
-    if (S.count <= 0) startPour(); else countLoop();
+    if (S.count <= 0) startPour(); else { countLoop(); buzz(S.count <= 3 ? 35 : 12); rumble(S.count <= 3 ? 2 : S.count <= 6 ? 1 : 0); }
     render();
   }, 1000);
 }
 function startCount() {
   S.phase = "count"; S.count = 10;
+  rumble(0);
   countLoop();
 }
 function startPour() {
   S.phase = "pour"; S.brewTemp = S.temp; S.brewed = target();
   keepAwake();
+  buzz([60, 40, 90]); rumble(2); setTimeout(() => rumble(0), 700); // it starts: one last shake
   clearInterval(awakeTimer);
   awakeTimer = setInterval(keepAwake, 4000); // until it's full (onFull)
   coffeeMod.then((c) => c.pour(target(), S.brewTemp, reduced()));

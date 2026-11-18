@@ -1,31 +1,35 @@
 // ☕ The coffee of "passar café" (Espresso pacote, espresso.js): one canvas behind the feed.
-// - Liquid: a row of columns (shallow-water flow between neighbours), so pours, taps and tilts make waves that
-//   travel, bounce off the screen edges and settle. Gravity follows the phone (like the varal): tilted, the surface
-//   stays level with the real world and sloshes back.
-// - Stream: a chain of drops falling from a spout at the top under the same gravity, so it curves when the phone
-//   tilts and whips when it moves; each drop that reaches the surface adds its coffee there (that's the pour).
+// - Liquid: a row of columns standing along the real "down" (the phone's gravity, felt with a short delay), with
+//   shallow-water flow between neighbours. The screen is the cup: its bottom and sides are walls, its top edge is
+//   the rim. Tilting turns the columns with gravity (the coffee is carried over, flow included), so it keeps
+//   moving and sloshing at any angle; whatever rises past the top edge spills out, upside down it pours out.
+// - Stream: a chain of drops falling from a spout at the top under the phone's gravity (curves when tilted);
+//   each drop that reaches the surface adds its coffee there (that's the pour).
 // - Foam: a crema layer riding the surface, thick where the stream lands, carried by the flow, squashed on the
-//   crests and stretched in the troughs, full of little bubbles that drift and pop. Hot: thick; cold: thin.
+//   crests and stretched in the troughs, with little bubbles that drift and pop. Hot: thick; cold: thin.
 // The state lives in this module: it survives the layer being rebuilt, and is gone on reload.
 // It only animates while something moves; then it draws one last frame and sleeps (and always in rest mode).
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-const GW = 820;         // wave gravity (px/s²): how fast waves travel (lower = a bit thicker, lazier coffee)
+const GW = 820;         // wave gravity (px/s²): how fast waves travel (a bit thick, still coffee)
 const GS = 2300;        // stream gravity (px/s²)
 const DX = 4;           // column width (px)
 const SUB = 1 / 360;    // simulation step (s)
 const FOAM = { hot: [17, 30, 1.25], warm: [9, 18, 0.7], cold: [2.5, 5, 0.12] }; // [rest thickness, max, bubbles per drop]
 
 const C = {
-  canvas: null, g: null, dpr: 1, W: 0, H: 0, N: 0,
-  h: null, q: null, fm: null,             // depth, flow between i and i+1, foam thickness
-  drops: [], spl: [], bubs: [],           // stream drops, splash droplets, bubbles
-  gx: 0, gy: 1,                           // gravity in screen coordinates (smoothed)
+  canvas: null, g: null, dpr: 1, W: 0, H: 0,
+  // the frame: columns along u (across), depth along g (down); column j is the line U = U0 + j·d
+  ux: 1, uy: 0, gxn: 0, gyn: 1, U0: 0, d: DX, N: 0,
+  tmin: null, tmax: null, topOpen: null, floorOpen: null, // each column's segment inside the screen (t along g)
+  h: null, q: null, fm: null,             // depth from the floor, flow between j and j+1, foam thickness
+  drops: [], bubs: [],                    // stream drops, bubbles
+  gx: 0, gy: 1,                           // phone gravity in screen coordinates (smoothed)
   lx: 0, ly: 1,                           // the gravity the coffee feels: follows gx/gy with a short delay (body)
-  spilled: 0,                             // coffee lost over the top edge
-  pouring: false, poured: 0, goal: 0, rate: 0, emitAcc: 0, emitT: 0,
+  spilled: 0, landed: 0,
+  pouring: false, poured: 0, goal: 0, rate: 0, emitAcc: 0, emitT: 0, full: null,
   kind: "warm", onFull: null, onDraw: null, raf: 0, last: 0, liveUntil: 0, resting: false, t: 0,
   listening: false, gotMotion: false, mottle: null,
 };
@@ -52,11 +56,87 @@ function onMotion(e) {
   if (!C.resting) wake(2500);
 }
 // The pull we use: flat on a table the phone barely feels "down" along the screen, so keep a gentle one.
-function grav() {
-  const m = Math.hypot(C.gx, C.gy);
+function grav(x = C.gx, y = C.gy) {
+  const m = Math.hypot(x, y);
   if (m < 0.15) return [0, 0.6];
   const k = Math.max(m, 0.6) / m;
-  return [C.gx * k, C.gy * k];
+  return [x * k, y * k];
+}
+
+// ---------- the frame ----------
+// Column at U: the points U·u + t·g; returns [tmin, tmax, top edge is its upper end, top edge is its floor].
+function clip(U, ux, uy, gx, gy, W, H) {
+  let lo = -1e9, hi = 1e9, loTop = false, hiTop = false;
+  const axis = (uc, gc, max, isY) => {
+    const base = U * uc;
+    if (Math.abs(gc) < 1e-6) { if (base < 0 || base > max) { lo = 1; hi = 0; } return; }
+    const a = (0 - base) / gc, b = (max - base) / gc; // t where this coordinate is 0 and max
+    const [t1, top1, t2, top2] = a < b ? [a, isY, b, false] : [b, false, a, isY];
+    if (t1 > lo) { lo = t1; loTop = top1; }
+    if (t2 < hi) { hi = t2; hiTop = top2; }
+  };
+  axis(ux, gx, W, false); axis(uy, gy, H, true);
+  if (hi < lo) return [0, 0, false, false];
+  return [lo, hi, loTop, hiTop];
+}
+function makeFrame(gx, gy, W, H) {
+  const m = Math.hypot(gx, gy) || 1, g1 = gx / m, g2 = gy / m, u1 = g2, u2 = -g1;
+  const us = [0, W * u1, H * u2, W * u1 + H * u2], U0 = Math.min(...us), U1 = Math.max(...us);
+  const N = Math.max(8, Math.round((U1 - U0) / DX) + 1), d = (U1 - U0) / (N - 1);
+  const F = { ux: u1, uy: u2, gxn: g1, gyn: g2, U0, d, N, tmin: new Float32Array(N), tmax: new Float32Array(N), topOpen: new Uint8Array(N), floorOpen: new Uint8Array(N) };
+  for (let j = 0; j < N; j++) {
+    const [a, b, at, bt] = clip(U0 + j * d + (j === 0 ? 0.01 : j === N - 1 ? -0.01 : 0), u1, u2, g1, g2, W, H);
+    F.tmin[j] = a; F.tmax[j] = b; F.topOpen[j] = at ? 1 : 0; F.floorOpen[j] = bt ? 1 : 0;
+  }
+  return F;
+}
+// Where a screen point is in the frame: [column (fractional), t].
+const toFrame = (x, y) => [((x * C.ux + y * C.uy) - C.U0) / C.d, x * C.gxn + y * C.gyn];
+const ptAt = (j, t) => { const U = C.U0 + j * C.d; return [U * C.ux + t * C.gxn, U * C.uy + t * C.gyn]; };
+function lerpA(a, s) { const n = a.length, k = clamp(Math.floor(s), 0, n - 1), f = clamp(s - k, 0, 1); return a[k] * (1 - f) + a[Math.min(k + 1, n - 1)] * f; }
+const surfT = (j) => C.tmax[j] - C.h[j];
+function volume() { let v = 0; for (let j = 0; j < C.N; j++) v += C.h[j]; return v * C.d; }
+
+// Turn the columns to a new gravity (or a new screen size), carrying the coffee, its flow and its foam over.
+function reframe(gx, gy, W, H) {
+  const F = makeFrame(gx, gy, W, H);
+  const h1 = new Float32Array(F.N), v1 = new Float32Array(F.N), f1 = new Float32Array(F.N);
+  if (C.h && C.N) {
+    const old = { ux: C.ux, uy: C.uy, gxn: C.gxn, gyn: C.gyn, U0: C.U0, d: C.d, N: C.N, tmax: C.tmax, h: C.h, q: C.q, fm: C.fm };
+    const ts = new Float32Array(old.N); for (let j = 0; j < old.N; j++) ts[j] = old.tmax[j] - old.h[j];
+    const sOld = (x, y) => ((x * old.ux + y * old.uy) - old.U0) / old.d;
+    const wet = (x, y) => { const s = sOld(x, y); if (s < -0.5 || s > old.N - 0.5) return false; return x * old.gxn + y * old.gyn >= lerpA(ts, s) - 0.01; };
+    const vel = new Float32Array(old.N);
+    for (let j = 0; j < old.N; j++) { const a = j > 0 ? old.q[j - 1] : 0, b = j < old.N - 1 ? old.q[j] : 0; vel[j] = old.h[j] > 1 ? (a + b) / 2 / old.h[j] : 0; }
+    let v0 = 0; for (let j = 0; j < old.N; j++) v0 += old.h[j]; v0 *= old.d;
+    let vn = 0;
+    for (let j = 0; j < F.N; j++) {
+      const U = F.U0 + j * F.d, lo = F.tmin[j], hi = F.tmax[j];
+      if (hi - lo < 0.5) continue;
+      const P = (t) => [U * F.ux + t * F.gxn, U * F.uy + t * F.gyn];
+      let [x, y] = P(hi - 0.3);
+      if (!wet(x, y)) continue;
+      [x, y] = P(lo + 0.3);
+      let depth;
+      if (wet(x, y)) depth = hi - lo;
+      else { let a = lo, b = hi; for (let k = 0; k < 14; k++) { const m = (a + b) / 2, [px, py] = P(m); if (wet(px, py)) b = m; else a = m; } depth = hi - (a + b) / 2; }
+      h1[j] = depth; vn += depth;
+      const [mx, my] = P(hi - depth / 2), [sx, sy] = P(hi - depth);
+      const vo = lerpA(vel, sOld(mx, my)); // the old flow, as a direction on the screen, seen from the new columns
+      v1[j] = vo * (old.ux * F.ux + old.uy * F.uy);
+      f1[j] = lerpA(old.fm, sOld(sx, sy));
+    }
+    vn *= F.d;
+    if (vn > 0 && v0 > 0) { const k = v0 / vn; for (let j = 0; j < F.N; j++) h1[j] *= k; } // keep every drop
+    for (const b of C.bubs) { // bubbles ride along
+      const [x, y] = ptAt(b.j, surfT(clamp(Math.round(b.j), 0, C.N - 1)));
+      b.j = ((x * F.ux + y * F.uy) - F.U0) / F.d;
+    }
+  }
+  Object.assign(C, F);
+  C.h = h1; C.fm = f1; C.q = new Float32Array(F.N - 1);
+  for (let j = 0; j < F.N - 1; j++) C.q[j] = 0.5 * (v1[j] + v1[j + 1]) * 0.5 * (h1[j] + h1[j + 1]);
+  C.fx = gx; C.fy = gy;
 }
 
 // ---------- size ----------
@@ -65,89 +145,83 @@ function fit() {
   const dpr = Math.min(devicePixelRatio || 1, 1.75);
   if (W === C.W && H === C.H && dpr === C.dpr) return;
   C.canvas.width = Math.round(W * dpr); C.canvas.height = Math.round(H * dpr); C.dpr = dpr;
-  const N = Math.max(8, Math.round(W / DX) + 1);
-  const resample = (a, n) => { const o = new Float32Array(n); if (!a) return o; for (let i = 0; i < n; i++) { const s = (i / (n - 1)) * (a.length - 1), k = Math.floor(s), f = s - k; o[i] = a[k] * (1 - f) + (a[Math.min(k + 1, a.length - 1)] || 0) * f; } return o; };
-  C.h = resample(C.h, N); C.fm = resample(C.fm, N); C.q = new Float32Array(N - 1);
-  C.W = W; C.H = H; C.N = N;
+  C.W = W; C.H = H;
+  const [gx, gy] = grav(C.lx, C.ly);
+  reframe(gx, gy, W, H);
 }
-const dx = () => C.W / (C.N - 1);
-const col = (x) => clamp(Math.round(x / dx()), 0, C.N - 1);
-function hAt(x) { const s = clamp(x / dx(), 0, C.N - 1), k = Math.floor(s), f = s - k; return C.h[k] * (1 - f) + C.h[Math.min(k + 1, C.N - 1)] * f; }
-const surfY = (x) => C.H - hAt(x);
-function volume() { let v = 0; for (let i = 0; i < C.N; i++) v += C.h[i]; return v * dx(); }
 
 // ---------- physics ----------
 function stepFluid(dt) {
-  const { h, q, N } = C, d = dx();
-  const ex = C.lx, ey = C.ly, gy = Math.max(ey, 0.1), ratio = clamp(ex / gy, -4, 4); // steep enough to reach the top and spill
+  const { h, q, N, tmax } = C, d = C.d;
+  const [gx, gy] = grav(C.lx, C.ly), G = GW * Math.hypot(gx, gy);
   for (let s = 0, n = Math.ceil(dt / SUB), sdt = dt / n; s < n; s++) {
     for (let i = 0; i < N - 1; i++) {
-      const ha = (h[i] + h[i + 1]) * 0.5;
-      q[i] += sdt * GW * gy * ha * ((h[i] - h[i + 1]) / d + ratio);
+      const e0 = h[i] - tmax[i], e1 = h[i + 1] - tmax[i + 1]; // surface height against gravity
+      const ha = Math.max(0, Math.max(e0, e1) - Math.max(-tmax[i], -tmax[i + 1])); // depth over the higher floor
+      if (ha <= 0) { q[i] = 0; continue; }
+      q[i] += sdt * G * ha * (e0 - e1) / d;
       q[i] *= 1 - 1.5 * sdt;
     }
     for (let i = 1; i < N - 2; i++) q[i] += (q[i - 1] + q[i + 1] - 2 * q[i]) * 0.1; // viscosity: no jagged ripples, a little body
-    for (let i = 0; i < N - 1; i++) { const m = (h[i + 1] - h[i]) * 0.015; h[i] += m; h[i + 1] -= m; } // surface tension (keeps the volume)
     for (let i = 0; i < N; i++) { // never take more than a column holds
       const outR = i < N - 1 && q[i] > 0 ? q[i] : 0, outL = i > 0 && q[i - 1] < 0 ? -q[i - 1] : 0, out = (outR + outL) * sdt;
       if (out > h[i] * d && out > 0) { const k = (h[i] * d) / out; if (outR) q[i] *= k; if (outL) q[i - 1] *= k; }
     }
     for (let i = 0; i < N; i++) h[i] = Math.max(0, h[i] - (sdt * ((i < N - 1 ? q[i] : 0) - (i > 0 ? q[i - 1] : 0))) / d);
+    for (let i = 0; i < N - 1; i++) { // surface tension (keeps the volume), only between wet neighbours
+      if (h[i] < 1 || h[i + 1] < 1) continue;
+      const m = ((h[i + 1] - tmax[i + 1]) - (h[i] - tmax[i])) * 0.015;
+      const mm = m > 0 ? Math.min(m, h[i + 1]) : -Math.min(-m, h[i]);
+      h[i] += mm; h[i + 1] -= mm;
+    }
   }
 }
-// The top of the screen is the cup's rim: coffee that climbs past it is gone (a few drops fly off).
-// Upside down, it pours out over the top.
+// The top edge of the screen is the cup's rim: coffee that rises past it is gone. Upside down, it pours out.
 function spill(dt) {
-  const { h, H, N } = C, d = dx();
+  const { h, N } = C;
   let lost = 0;
-  for (let i = 0; i < N; i++) if (h[i] > H) {
-    lost += (h[i] - H) * d; h[i] = H;
-    if (Math.random() < 0.15 && C.spl.length < 60) C.spl.push({ x: i * d, y: 3, vx: C.lx * rnd(60, 160), vy: -rnd(40, 120), r: rnd(1.2, 2.6) });
+  for (let j = 0; j < N; j++) {
+    if (!h[j]) continue;
+    if (C.floorOpen[j]) { const k = Math.min(h[j], h[j] * 3 * dt + 2 * dt * 60); lost += k; h[j] -= k; continue; }
+    const cap = C.tmax[j] - C.tmin[j];
+    if (C.topOpen[j] && h[j] > cap) { lost += h[j] - cap; h[j] = cap; }
   }
-  if (C.ly < -0.3) { // the phone is upside down: it runs out
-    const k = Math.min(1, (-C.ly - 0.3) * 1.4 * dt);
-    for (let i = 0; i < N; i++) { lost += h[i] * k * d; h[i] -= h[i] * k; }
-  }
-  if (lost > 0) { C.spilled += lost; wake(1500); }
+  if (lost > 0) { C.spilled += lost * C.d; wake(1500); }
 }
 function flowAt(i) { const a = i > 0 ? C.q[i - 1] : 0, b = i < C.N - 1 ? C.q[i] : 0; return (a + b) / 2 / Math.max(C.h[i], 4); }
 function stepFoam(dt) {
-  const { fm, N, h } = C, d = dx(), [rest, max] = FOAM[C.kind];
+  const { fm, N, h } = C, d = C.d, [rest, max] = FOAM[C.kind];
   const nf = new Float32Array(N);
   for (let i = 0; i < N; i++) { // carried by the flow (a bit slower than the coffee)
     const src = clamp(i - (flowAt(i) * dt * 0.7) / d, 0, N - 1), k = Math.floor(src), f = src - k;
     nf[i] = fm[k] * (1 - f) + fm[Math.min(k + 1, N - 1)] * f;
   }
   for (let i = 0; i < N; i++) {
-    const l = nf[i > 0 ? i - 1 : i], r = nf[i < N - 1 ? i + 1 : i];
+    const l = h[i > 0 ? i - 1 : i] >= 1 ? nf[i > 0 ? i - 1 : i] : nf[i], r = h[i < N - 1 ? i + 1 : i] >= 1 ? nf[i < N - 1 ? i + 1 : i] : nf[i];
     let v = nf[i] + (l + r - 2 * nf[i]) * 0.18; // it spreads out by itself
     if (v > rest) v -= (v - rest) * Math.min(1, 0.35 * dt); // settles to the cup's crema
     fm[i] = h[i] < 1 ? 0 : Math.min(v, max);
   }
 }
-// A drop lands at x: its coffee goes into the columns around it, with foam, bubbles and sometimes a splash.
-function land(x, vy, mass) {
-  const k = col(x), d = dx(), spread = 7, [, max, bub] = FOAM[C.kind];
-  let wsum = 0; for (let j = -spread; j <= spread; j++) wsum += Math.exp(-(j * j) / 14);
+// A drop lands in column s: its coffee goes into the columns around it, with foam and bubbles.
+function land(s, speed, mass) {
+  const k = clamp(Math.round(s), 0, C.N - 1), d = C.d, spread = 7, [, max, bub] = FOAM[C.kind];
+  let wsum = 0; for (let j = -spread; j <= spread; j++) if (k + j >= 0 && k + j < C.N) wsum += Math.exp(-(j * j) / 14);
   for (let j = -spread; j <= spread; j++) {
     const i = k + j; if (i < 0 || i >= C.N) continue;
     const w = Math.exp(-(j * j) / 14) / wsum;
     C.h[i] += (mass * w) / d;
     C.fm[i] = Math.min(max * 1.3, C.fm[i] + (mass * w) / d * (C.kind === "cold" ? 0.15 : 1.1));
   }
-  // the impact pushes coffee sideways (a dent and a ring of waves)
-  const push = mass * Math.min(vy, 1600) * 0.006;
+  C.landed += mass;
+  const push = mass * Math.min(speed, 1600) * 0.006; // the impact: a dent and a ring of waves
   if (k > 0) C.q[k - 1] -= push; if (k < C.N - 1) C.q[k] += push;
-  if (Math.random() < bub) addBubble(x + rnd(-12, 12));
-  if (Math.random() < 0.22 && C.spl.length < 60) {
-    const [ex, ey] = grav(), sp = rnd(110, 260), side = rnd(-1, 1);
-    C.spl.push({ x, y: surfY(x) - 2, vx: -ex * sp + side * 160, vy: -ey * sp, r: rnd(1.1, 2.5) });
-  }
+  if (Math.random() < bub) addBubble(k + rnd(-3, 3));
 }
-function addBubble(x, big) {
+function addBubble(j, big) {
   if (C.bubs.length >= 170) return;
   const hot = C.kind === "hot";
-  C.bubs.push({ x, d: rnd(0.15, 0.85), r: big ? rnd(3, 4.6) : Math.random() < 0.15 ? rnd(2.4, 3.6) : rnd(0.7, 2.2), life: rnd(1.5, hot ? 9 : 5), pop: 0, j: rnd(0, 6.28) });
+  C.bubs.push({ j: clamp(j, 0, C.N - 1), d: rnd(0.15, 0.85), r: big ? rnd(3, 4.6) : Math.random() < 0.15 ? rnd(2.4, 3.6) : rnd(0.7, 2.2), life: rnd(1.5, hot ? 9 : 5), pop: 0, ph: rnd(0, 6.28) });
 }
 function stepStream(dt) {
   const [ex, ey] = grav();
@@ -169,30 +243,30 @@ function stepStream(dt) {
     p.x += p.vx * dt; p.y += p.vy * dt; p.age += dt;
     if (p.x < 2) { p.x = 2; p.vx = Math.abs(p.vx) * 0.2; }
     if (p.x > C.W - 2) { p.x = C.W - 2; p.vx = -Math.abs(p.vx) * 0.2; }
-    if (p.y >= surfY(p.x) - Math.min(C.fm[col(p.x)], 8) || p.age > 4) land(p.x, p.vy, p.m); else keep.push(p);
+    if (p.y > C.H - 2) { p.y = C.H - 2; p.vy = -Math.abs(p.vy) * 0.2; }
+    const [s, t] = toFrame(p.x, p.y), j = clamp(Math.round(s), 0, C.N - 1);
+    const inside = p.y >= 0 && s >= 0 && s <= C.N - 1;
+    if ((inside && t >= surfT(j) - Math.min(C.fm[j], 8) - 3) || p.age > 4) {
+      if (inside) land(s, Math.hypot(p.vx, p.vy), p.m); else C.landed += p.m;
+    } else keep.push(p);
   }
   C.drops = keep;
-  const ks = [];
-  for (const s of C.spl) {
-    s.vx += ex * GS * dt; s.vy += ey * GS * dt; s.x += s.vx * dt; s.y += s.vy * dt;
-    if (s.y >= surfY(s.x) && s.vy > 0) { const k = col(s.x); if (k < C.N - 1) C.q[k] += 4; } else if (s.x > -10 && s.x < C.W + 10 && s.y < C.H + 10) ks.push(s);
-  }
-  C.spl = ks;
 }
 function stepBubbles(dt) {
-  const d = dx(), keep = [];
+  const keep = [];
   for (const b of C.bubs) {
     if (b.pop) { b.pop += dt; if (b.pop < 0.18) keep.push(b); continue; }
-    const i = col(b.x);
-    b.x = clamp(b.x + flowAt(i) * dt * 0.7 + Math.sin((C.t + b.j) * 1.7) * 2 * dt, 1, C.W - 1);
+    const i = clamp(Math.round(b.j), 0, C.N - 1);
+    b.j = clamp(b.j + (flowAt(i) * dt * 0.7 + Math.sin((C.t + b.ph) * 1.7) * 2 * dt) / C.d, 0, C.N - 1);
     b.d = Math.max(0.05, b.d - dt * 0.03);
     b.life -= dt;
     if (b.life <= 0 || C.fm[i] < b.r * 0.9) { b.pop = 1e-6; if (b.r > 2.5) C.fm[i] = Math.max(0, C.fm[i] - 0.5); }
     keep.push(b);
   }
   C.bubs = keep;
-  if (!C.pouring && C.kind === "hot" && performance.now() < C.liveUntil && Math.random() < dt * 5) addBubble(rnd(4, C.W - 4)); // a hot crema keeps fizzing a little
-  void d;
+  if (!C.pouring && C.kind === "hot" && performance.now() < C.liveUntil && Math.random() < dt * 5) { // a hot crema keeps fizzing a little
+    const j = Math.floor(rnd(0, C.N)); if (C.h[j] > 1) addBubble(j);
+  }
 }
 function energy() { let e = 0; for (let i = 0; i < C.N - 1; i++) e += Math.abs(C.q[i]); return e / C.N; }
 
@@ -214,44 +288,54 @@ const COLORS = {
   hot: ["#f0c08a", "#c98646", "#7d431f"], warm: ["#d9a46c", "#ad6c38", "#5f3218"], cold: ["#a08b7b", "#6b5444", "#3a2418"],
 };
 function draw() {
-  const { g, W, H, N, h, fm, dpr } = C, d = dx();
+  const { g, W, H, N, h, fm, dpr, tmax } = C;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
-  let minY = H, sum = 0;
-  for (let i = 0; i < N; i++) { minY = Math.min(minY, H - h[i] - fm[i]); sum += h[i]; }
-  const mean = sum / N;
-  if (C.onDraw) C.onDraw((mean / H) * 100);
-  if (mean > 0.3) {
+  const vol = volume();
+  // the surface on the screen, and how high it sits (for the steam)
+  const sx = new Float32Array(N), sy = new Float32Array(N);
+  let tTop = 1e9, tBot = -1e9, ySum = 0, yN = 0;
+  for (let j = 0; j < N; j++) {
+    const t = tmax[j] - h[j], [x, y] = ptAt(j, t); sx[j] = x; sy[j] = y;
+    if (h[j] > 1) { tTop = Math.min(tTop, t); ySum += y; yN++; }
+    tBot = Math.max(tBot, tmax[j]);
+  }
+  if (C.onDraw) C.onDraw((vol / (W * H)) * 100, yN ? ((H - ySum / yN) / H) * 100 : 0, C.goal > 0 ? clamp(C.landed / C.goal, 0, 1) : 1);
+  if (vol > W * 0.3 && yN) {
+    const gx = C.gxn, gy = C.gyn, mid = (N - 1) / 2;
+    const [ax, ay] = ptAt(mid, tTop - 30), [bx, by] = ptAt(mid, tBot);
     // the coffee
-    g.beginPath(); g.moveTo(0, H);
-    for (let i = 0; i < N; i++) g.lineTo(i * d, H - h[i]);
-    g.lineTo(W, H); g.closePath();
-    const top = H - mean - 30, body = g.createLinearGradient(0, Math.min(top, H - 60), 0, H);
+    g.beginPath();
+    for (let j = 0; j < N; j++) g.lineTo(sx[j], sy[j]);
+    for (let j = N - 1; j >= 0; j--) { const [x, y] = ptAt(j, tmax[j]); g.lineTo(x, y); }
+    g.closePath();
+    const body = g.createLinearGradient(ax, ay, bx, by);
     body.addColorStop(0, C.kind === "cold" ? "#2e1b12" : "#4d2912"); body.addColorStop(0.12, "#311709");
     body.addColorStop(0.5, "#170904"); body.addColorStop(1, "#090301");
     g.fillStyle = body; g.fill();
     g.save(); g.clip(); // warm light moving slowly inside it
-    for (const [px, py, r, a] of [[0.3 + Math.sin(C.t * 0.23) * 0.12, 0.25, 0.6, 0.14], [0.72 + Math.cos(C.t * 0.17) * 0.1, 0.45, 0.45, 0.08]]) {
-      const cx = W * px, cy = H - mean + mean * py, rr = W * r, gr = g.createRadialGradient(cx, cy, 0, cx, cy, rr);
+    const depth = tBot - tTop;
+    for (const [pj, pt, r, a] of [[0.3 + Math.sin(C.t * 0.23) * 0.12, 0.25, 0.6, 0.14], [0.72 + Math.cos(C.t * 0.17) * 0.1, 0.45, 0.45, 0.08]]) {
+      const [cx, cy] = ptAt(pj * (N - 1), tTop + depth * pt), rr = W * r, gr = g.createRadialGradient(cx, cy, 0, cx, cy, rr);
       gr.addColorStop(0, `rgba(201,139,79,${a})`); gr.addColorStop(1, "rgba(201,139,79,0)");
       g.fillStyle = gr; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);
     }
-    // the shade just under the crema
-    g.lineWidth = 14; g.strokeStyle = "rgba(10,4,1,.35)";
-    g.beginPath(); for (let i = 0; i < N; i++) g.lineTo(i * d, H - h[i] + 7); g.stroke();
+    g.lineWidth = 14; g.strokeStyle = "rgba(10,4,1,.35)"; // the shade just under the crema
+    g.beginPath(); for (let j = 0; j < N; j++) if (h[j] > 1) g.lineTo(sx[j] + gx * 7, sy[j] + gy * 7); g.stroke();
     g.restore();
     // the crema: squashed on crests, stretched in troughs
     const fv = new Float32Array(N);
-    for (let i = 0; i < N; i++) {
-      const curv = (h[i > 0 ? i - 1 : i] + h[i < N - 1 ? i + 1 : i] - 2 * h[i]);
-      fv[i] = h[i] < 1 ? 0 : fm[i] * clamp(1 + curv * 0.07, 0.5, 1.7);
+    for (let j = 0; j < N; j++) {
+      const e = (k) => h[k] - tmax[k], a = j > 0 ? j - 1 : j, b = j < N - 1 ? j + 1 : j;
+      fv[j] = h[j] < 1 ? 0 : Math.min(h[j], fm[j] * clamp(1 + (e(a) + e(b) - 2 * e(j)) * 0.07, 0.5, 1.7));
     }
     g.beginPath();
-    for (let i = 0; i < N; i++) g.lineTo(i * d, H - h[i] - fv[i]);
-    for (let i = N - 1; i >= 0; i--) g.lineTo(i * d, H - h[i] + 0.5);
+    for (let j = 0; j < N; j++) g.lineTo(sx[j] - gx * fv[j], sy[j] - gy * fv[j]);
+    for (let j = N - 1; j >= 0; j--) g.lineTo(sx[j] + gx * 0.5, sy[j] + gy * 0.5);
     g.closePath();
     const [c0, c1, c2] = COLORS[C.kind], fmax = FOAM[C.kind][1];
-    const cg = g.createLinearGradient(0, H - mean - fmax, 0, H - mean + 2);
+    const [fx0, fy0] = ptAt(mid, tTop - fmax), [fx1, fy1] = ptAt(mid, tTop + 2);
+    const cg = g.createLinearGradient(fx0, fy0, fx1, fy1);
     cg.addColorStop(0, c0); cg.addColorStop(0.45, c1); cg.addColorStop(1, c2);
     g.fillStyle = cg; g.fill();
     if (C.kind !== "cold") {
@@ -259,11 +343,11 @@ function draw() {
       g.globalAlpha = 0.5;
       g.fillStyle = g.createPattern(mottle(), "repeat");
       const off = (C.t * 6) % 160;
-      g.translate(off, 0); g.fillRect(-off, H - mean - fmax * 2, W + 160, fmax * 3 + 40);
+      g.translate(off, 0); g.fillRect(-off - 10, -10, W + 180, H + 20);
       g.restore();
     }
     // its top edge catches the light
-    g.beginPath(); for (let i = 0; i < N; i++) g.lineTo(i * d, H - h[i] - fv[i]);
+    g.beginPath(); for (let j = 0; j < N; j++) if (h[j] > 1) g.lineTo(sx[j] - gx * fv[j], sy[j] - gy * fv[j]);
     if (C.kind === "cold") {
       const a = 0.55 + Math.sin(C.t * 2) * 0.25;
       g.strokeStyle = `rgba(127,200,248,${0.12 * a})`; g.lineWidth = 14; g.stroke();
@@ -274,11 +358,12 @@ function draw() {
     }
     // bubbles
     for (const b of C.bubs) {
-      const i = col(b.x), y = H - h[i] - fv[i] + b.d * fv[i];
-      if (b.pop) { g.strokeStyle = `rgba(255,240,215,${0.6 * (1 - b.pop / 0.18)})`; g.lineWidth = 0.8; g.beginPath(); g.arc(b.x, y, b.r * (1 + b.pop * 8), 0, 7); g.stroke(); continue; }
+      const j = clamp(Math.round(b.j), 0, N - 1); if (h[j] < 1) continue;
+      const x = sx[j] - gx * fv[j] * (1 - b.d), y = sy[j] - gy * fv[j] * (1 - b.d);
+      if (b.pop) { g.strokeStyle = `rgba(255,240,215,${0.6 * (1 - b.pop / 0.18)})`; g.lineWidth = 0.8; g.beginPath(); g.arc(x, y, b.r * (1 + b.pop * 8), 0, 7); g.stroke(); continue; }
       g.fillStyle = "rgba(255,244,225,.14)"; g.strokeStyle = "rgba(255,240,215,.5)"; g.lineWidth = 0.7;
-      g.beginPath(); g.arc(b.x, y, b.r, 0, 7); g.fill(); g.stroke();
-      if (b.r > 1.6) { g.fillStyle = "rgba(255,250,240,.75)"; g.beginPath(); g.arc(b.x - b.r * 0.35, y - b.r * 0.35, b.r * 0.22, 0, 7); g.fill(); }
+      g.beginPath(); g.arc(x, y, b.r, 0, 7); g.fill(); g.stroke();
+      if (b.r > 1.6) { g.fillStyle = "rgba(255,250,240,.75)"; g.beginPath(); g.arc(x - b.r * 0.35, y - b.r * 0.35, b.r * 0.22, 0, 7); g.fill(); }
     }
   }
   // the stream: thick at the spout, thinner as it speeds up
@@ -296,8 +381,6 @@ function draw() {
       }
     }
   }
-  g.fillStyle = "#8a4d24";
-  for (const s of C.spl) { g.beginPath(); g.arc(s.x, s.y, s.r, 0, 7); g.fill(); }
 }
 
 // ---------- loop ----------
@@ -310,13 +393,17 @@ function frame(now) {
   { // the coffee follows the phone's gravity with a short delay (~0.3 s): it has some body
     const [ex, ey] = grav(), k = Math.min(1, dt * 3.5);
     C.lx += (ex - C.lx) * k; C.ly += (ey - C.ly) * k;
+    const [gx, gy] = grav(C.lx, C.ly), m = Math.hypot(gx, gy);
+    const nx = gx / m, ny = gy / m;
+    if (Math.abs(Math.atan2(nx * C.gyn - ny * C.gxn, nx * C.gxn + ny * C.gyn)) > 0.004) reframe(gx, gy, C.W, C.H); // turned: turn the columns
   }
   stepStream(dt); stepFluid(dt); spill(dt); stepFoam(dt); stepBubbles(dt);
   draw();
   if (!C.pouring && !C.drops.length && C.full === false) { C.full = true; if (C.onFull) C.onFull(); }
-  const busy = C.pouring || C.drops.length || C.spl.length || energy() > 3 || performance.now() < C.liveUntil || C.bubs.some((b) => b.pop);
-  if (busy && !C.resting && !document.hidden) C.raf = requestAnimationFrame(frame);
-  else C.last = 0;
+  const [ex, ey] = grav(), turning = Math.hypot(ex - C.lx, ey - C.ly) > 0.01;
+  const busy = C.pouring || C.drops.length || turning || energy() > 3 || performance.now() < C.liveUntil || C.bubs.some((b) => b.pop);
+  if (busy && !C.resting && !document.hidden) { if (!C.raf) C.raf = requestAnimationFrame(frame); } // (a wake() during this frame may have asked already)
+  else if (!C.raf) C.last = 0;
 }
 function wake(ms = 4000) {
   C.liveUntil = Math.max(C.liveUntil, performance.now() + ms);
@@ -326,6 +413,7 @@ function wake(ms = 4000) {
 // ---------- the outside ----------
 export const coffee = {
   // Put the canvas in `box` (again after the layer is rebuilt; the coffee stays as it was).
+  // onDraw(amount %, surface height % from the bottom, brew progress 0..1)
   attach(box, { onFull, onDraw } = {}) {
     C.onFull = onFull; C.onDraw = onDraw;
     if (!C.canvas) { C.canvas = document.createElement("canvas"); C.canvas.className = "esp-canvas"; C.g = C.canvas.getContext("2d"); }
@@ -338,31 +426,35 @@ export const coffee = {
     if (C.listening) { C.listening = false; removeEventListener("devicemotion", onMotion); removeEventListener("deviceorientation", onMotion); }
     cancelAnimationFrame(C.raf); C.raf = 0;
   },
-  // Pour until the coffee fills `frac` of the screen; temp 0..100 decides the crema.
+  // Pour until the coffee fills `frac` of the screen; temp 0..100 decides the crema. What's there stays in.
   pour(frac, temp, still) {
     fit();
     C.kind = temp > 66 ? "hot" : temp < 33 ? "cold" : "warm";
     C.goal = Math.max(0, frac * C.W * C.H - volume());
-    C.poured = 0; C.emitAcc = 0;
+    C.poured = 0; C.landed = 0; C.emitAcc = 0;
     C.rate = Math.max(C.goal / 14, 0.06 * C.W * C.H); // ~6% of the screen a second (at most 14 s)
     C.full = false;
-    if (still) { // reduced motion: just there
-      const lv = frac * C.H; C.h.fill(lv); C.fm.fill(FOAM[C.kind][0]); C.pouring = false; draw(); C.full = true; if (C.onFull) C.onFull(); return;
+    if (still) { // reduced motion: just there, level with gravity
+      const want = frac * C.W * C.H; let a = -2 * (C.W + C.H), b = 2 * (C.W + C.H);
+      for (let k = 0; k < 40; k++) { const L = (a + b) / 2; let v = 0; for (let j = 0; j < C.N; j++) v += clamp(L + C.tmax[j], 0, C.tmax[j] - C.tmin[j]); if (v * C.d < want) a = L; else b = L; }
+      for (let j = 0; j < C.N; j++) { C.h[j] = clamp(a + C.tmax[j], 0, C.tmax[j] - C.tmin[j]); C.fm[j] = C.h[j] > 1 ? FOAM[C.kind][0] : 0; }
+      C.landed = C.goal; C.pouring = false; draw(); C.full = true; if (C.onFull) C.onFull(); return;
     }
     C.pouring = true; wake();
   },
-  // A finger on the coffee: waves where it touches; dragging pushes the coffee along.
+  // A finger on the coffee: a dent where it touches, its coffee pushed into a ring around it; dragging pushes along.
   poke(x, y, mx = 0, my = 0) {
     if (!C.N || volume() < 1) return;
-    const k = col(x), near = clamp(1 - Math.abs(y - surfY(x)) / 260, 0.25, 1);
-    const tap = !mx && !my, depth = (tap ? 34 : Math.min(26, 6 + Math.hypot(mx, my) * 1.2)) * near, d = dx();
-    let moved = 0; // a dent under the finger; its coffee goes into a ring around it (so it's kept), then waves
+    const [s, t] = toFrame(x, y), k = clamp(Math.round(s), 0, C.N - 1);
+    const near = clamp(1 - Math.abs(t - surfT(k)) / 260, 0.25, 1);
+    const tap = !mx && !my, depth = (tap ? 34 : Math.min(26, 6 + Math.hypot(mx, my) * 1.2)) * near;
+    let moved = 0;
     for (let j = -6; j <= 6; j++) { const i = k + j; if (i < 0 || i >= C.N) continue; const take = Math.min(C.h[i], depth * Math.exp(-(j * j) / 10)); C.h[i] -= take; moved += take; }
-    const ring = []; for (let j = 7; j <= 13; j++) for (const i of [k - j, k + j]) if (i >= 0 && i < C.N) ring.push(i);
-    for (const i of ring) C.h[i] += moved / ring.length;
-    if (mx) for (let j = -5; j <= 5; j++) { const i = k + j; if (i >= 0 && i < C.N - 1) C.q[i] += mx * C.h[i] * 1.5; }
-    void d;
-    if (tap && C.kind !== "cold" && Math.random() < 0.6) addBubble(x, true);
+    const ring = []; for (let j = 7; j <= 13; j++) for (const i of [k - j, k + j]) if (i >= 0 && i < C.N && C.h[i] > 0.5) ring.push(i);
+    if (ring.length) for (const i of ring) C.h[i] += moved / ring.length; else C.h[k] += moved;
+    const along = mx * C.ux + my * C.uy; // the drag, across the columns
+    if (along) for (let j = -5; j <= 5; j++) { const i = k + j; if (i >= 0 && i < C.N - 1) C.q[i] += along * C.h[i] * 1.5; }
+    if (tap && C.kind !== "cold" && Math.random() < 0.6) addBubble(k, true);
     wake();
   },
   // How much coffee there is, as a share of the screen.
