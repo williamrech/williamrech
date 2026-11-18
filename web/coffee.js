@@ -120,7 +120,7 @@ function stepWaves(dt) {
   const G = C.geo; if (!G) return;
   const depth = clamp(C.V / G.L, 4, 2000), lim = Math.min(10, G.L * 0.03); // coffee in a cup: small waves
   for (let k = 0; k < MODES; k++) {
-    const kk = ((k + 1) * Math.PI) / G.L, w = Math.sqrt(GW * kk * Math.tanh(kk * depth)), z = 0.07 + 0.03 * k + (C.kind === "hot" ? 0.04 : 0);
+    const kk = ((k + 1) * Math.PI) / G.L, w = Math.sqrt(GW * kk * Math.tanh(kk * depth)), z = 0.28 + 0.05 * k + (C.kind === "hot" ? 0.06 : 0); // crema damps quickly: waves settle in about a second
     C.v[k] += (-w * w * C.a[k] - 2 * z * w * C.v[k]) * dt;
     C.a[k] = clamp(C.a[k] + C.v[k] * dt, -lim, lim);
     if (Math.abs(C.a[k]) >= lim) C.v[k] *= 0.5;
@@ -270,10 +270,10 @@ function draw() {
   const sx = [], sy = [], fv = [];
   // The crema never gets thicker than a share of the coffee under it (a sliver of coffee = thin crema).
   let ySum = 0, yN = 0;
-  for (let i = 0; i <= SAMPLES; i++) { // the surface, wall to wall (a little past them so the edges are clean)
-    const s = G.s0 + (G.L * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
+  for (let i = 0; i <= SAMPLES; i++) { // the surface, from past one edge to past the other: the screen cuts the crema straight, not at an angle
+    const s = G.s0 - 80 + ((G.L + 160) * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
     sx.push(x); sy.push(y);
-    fv.push(Math.min(foamAt(f), under(x, y) * 0.35));
+    fv.push(C.V > W * H * 0.15 ? foamAt(f) : Math.min(foamAt(f), under(x, y) * 0.35)); // the 'little coffee' limit only when there's little coffee (at the edges it cut the crema)
     if (f >= 0 && f <= 1) { ySum += y; yN++; }
   }
   if (C.onDraw) C.onDraw((C.V / (W * H)) * 100, yN ? ((H - ySum / yN) / H) * 100 : 0, C.goal > 0 ? clamp(C.landed / C.goal, 0, 1) : 1);
@@ -328,7 +328,7 @@ function draw() {
     for (let i = 0; i <= NB; i++) {
       const f = i / NB, e = eta(f), s0 = G.s0 + f * G.L;
       bE[i] = e;
-      bT[i] = Math.min(foamAt(f), under(s0 * G.ux + (G.c - e) * G.nx, s0 * G.uy + (G.c - e) * G.ny) * 0.35);
+      bT[i] = C.V > W * H * 0.15 ? foamAt(f) : Math.min(foamAt(f), under(s0 * G.ux + (G.c - e) * G.nx, s0 * G.uy + (G.c - e) * G.ny) * 0.35);
     }
     const lerp = (a, f) => { const x = clamp(f, 0, 1) * NB, k = Math.min(NB - 1, Math.floor(x)), r = x - k; return a[k] * (1 - r) + a[k + 1] * r; };
     for (const b of cand) {
