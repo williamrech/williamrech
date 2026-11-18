@@ -227,11 +227,19 @@ function draw() {
   g.clearRect(0, 0, W, H);
   const P = (s, d) => [s * G.ux + d * G.nx, s * G.uy + d * G.ny]; // along, depth → screen
   const sx = [], sy = [], fv = [];
+  // How much coffee there is under a surface point (along "down", to the screen's edge). The crema and its
+  // bubbles never get thicker than a share of it: with little coffee left, the crema thins out instead of
+  // sitting as a thick band on a sliver of coffee (18.11).
+  const under = (x, y) => {
+    x = clamp(x, 0, W); y = clamp(y, 0, H);
+    const tx = G.nx > 1e-6 ? (W - x) / G.nx : G.nx < -1e-6 ? -x / G.nx : 1e9, ty = G.ny > 1e-6 ? (H - y) / G.ny : G.ny < -1e-6 ? -y / G.ny : 1e9;
+    return Math.max(0, Math.min(tx, ty));
+  };
   let ySum = 0, yN = 0;
   for (let i = 0; i <= SAMPLES; i++) { // the surface, wall to wall (a little past them so the edges are clean)
     const s = G.s0 - 30 + ((G.L + 60) * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
     sx.push(x); sy.push(y);
-    fv.push(foamAt(f) * clamp(1 - curv(f) * 60, 0.5, 1.7));
+    fv.push(Math.min(foamAt(f) * clamp(1 - curv(f) * 60, 0.5, 1.7), under(x, y) * 0.35));
     if (f >= 0 && f <= 1) { ySum += y; yN++; }
   }
   if (C.onDraw) C.onDraw((C.V / (W * H)) * 100, yN ? ((H - ySum / yN) / H) * 100 : 0, C.goal > 0 ? clamp(C.landed / C.goal, 0, 1) : 1);
@@ -281,7 +289,9 @@ function draw() {
       g.strokeStyle = "rgba(200,236,255,.85)"; g.lineWidth = 1.4; g.stroke();
     } else { g.strokeStyle = "rgba(255,238,210,.55)"; g.lineWidth = 1.2; g.stroke(); }
     for (const b of C.bubs) {
-      const s = G.s0 + b.f * G.L, th = foamAt(b.f), [x, y] = P(s, G.c - eta(b.f) - th * (1 - b.d));
+      const s = G.s0 + b.f * G.L, [x0, y0] = P(s, G.c - eta(b.f)), th = Math.min(foamAt(b.f), under(x0, y0) * 0.35);
+      if (!b.pop && th < b.r * 1.8) continue; // too little crema there for this bubble
+      const x = x0 - G.nx * th * (1 - b.d), y = y0 - G.ny * th * (1 - b.d);
       if (b.pop) { g.strokeStyle = `rgba(255,240,215,${0.6 * (1 - b.pop / 0.18)})`; g.lineWidth = 0.8; g.beginPath(); g.arc(x, y, b.r * (1 + b.pop * 8), 0, 7); g.stroke(); continue; }
       g.fillStyle = "rgba(255,244,225,.14)"; g.strokeStyle = "rgba(255,240,215,.5)"; g.lineWidth = 0.7;
       g.beginPath(); g.arc(x, y, b.r, 0, 7); g.fill(); g.stroke();
