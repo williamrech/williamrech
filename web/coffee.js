@@ -118,9 +118,9 @@ function stepTilt(dt) {
 }
 function stepWaves(dt) {
   const G = C.geo; if (!G) return;
-  const depth = clamp(C.V / G.L, 4, 2000), lim = Math.min(18, G.L * 0.05); // coffee in a cup: modest waves
+  const depth = clamp(C.V / G.L, 4, 2000), lim = Math.min(30, G.L * 0.08);
   for (let k = 0; k < MODES; k++) {
-    const kk = ((k + 1) * Math.PI) / G.L, w = Math.sqrt(GW * kk * Math.tanh(kk * depth)), z = 0.14 + 0.04 * k + (C.kind === "hot" ? 0.03 : 0); // crema damps quickly: waves settle in about a second
+    const kk = ((k + 1) * Math.PI) / G.L, w = Math.sqrt(GW * kk * Math.tanh(kk * depth)), z = 0.07 + 0.03 * k; // runny coffee: waves and ripples last
     C.v[k] += (-w * w * C.a[k] - 2 * z * w * C.v[k]) * dt;
     C.a[k] = clamp(C.a[k] + C.v[k] * dt, -lim, lim);
     if (Math.abs(C.a[k]) >= lim) C.v[k] *= 0.5;
@@ -253,7 +253,7 @@ function sprite(kind) {
 function candidates() {
   if (C.cand) return C.cand;
   const out = [];
-  for (let b = 0; b < FN; b++) for (let i = 0; i < 22; i++) {
+  for (let b = 0; b < FN; b++) for (let i = 0; i < 34; i++) {
     const v = Math.random();
     out.push({ f: (b + Math.random()) / FN, v, keep: Math.random(), rs: rnd(0.8, 1.2) * (0.55 + v * 1.5) * (Math.random() < 0.04 ? 1.5 : 1), ph: rnd(0, 6.28), rate: rnd(0.12, 0.45) });
   }
@@ -273,7 +273,7 @@ function draw() {
   for (let i = 0; i <= SAMPLES; i++) { // the surface, from past one edge to past the other: the screen cuts the crema straight, not at an angle
     const s = G.s0 - 80 + ((G.L + 160) * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
     sx.push(x); sy.push(y);
-    const lumpy = 1 + 0.1 * Math.sin(f * 23 + C.t * 0.11) + 0.07 * Math.sin(f * 57 - C.t * 0.07); // crema isn't a flat slab
+    const lumpy = 1; // crema isn't a flat slab
     fv.push((C.V > W * H * 0.15 ? foamAt(f) : Math.min(foamAt(f), under(x, y) * 0.35)) * lumpy); // the 'little coffee' limit only when there's little coffee (at the edges it cut the crema)
     if (f >= 0 && f <= 1) { ySum += y; yN++; }
   }
@@ -308,9 +308,9 @@ function draw() {
     const [fx0, fy0] = P(mid, G.c - avgT), [fx1, fy1] = P(mid, G.c + melt);
     const cg = g.createLinearGradient(fx0, fy0, fx1, fy1), k = avgT / (avgT + melt);
     cg.addColorStop(0, c0); cg.addColorStop(k * 0.55, c1); cg.addColorStop(k, c2); cg.addColorStop(1, "rgba(40,18,8,0)");
-    g.globalAlpha = C.kind === "cold" ? 0.6 : 1; g.fillStyle = cg; g.fill(); g.globalAlpha = 1;
+    g.globalAlpha = C.kind === "cold" ? 0.35 : 0.3; g.fillStyle = cg; g.fill(); g.globalAlpha = 1; // only a faint haze: the foam is the bubbles
     if (C.kind !== "cold") {
-      g.save(); g.clip(); g.globalAlpha = 0.45;
+      g.save(); g.clip(); g.globalAlpha = 0;
       g.fillStyle = g.createPattern(mottle(), "repeat");
       const off = (C.t * 6) % 160;
       g.translate(off, 0); g.fillRect(-off - 10, -10, W + 180, H + 20);
@@ -334,13 +334,13 @@ function draw() {
     const lerp = (a, f) => { const x = clamp(f, 0, 1) * NB, k = Math.min(NB - 1, Math.floor(x)), r = x - k; return a[k] * (1 - r) + a[k + 1] * r; };
     for (const b of cand) {
       const T = lerp(bT, b.f);
-      if (b.keep > (T / fmax) * 0.8 || T < 6 || b.v < 0.35) continue; // bubbles in the upper part of the crema
+      if (b.keep > Math.min(1, (T / fmax) * 1.3) || T < 3) continue; // the foam is made of bubbles, packed through its whole thickness // bubbles in the upper part of the crema
       const live = clamp((Math.sin(t * b.rate + b.ph) + 0.9) * 4, 0, 1);
       if (live <= 0.02) continue;
-      const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.3);
+      const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.45);
       const z = b.v * T * 0.92 + r * 0.3, e = lerp(bE, b.f), s0 = G.s0 + b.f * G.L;
       const x = s0 * G.ux + (G.c - e - z) * G.nx, y = s0 * G.uy + (G.c - e - z) * G.ny;
-      g.globalAlpha = live * (C.kind === "cold" ? 0.6 : 0.8);
+      g.globalAlpha = live * (C.kind === "cold" ? 0.6 : 0.92);
       g.drawImage(spr, x - r, y - r, r * 2, r * 2);
     }
     // bubbles rising from inside
@@ -434,11 +434,11 @@ export const coffee = {
     if (C.V < 1 || !C.geo) return;
     const G = C.geo, f = clamp(along(x, y), 0, 1);
     if (!mx && !my) {
-      for (let k = 0; k < MODES; k++) C.v[k] -= (40 * Math.cos((k + 1) * Math.PI * f)) / (k + 1);
+      for (let k = 0; k < MODES; k++) C.v[k] -= (160 * Math.cos((k + 1) * Math.PI * f)) / (k + 1);
       if (C.kind !== "cold") addFoam(f, 2.5);
     } else {
       const push = clamp(mx * G.ux + my * G.uy, -40, 40);
-      for (let k = 0; k < MODES; k++) C.v[k] += (push * 6 * Math.sin((k + 1) * Math.PI * f)) / (k + 1);
+      for (let k = 0; k < MODES; k++) C.v[k] += (push * 14 * Math.sin((k + 1) * Math.PI * f)) / (k + 1);
     }
     wake();
   },
