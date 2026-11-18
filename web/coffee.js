@@ -153,13 +153,14 @@ function fit() {
 // ---------- physics ----------
 function stepFluid(dt) {
   const { h, q, N, tmax } = C, d = C.d;
-  const [gx, gy] = grav(C.lx, C.ly), G = GW * Math.hypot(gx, gy);
+  // gravity in the columns' own terms: along them (gN) and across them (gU, a small tilt since the last turn)
+  const [gx, gy] = grav(C.lx, C.ly), gN = gx * C.gxn + gy * C.gyn, gU = gx * C.ux + gy * C.uy;
   for (let s = 0, n = Math.ceil(dt / SUB), sdt = dt / n; s < n; s++) {
     for (let i = 0; i < N - 1; i++) {
       const e0 = h[i] - tmax[i], e1 = h[i + 1] - tmax[i + 1]; // surface height against gravity
       const ha = Math.max(0, Math.max(e0, e1) - Math.max(-tmax[i], -tmax[i + 1])); // depth over the higher floor
       if (ha <= 0) { q[i] = 0; continue; }
-      q[i] += sdt * G * ha * (e0 - e1) / d;
+      q[i] += sdt * GW * ha * (gN * (e0 - e1) / d + gU);
       q[i] *= 1 - 1.5 * sdt;
     }
     for (let i = 1; i < N - 2; i++) q[i] += (q[i - 1] + q[i + 1] - 2 * q[i]) * 0.1; // viscosity: no jagged ripples, a little body
@@ -395,7 +396,9 @@ function frame(now) {
     C.lx += (ex - C.lx) * k; C.ly += (ey - C.ly) * k;
     const [gx, gy] = grav(C.lx, C.ly), m = Math.hypot(gx, gy);
     const nx = gx / m, ny = gy / m;
-    if (Math.abs(Math.atan2(nx * C.gyn - ny * C.gxn, nx * C.gxn + ny * C.gyn)) > 0.004) reframe(gx, gy, C.W, C.H); // turned: turn the columns
+    // Turned for real (> ~11°): turn the columns. Small wobbles (a hand) stay a sideways pull in stepFluid —
+    // rebuilding the columns for every wobble added energy each time and the coffee went wild (18.11).
+    if (Math.abs(Math.atan2(nx * C.gyn - ny * C.gxn, nx * C.gxn + ny * C.gyn)) > 0.2) reframe(gx, gy, C.W, C.H);
   }
   stepStream(dt); stepFluid(dt); spill(dt); stepFoam(dt); stepBubbles(dt);
   draw();
