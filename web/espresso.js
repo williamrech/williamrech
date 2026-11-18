@@ -38,6 +38,7 @@ const CSS = `
 .esp-bar .esp-lit,.esp-bar .esp-cap{opacity:.45}.esp-bar .esp-halo{opacity:.12}
 .esp-bar.on .esp-lit,.esp-bar.on .esp-cap{opacity:1}.esp-bar.on .esp-halo{opacity:.28}
 .esp.full .esp-bar .esp-lit,.esp.full .esp-bar .esp-cap{opacity:.6}
+.esp ~ .steam-cup{transition:opacity 4s ease-in}
 .esp.brew ~ .steam-cup,.esp.full ~ .steam-cup{opacity:0;transition:opacity 2s}
 @keyframes esp-rise{0%{transform:translate(-50%,0) scale(.7);opacity:0}25%{opacity:.5}100%{transform:translate(-50%,-120px) scale(1.4);opacity:0}}
 @keyframes esp-pulse{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.06)}}
@@ -77,7 +78,7 @@ function build(layer) {
     if (el && el.root === root && root.isConnected) c.attach(root, { onFull, onDraw });
   }).catch((e) => console.warn("coffee", e));
   if (S.phase === "count") countLoop();
-  if (S.phase === "pour" || S.phase === "full") stayAwake(true); // rebuilt with coffee in it
+  stayAwake(true); // rebuilt: stays awake again if there's coffee in it
 }
 const alive = () => el && el.root.isConnected && layerRef && layerRef.dataset.fx === "espresso-bg";
 
@@ -120,7 +121,7 @@ function render() {
 let steamAt = -1, timerAt = -1;
 function onDraw(amount, surface, progress) {
   // Almost all of it spilled out: the bars wake up for a new brew (what's left becomes part of it).
-  if (S.phase === "full" && amount / 100 < S.brewed * 0.12) { S.phase = "idle"; S.touched.clear(); stayAwake(false); render(); return; }
+  if (S.phase === "full" && amount / 100 < S.brewed * 0.12) { S.phase = "idle"; S.touched.clear(); render(); return; }
   if (!el) return;
   // the green LED timer at the top drains as the coffee lands
   const left = S.phase === "pour" ? 1 - progress : 0;
@@ -131,6 +132,13 @@ function onDraw(amount, surface, progress) {
 }
 // The machine gets ready: a little hum in the last seconds, a buzz on the phone with each tick.
 const buzz = (p) => { try { if (navigator.vibrate) navigator.vibrate(p); } catch {} };
+// One steady hum through the countdown, stronger as it gets closer to 0. Phones can't set the strength, so each
+// second is ten short pulses that get longer (more "on" per pulse feels stronger); the next tick takes over.
+function hum() {
+  const on = Math.round(6 + (10 - S.count) * 8.5), p = []; // 6 ms at 10 … ~83 ms at 1 (of every 100 ms)
+  for (let i = 0; i < 10; i++) p.push(Math.min(on, 95), Math.max(5, 100 - on));
+  buzz(p);
+}
 function rumble(level) {
   if (!el) return;
   const on = level > 0 && !reduced();
@@ -140,7 +148,8 @@ function rumble(level) {
 // While there's coffee on the screen the app doesn't go to rest mode (it froze the coffee mid-slosh).
 function stayAwake(on) {
   clearInterval(awakeTimer);
-  if (on) awakeTimer = setInterval(() => { if (alive() && (S.phase === "pour" || S.phase === "full")) keepAwake(); else clearInterval(awakeTimer); }, 4000);
+  const coffeeLeft = () => S.phase === "pour" || (cf && cf.amount() > 0.001); // any coffee at all
+  if (on) awakeTimer = setInterval(() => { if (alive() && coffeeLeft()) keepAwake(); else clearInterval(awakeTimer); }, 4000);
 }
 function onFull() {
   if (S.phase !== "pour") return;
@@ -155,19 +164,20 @@ function countLoop() {
     if (S.phase !== "count") return;
     S.count--;
     keepAwake();
-    if (S.count <= 0) startPour(); else { countLoop(); buzz(S.count <= 3 ? 35 : 12); rumble(S.count <= 3 ? 2 : S.count <= 6 ? 1 : 0); }
+    if (S.count <= 0) startPour(); else { countLoop(); hum(); rumble(S.count <= 3 ? 2 : S.count <= 6 ? 1 : 0); }
     render();
   }, 1000);
 }
 function startCount() {
+  const was = S.phase === "count";
   S.phase = "count"; S.count = 10;
-  rumble(0);
+  rumble(0); if (!was) hum(); // (dragging a bar restarts the count: don't restart the hum on every move)
   countLoop();
 }
 function startPour() {
   S.phase = "pour"; S.brewTemp = S.temp; S.brewed = target();
   keepAwake();
-  buzz([60, 40, 90]); rumble(2); setTimeout(() => rumble(0), 700); // it starts: one last shake
+  buzz(600); rumble(2); setTimeout(() => rumble(0), 700); // it starts: one last shake
   stayAwake(true); // from the pour until the coffee is gone (or reload)
   coffeeMod.then((c) => c.pour(target(), S.brewTemp, reduced()));
 }
