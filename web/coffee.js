@@ -237,13 +237,13 @@ function sprite(kind) {
   if (C.sprites[kind]) return C.sprites[kind];
   const S = 64, c = document.createElement("canvas"); c.width = c.height = S;
   const g = c.getContext("2d"), m = S / 2, R = S / 2 - 2;
-  const cold = kind === "cold", wall = cold ? "200,210,215" : "246,214,172", dark = cold ? "40,30,25" : "92,46,16";
+  const cold = kind === "cold", wall = cold ? "200,210,215" : "222,170,115", dark = cold ? "40,30,25" : "92,46,16";
   let gr = g.createRadialGradient(m, m, R * 0.2, m, m, R);
-  gr.addColorStop(0, `rgba(${wall},${cold ? .06 : .14})`); gr.addColorStop(0.72, `rgba(${wall},${cold ? .16 : .26})`); gr.addColorStop(0.92, `rgba(${wall},.55)`); gr.addColorStop(1, `rgba(${dark},.55)`);
+  gr.addColorStop(0, `rgba(${wall},${cold ? .06 : .45})`); gr.addColorStop(0.72, `rgba(${wall},${cold ? .16 : .55})`); gr.addColorStop(0.92, `rgba(${wall},.55)`); gr.addColorStop(1, `rgba(${dark},.55)`);
   g.fillStyle = gr; g.beginPath(); g.arc(m, m, R, 0, 7); g.fill();
   g.strokeStyle = `rgba(${dark},.45)`; g.lineWidth = 2; g.beginPath(); g.arc(m, m, R - 1, 0, 7); g.stroke();
   gr = g.createRadialGradient(m - R * 0.38, m - R * 0.42, 0, m - R * 0.38, m - R * 0.42, R * 0.34);
-  gr.addColorStop(0, "rgba(255,255,250,.95)"); gr.addColorStop(1, "rgba(255,255,250,0)");
+  gr.addColorStop(0, "rgba(255,248,235,.7)"); gr.addColorStop(1, "rgba(255,255,250,0)");
   g.fillStyle = gr; g.beginPath(); g.arc(m - R * 0.38, m - R * 0.42, R * 0.34, 0, 7); g.fill();
   g.strokeStyle = "rgba(255,250,240,.35)"; g.lineWidth = 2.2; g.beginPath(); g.arc(m, m, R * 0.72, 0.35, 1.25); g.stroke(); // a soft reflection low right
   return (C.sprites[kind] = c);
@@ -255,12 +255,12 @@ function candidates() {
   const out = [];
   for (let b = 0; b < FN; b++) for (let i = 0; i < 22; i++) {
     const v = Math.random();
-    out.push({ f: (b + Math.random()) / FN, v, keep: Math.random(), rs: rnd(0.9, 1.25) * (0.8 + v * 2.6) * (Math.random() < 0.08 ? 1.6 : 1), ph: rnd(0, 6.28), rate: rnd(0.12, 0.45) });
+    out.push({ f: (b + Math.random()) / FN, v, keep: Math.random(), rs: rnd(0.8, 1.2) * (0.55 + v * 1.5) * (Math.random() < 0.04 ? 1.5 : 1), ph: rnd(0, 6.28), rate: rnd(0.12, 0.45) });
   }
   out.sort((a, b) => a.v - b.v); // deeper (smaller) first, so the big ones on top are drawn over them
   return (C.cand = out);
 }
-const COLORS = { hot: ["#f0c08a", "#c98646", "#7d431f"], warm: ["#d9a46c", "#ad6c38", "#5f3218"], cold: ["#a08b7b", "#6b5444", "#3a2418"] };
+const COLORS = { hot: ["#d9a066", "#b06a33", "#6e3516"], warm: ["#c99460", "#9a5c2c", "#5a2c12"], cold: ["#a08b7b", "#6b5444", "#3a2418"] };
 const SAMPLES = 90;
 function draw() {
   const { g, W, H, dpr } = C, G = C.geo;
@@ -271,7 +271,7 @@ function draw() {
   // The crema never gets thicker than a share of the coffee under it (a sliver of coffee = thin crema).
   let ySum = 0, yN = 0;
   for (let i = 0; i <= SAMPLES; i++) { // the surface, wall to wall (a little past them so the edges are clean)
-    const s = G.s0 - 30 + ((G.L + 60) * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
+    const s = G.s0 + (G.L * i) / SAMPLES, f = (s - G.s0) / G.L, [x, y] = P(s, G.c - eta(f));
     sx.push(x); sy.push(y);
     fv.push(Math.min(foamAt(f) * clamp(1 - curv(f) * 60, 0.5, 1.7), under(x, y) * 0.35));
     if (f >= 0 && f <= 1) { ySum += y; yN++; }
@@ -296,21 +296,20 @@ function draw() {
       gr.addColorStop(0, `rgba(201,139,79,${a})`); gr.addColorStop(1, "rgba(201,139,79,0)");
       g.fillStyle = gr; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);
     }
-    g.lineWidth = 14; g.strokeStyle = "rgba(10,4,1,.35)"; // the shade just under the crema
-    g.beginPath(); for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] + G.nx * 7, sy[i] + G.ny * 7); g.stroke();
     g.restore();
     // the crema: a soft foam body underneath…
     g.beginPath();
-    for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] - G.nx * fv[i] * 0.7, sy[i] - G.ny * fv[i] * 0.7);
-    for (let i = SAMPLES; i >= 0; i--) g.lineTo(sx[i] + G.nx * 0.5, sy[i] + G.ny * 0.5);
+    const melt = 14; // the crema fades down into the coffee, like in a glass: no line between them
+    for (let i = 0; i <= SAMPLES; i++) g.lineTo(sx[i] - G.nx * fv[i], sy[i] - G.ny * fv[i]);
+    for (let i = SAMPLES; i >= 0; i--) g.lineTo(sx[i] + G.nx * melt, sy[i] + G.ny * melt);
     g.closePath();
-    const [c0, c1, c2] = COLORS[C.kind], fmax = FOAM[C.kind][1];
-    const [fx0, fy0] = P(mid, G.c - fmax * 0.7), [fx1, fy1] = P(mid, G.c + 2);
-    const cg = g.createLinearGradient(fx0, fy0, fx1, fy1);
-    cg.addColorStop(0, c0); cg.addColorStop(0.45, c1); cg.addColorStop(1, c2);
-    g.globalAlpha = C.kind === "cold" ? 0.6 : 0.9; g.fillStyle = cg; g.fill(); g.globalAlpha = 1;
+    const [c0, c1, c2] = COLORS[C.kind], fmax = FOAM[C.kind][1], avgT = Math.max(2, fv.reduce((a, b) => a + b, 0) / fv.length);
+    const [fx0, fy0] = P(mid, G.c - avgT), [fx1, fy1] = P(mid, G.c + melt);
+    const cg = g.createLinearGradient(fx0, fy0, fx1, fy1), k = avgT / (avgT + melt);
+    cg.addColorStop(0, c0); cg.addColorStop(k * 0.55, c1); cg.addColorStop(k, c2); cg.addColorStop(1, "rgba(40,18,8,0)");
+    g.globalAlpha = C.kind === "cold" ? 0.6 : 1; g.fillStyle = cg; g.fill(); g.globalAlpha = 1;
     if (C.kind !== "cold") {
-      g.save(); g.clip(); g.globalAlpha = 0.35;
+      g.save(); g.clip(); g.globalAlpha = 0.22;
       g.fillStyle = g.createPattern(mottle(), "repeat");
       const off = (C.t * 6) % 160;
       g.translate(off, 0); g.fillRect(-off - 10, -10, W + 180, H + 20);
