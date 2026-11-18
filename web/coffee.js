@@ -114,11 +114,11 @@ function stepTilt(dt) {
   C.om = clamp(C.om + acc * dt, -6, 6);
   C.th = wrap(C.th + C.om * dt);
   const G = C.geo; // a quick turn also kicks the first waves (bounded)
-  if (G) { C.v[0] += clamp(-acc * G.L * 0.06, -600, 600) * dt; C.v[1] += clamp(-acc * G.L * 0.02, -300, 300) * dt; }
+  if (G) { C.v[0] += clamp(-acc * G.L * 0.012, -120, 120) * dt; C.v[1] += clamp(-acc * G.L * 0.004, -60, 60) * dt; }
 }
 function stepWaves(dt) {
   const G = C.geo; if (!G) return;
-  const depth = clamp(C.V / G.L, 4, 2000), lim = Math.min(60, G.L * 0.12);
+  const depth = clamp(C.V / G.L, 4, 2000), lim = Math.min(10, G.L * 0.03); // coffee in a cup: small waves
   for (let k = 0; k < MODES; k++) {
     const kk = ((k + 1) * Math.PI) / G.L, w = Math.sqrt(GW * kk * Math.tanh(kk * depth)), z = 0.07 + 0.03 * k + (C.kind === "hot" ? 0.04 : 0);
     C.v[k] += (-w * w * C.a[k] - 2 * z * w * C.v[k]) * dt;
@@ -144,7 +144,7 @@ function stepFoam(dt) {
   const stir = C.kind === "cold" ? 0.004 : 0.02, swirl = Math.abs(C.om) * (C.geo ? C.geo.L : 300) * 0.3;
   for (let i = 0; i < FN; i++) {
     const l = f[i > 0 ? i - 1 : i], r = f[i < FN - 1 ? i + 1 : i];
-    let v = f[i] + (l + r - 2 * f[i]) * 0.25;
+    let v = f[i] + (l + r - 2 * f[i]) * 0.45;
     if (v > floor) v -= (v - floor) * Math.min(1, dt / 45); // ~45 s to thin out
     else v += (floor - v) * Math.min(1, dt * 0.5);          // the thin layer always re-forms
     let vel = 0; const fi = i / (FN - 1);
@@ -161,7 +161,7 @@ function addFoam(f, amount) {
 // A drop lands at 0..1 along the surface: its coffee, a dent (waves), foam, a bubble.
 function land(f, speed, mass) {
   C.V += mass; C.landed += mass;
-  const imp = clamp(mass * Math.min(speed, 1600) * 0.00003, 0, 6); // a small dimple per drop, not a crater
+  const imp = clamp(mass * Math.min(speed, 1600) * 0.000008, 0, 1.2); // a small dimple per drop, not a crater
   for (let k = 0; k < MODES; k++) C.v[k] -= (imp * Math.cos((k + 1) * Math.PI * clamp(f, 0, 1))) / (k + 1);
   addFoam(f, (mass / Math.max(40, C.geo.L)) * (C.kind === "cold" ? 0.15 : 1.4));
 }
@@ -333,10 +333,10 @@ function draw() {
     const lerp = (a, f) => { const x = clamp(f, 0, 1) * NB, k = Math.min(NB - 1, Math.floor(x)), r = x - k; return a[k] * (1 - r) + a[k + 1] * r; };
     for (const b of cand) {
       const T = lerp(bT, b.f);
-      if (b.keep > (T / fmax) * 0.8 || T < 2 || b.v < 0.35) continue; // bubbles in the upper part of the crema
+      if (b.keep > (T / fmax) * 0.8 || T < 6 || b.v < 0.35) continue; // bubbles in the upper part of the crema
       const live = clamp((Math.sin(t * b.rate + b.ph) + 0.9) * 4, 0, 1);
       if (live <= 0.02) continue;
-      const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.55 + 0.6);
+      const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.3);
       const z = b.v * T * 0.92 + r * 0.3, e = lerp(bE, b.f), s0 = G.s0 + b.f * G.L;
       const x = s0 * G.ux + (G.c - e - z) * G.nx, y = s0 * G.uy + (G.c - e - z) * G.ny;
       g.globalAlpha = live * (C.kind === "cold" ? 0.6 : 0.8);
@@ -433,7 +433,7 @@ export const coffee = {
     if (C.V < 1 || !C.geo) return;
     const G = C.geo, f = clamp(along(x, y), 0, 1);
     if (!mx && !my) {
-      for (let k = 0; k < MODES; k++) C.v[k] -= (140 * Math.cos((k + 1) * Math.PI * f)) / (k + 1);
+      for (let k = 0; k < MODES; k++) C.v[k] -= (40 * Math.cos((k + 1) * Math.PI * f)) / (k + 1);
       if (C.kind !== "cold") addFoam(f, 2.5);
     } else {
       const push = clamp(mx * G.ux + my * G.uy, -40, 40);
