@@ -22,7 +22,7 @@ const MODES = 5;          // standing waves on the surface
 const TILT_K = 13;        // the surface's spring towards level (rad/s²/rad): ~0.57 Hz slosh
 const TILT_D = 2.6;       // its damping (coffee with crema: settles in ~2 s)
 const FN = 48;            // crema samples along the surface
-const FOAM = { hot: [6, 30], warm: [4, 20], cold: [1.5, 6] }; // crema: [the thin layer it never goes below, max]
+const FOAM = { hot: [26, 54], warm: [18, 40], cold: [5, 12] }; // crema: [the thin layer it never goes below, max]
 
 const C = {
   canvas: null, g: null, dpr: 1, W: 0, H: 0,
@@ -260,7 +260,7 @@ function candidates() {
   out.sort((a, b) => a.v - b.v); // deeper (smaller) first, so the big ones on top are drawn over them
   return (C.cand = out);
 }
-const COLORS = { hot: ["#d9a066", "#b06a33", "#6e3516"], warm: ["#c99460", "#9a5c2c", "#5a2c12"], cold: ["#a08b7b", "#6b5444", "#3a2418"] };
+const COLORS = { hot: ["#e4b678", "#c38a4c", "#7a3c18"], warm: ["#d6a66c", "#b07a40", "#6a3214"], cold: ["#a08b7b", "#6b5444", "#3a2418"] };
 const SAMPLES = 90;
 function draw() {
   const { g, W, H, dpr } = C, G = C.geo;
@@ -286,8 +286,8 @@ function draw() {
     g.closePath();
     const mid = (G.s0 + G.s1) / 2, [ax, ay] = P(mid, G.c - 40), [bx, by] = P(mid, G.deep);
     const body = g.createLinearGradient(ax, ay, bx, by);
-    body.addColorStop(0, C.kind === "cold" ? "#2e1b12" : "#4d2912"); body.addColorStop(0.12, "#311709");
-    body.addColorStop(0.5, "#170904"); body.addColorStop(1, "#090301");
+    body.addColorStop(0, C.kind === "cold" ? "#2e1b12" : "#5a240c"); body.addColorStop(0.12, "#3d1607");
+    body.addColorStop(0.5, "#1c0803"); body.addColorStop(1, "#0a0301");
     g.fillStyle = body; g.fill();
     g.save(); g.clip(); // warm light moving slowly inside it
     const depth = Math.max(40, G.deep - G.c);
@@ -308,7 +308,7 @@ function draw() {
     const cg = g.createLinearGradient(fx0, fy0, fx1, fy1), k = avgT / (avgT + melt);
     cg.addColorStop(0, c0); cg.addColorStop(k * 0.55, c1); cg.addColorStop(k, c2); cg.addColorStop(1, "rgba(40,18,8,0)");
     g.globalAlpha = C.kind === "cold" ? 0.6 : 1; g.fillStyle = cg; g.fill(); g.globalAlpha = 1;
-    if (C.kind !== "cold") {
+    if (false) {
       g.save(); g.clip(); g.globalAlpha = 0.22;
       g.fillStyle = g.createPattern(mottle(), "repeat");
       const off = (C.t * 6) % 160;
@@ -333,13 +333,13 @@ function draw() {
     const lerp = (a, f) => { const x = clamp(f, 0, 1) * NB, k = Math.min(NB - 1, Math.floor(x)), r = x - k; return a[k] * (1 - r) + a[k + 1] * r; };
     for (const b of cand) {
       const T = lerp(bT, b.f);
-      if (b.keep > T / fmax || T < 1) continue;
+      if (b.keep > (T / fmax) * 0.25 || T < 1 || b.v < 0.7) continue; // only a few faint bubbles, near the top
       const live = clamp((Math.sin(t * b.rate + b.ph) + 0.9) * 4, 0, 1);
       if (live <= 0.02) continue;
       const r = Math.min(b.rs * clamp(T / 14, 0.45, 1.15) * (1 + 0.05 * Math.sin(t * 2.1 + b.ph)), T * 0.55 + 0.6);
       const z = b.v * T * 0.92 + r * 0.3, e = lerp(bE, b.f), s0 = G.s0 + b.f * G.L;
       const x = s0 * G.ux + (G.c - e - z) * G.nx, y = s0 * G.uy + (G.c - e - z) * G.ny;
-      g.globalAlpha = live * (C.kind === "cold" ? 0.7 : 0.95);
+      g.globalAlpha = live * (C.kind === "cold" ? 0.5 : 0.35);
       g.drawImage(spr, x - r, y - r, r * 2, r * 2);
     }
     // bubbles rising from inside
