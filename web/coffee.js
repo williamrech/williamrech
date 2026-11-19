@@ -183,7 +183,7 @@ function stepStream(dt) {
     if (p.x < 2) { p.x = 2; p.vx = Math.abs(p.vx) * 0.2; }
     if (p.x > C.W - 2) { p.x = C.W - 2; p.vx = -Math.abs(p.vx) * 0.2; }
     if (p.y > C.H - 2) { p.y = C.H - 2; p.vy = -Math.abs(p.vy) * 0.2; }
-    const f = along(p.x, p.y), depth = p.x * G.nx + p.y * G.ny, surf = G.c - (C.V > 1 ? eta(f) + Math.min(foamAt(f), 8) : 0);
+    const f = along(p.x, p.y), depth = p.x * G.nx + p.y * G.ny, surf = G.c - (C.V > 1 ? eta(f) - 10 : 0); // lands a little under the surface (hidden by the coffee)
     const corner = depth >= G.deep - 3; // empty cup: the lowest corner
     if ((p.y >= 0 && depth >= surf - 3) || corner || p.age > 4) land(f, Math.hypot(p.vx, p.vy), p.m); else keep.push(p);
   }
@@ -278,6 +278,20 @@ function draw() {
     if (f >= 0 && f <= 1) { ySum += y; yN++; }
   }
   if (C.onDraw) C.onDraw((C.V / (W * H)) * 100, yN ? ((H - ySum / yN) / H) * 100 : 0, C.goal > 0 ? clamp(C.landed / C.goal, 0, 1) : 1);
+  // the stream first: the coffee is drawn over it, so it ends inside the liquid
+  const D = C.drops; // the stream: thick at the spout, thinner as it speeds up
+  if (D.length > 1) {
+    g.lineCap = "round";
+    for (const [col0, wk, ox] of [["rgba(201,139,79,.18)", 1.9, 0], ["#6b3617", 1, 0], ["#a35f2c", 0.55, -0.12], ["rgba(255,214,160,.55)", 0.2, -0.28]]) {
+      g.strokeStyle = col0;
+      for (let i = 1; i < D.length; i++) {
+        const a = D[i - 1], b = D[i];
+        if (Math.hypot(b.x - a.x, b.y - a.y) > 46) continue;
+        const w = clamp(10 - b.age * 7, 4.5, 10);
+        g.lineWidth = w * wk; g.beginPath(); g.moveTo(a.x + ox * w, a.y); g.lineTo(b.x + ox * w, b.y); g.stroke();
+      }
+    }
+  }
   if (C.V > W * 0.3) {
     const far = 4000, [lx, ly] = P(G.s0 - far, G.c - eta(0)), [rx, ry] = P(G.s1 + far, G.c - eta(1));
     g.beginPath(); // the surface, carried on far past both walls, then everything below it
@@ -352,19 +366,7 @@ function draw() {
     }
     g.globalAlpha = 1;
   }
-  const D = C.drops; // the stream: thick at the spout, thinner as it speeds up
-  if (D.length > 1) {
-    g.lineCap = "round";
-    for (const [col0, wk, ox] of [["rgba(201,139,79,.18)", 1.9, 0], ["#6b3617", 1, 0], ["#a35f2c", 0.55, -0.12], ["rgba(255,214,160,.55)", 0.2, -0.28]]) {
-      g.strokeStyle = col0;
-      for (let i = 1; i < D.length; i++) {
-        const a = D[i - 1], b = D[i];
-        if (Math.hypot(b.x - a.x, b.y - a.y) > 46) continue;
-        const w = clamp(10 - b.age * 7, 4.5, 10);
-        g.lineWidth = w * wk; g.beginPath(); g.moveTo(a.x + ox * w, a.y); g.lineTo(b.x + ox * w, b.y); g.stroke();
-      }
-    }
-  }
+
 }
 
 // ---------- loop ----------
