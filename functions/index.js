@@ -563,7 +563,11 @@ handlers.muteTemplate = async (req) => {
 // Every 15 minutes: fire scheduled templates, deliver delayed (quiet-hours)
 // notifications, nag people who haven't answered, close expired rounds.
 // ---------------------------------------------------------------------------
+// OFF (24.11.2026): the whole app is switched off. To bring it back: revert this commit.
+const APP_OFF = true;
+
 exports.tick = onSchedule({ schedule: "*/15 * * * *", timeZone: TZ, region: REGION }, async () => {
+  if (APP_OFF) return; // app switched off: no scheduled recados
   const sp = spParts();
   const nowMin = toMin(sp.hm);
   const now = Date.now();
@@ -817,6 +821,7 @@ handlers.adminBackend = async (req) => {
 // ---------------------------------------------------------------------------
 // Notification button → answer. Body (text/plain JSON): { r: roundId, u: uid, t: key, i: 0|1 }.
 exports.quick = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB", cors: true }, async (req, res) => {
+  if (APP_OFF) { res.status(503).send("off"); return; }
   const out = (code, body) => res.status(code).json(body);
   if (req.method !== "POST") return out(405, { ok: false });
   let b = req.body;
@@ -842,6 +847,7 @@ exports.quick = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB", c
 });
 
 exports.receipt = onRequest({ region: REGION, maxInstances: 3, memory: "256MiB", cors: true }, async (req, res) => {
+  if (APP_OFF) { res.status(503).send("off"); return; }
   const id = String(req.query.id || "");
   const e = req.query.e === "open" ? "open" : "recv";
   if (!/^[A-Za-z0-9]{20}$/.test(id)) { res.status(400).end(); return; }
@@ -1245,6 +1251,7 @@ async function returnOldGifts() {
 }
 
 exports.api = onCall(opts, async (req) => {
+  if (APP_OFF) throw new HttpsError("unavailable", "O app está fora do ar.");
   const action = req.data && req.data.action;
   const fn = Object.prototype.hasOwnProperty.call(handlers, action) && handlers[action];
   if (!fn) throw new HttpsError("invalid-argument", "Ação desconhecida.");

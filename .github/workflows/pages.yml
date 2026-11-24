@@ -1,10 +1,11 @@
 # Publishes the web/ folder to GitHub Pages on every push to main.
+# OFF (24.11.2026): publishing offline/ (a "fora do ar" page) instead. To bring the app back: revert this commit.
 name: Publish site
 
 on:
   push:
     branches: [main]
-    paths: ["web/**", ".github/workflows/pages.yml"]
+    paths: ["web/**", "offline/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -29,6 +30,6 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: offline
       - id: deployment
         uses: actions/deploy-pages@v4
